@@ -1,0 +1,2 @@
+#!/bin/sh
+/opt/homebrew/bin/zig cc -target wasm32-wasi "$@"
