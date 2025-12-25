@@ -149,7 +149,7 @@ def capture_screenshot(scene_id: int, output_path: Path) -> bool:
 
 
 def load_image(path: Path) -> Optional[Image.Image]:
-    """Load an image from a PPM file and convert to grayscale."""
+    """Load an image file and convert to grayscale."""
     if not path.exists():
         return None
     try:
@@ -210,9 +210,9 @@ def compare_images(golden: Image.Image, actual: Image.Image) -> Tuple[int, Image
 
 def run_test(scene_id: int, scene_name: str, scene_title: str) -> TestResult:
     """Run a visual test for a single scene."""
-    golden_path = GOLDEN_DIR / f"{scene_name}.ppm"
-    actual_path = ACTUAL_DIR / f"{scene_name}.ppm"
-    diff_path = DIFF_DIR / f"{scene_name}.png"
+    golden_path = GOLDEN_DIR / f"{scene_name}.png"
+    actual_path = ACTUAL_DIR / f"{scene_name}.png"
+    diff_path = DIFF_DIR / f"{scene_name}_diff.png"
 
     # Capture screenshot
     if not capture_screenshot(scene_id, actual_path):
@@ -297,7 +297,7 @@ def update_golden_screenshots(scene_ids: Optional[List[int]] = None):
     print("Updating golden screenshots...")
     for scene_id in scene_ids:
         scene_name, scene_title = SCENES[scene_id]
-        golden_path = GOLDEN_DIR / f"{scene_name}.ppm"
+        golden_path = GOLDEN_DIR / f"{scene_name}.png"
 
         print(f"  Scene {scene_id}: {scene_title}...", end=" ")
         if capture_screenshot(scene_id, golden_path):
@@ -569,8 +569,8 @@ def has_golden_screenshots() -> bool:
     """Check if golden screenshots exist."""
     if not GOLDEN_DIR.exists():
         return False
-    ppm_files = list(GOLDEN_DIR.glob("*.ppm"))
-    return len(ppm_files) > 0
+    png_files = list(GOLDEN_DIR.glob("*.png"))
+    return len(png_files) > 0
 
 
 def main():

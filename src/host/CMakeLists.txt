@@ -19,12 +19,16 @@ endif()
 
 add_subdirectory(${WAMR_ROOT_DIR} ${CMAKE_CURRENT_BINARY_DIR}/wamr)
 
-add_executable(host_emulator main.cpp)
+# lodepng for PNG screenshot output
+set(LODEPNG_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../libs/lodepng)
+
+add_executable(host_emulator main.cpp ${LODEPNG_DIR}/lodepng.cpp)
 
 target_include_directories(host_emulator PRIVATE
     ${SDL2_INCLUDE_DIRS}
     ${WAMR_ROOT_DIR}/core/iwasm/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../libs/u8g2/csrc
+    ${LODEPNG_DIR}
 )
 
 target_link_libraries(host_emulator PRIVATE

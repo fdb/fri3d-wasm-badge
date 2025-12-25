@@ -93,7 +93,7 @@ def main():
 
     # Generate screenshots for each scene
     for scene_id, scene_name in enumerate(SCENES):
-        output_path = GOLDEN_DIR / f"{scene_name}.ppm"
+        output_path = GOLDEN_DIR / f"{scene_name}.png"
         print(f"  [{scene_id + 1}/{len(SCENES)}] {scene_name}...", end=" ", flush=True)
 
         cmd = [
