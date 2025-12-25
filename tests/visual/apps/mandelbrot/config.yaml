@@ -1,0 +1,5 @@
+name: Mandelbrot Set
+description: Classic Mandelbrot set fractal visualization
+
+scenes:
+  - name: Default View

@@ -30,30 +30,26 @@ jobs:
       with:
         version: 0.11.0
 
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-
-    - name: Install Python dependencies
-      run: pip install -r tests/visual/requirements.txt
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
 
     - name: Build host emulator
       run: |
         cmake -B build
         cmake --build build
 
-    - name: Build test_drawing app
+    - name: Build WASM apps
       run: |
-        cmake -B build-apps/test_drawing \
-          -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/toolchain-wasm.cmake \
-          -S src/apps/test_drawing
-        cmake --build build-apps/test_drawing
-        echo "Build output:"
-        ls -la build-apps/test_drawing/
+        for app in test_drawing circles mandelbrot; do
+          echo "Building $app..."
+          cmake -B build-apps/$app \
+            -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/toolchain-wasm.cmake \
+            -S src/apps/$app
+          cmake --build build-apps/$app
+        done
 
     - name: Run visual regression tests
-      run: python tests/visual/run_visual_tests.py
+      run: uv run tests/visual/run_visual_tests.py
 
     - name: Upload test report
       uses: actions/upload-artifact@v4
@@ -68,7 +64,7 @@ jobs:
       if: failure()
       with:
         name: actual-screenshots
-        path: tests/visual/actual/
+        path: tests/visual/output/*/actual/
         retention-days: 7
 
     - name: Upload diff images
@@ -76,5 +72,5 @@ jobs:
       if: failure()
       with:
         name: diff-images
-        path: tests/visual/diff/
+        path: tests/visual/output/*/diff/
         retention-days: 7

@@ -5,6 +5,11 @@
 
 static uint32_t g_seed = 42;
 
+// Scene control for visual testing (single scene app)
+uint32_t get_scene(void) { return 0; }
+void set_scene(uint32_t scene) { (void)scene; }
+uint32_t get_scene_count(void) { return 1; }
+
 // Called by host each frame for rendering
 void render(void) {
     // Use same seed each frame for consistent circles

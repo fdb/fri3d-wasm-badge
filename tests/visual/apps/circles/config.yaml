@@ -1,0 +1,5 @@
+name: Circles
+description: Random circles with fixed seed for deterministic output
+
+scenes:
+  - name: Random Circles
