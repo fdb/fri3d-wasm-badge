@@ -5,7 +5,7 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
-  workflow_dispatch:  # Allow manual triggering
+  workflow_dispatch:
 
 jobs:
   visual-tests:
@@ -36,8 +36,7 @@ jobs:
         python-version: '3.11'
 
     - name: Install Python dependencies
-      run: |
-        pip install -r tests/visual/requirements.txt
+      run: pip install -r tests/visual/requirements.txt
 
     - name: Build host emulator
       run: |
@@ -53,53 +52,8 @@ jobs:
         echo "Build output:"
         ls -la build-apps/test_drawing/
 
-    - name: Check for golden screenshots
-      id: check-golden
-      run: |
-        # Count PPM files in golden directory
-        count=$(find tests/visual/golden -name "*.ppm" 2>/dev/null | wc -l)
-        echo "Golden screenshot count: $count"
-        if [ "$count" -lt 12 ]; then
-          echo "missing=true" >> $GITHUB_OUTPUT
-          echo "Golden screenshots are missing or incomplete. Will generate them."
-        else
-          echo "missing=false" >> $GITHUB_OUTPUT
-          echo "Golden screenshots found."
-        fi
-
-    - name: Generate missing golden screenshots
-      if: steps.check-golden.outputs.missing == 'true'
-      run: |
-        echo "Generating golden screenshots..."
-        python tests/visual/run_visual_tests.py --update-golden
-        echo ""
-        echo "=========================================="
-        echo "NOTICE: Golden screenshots were generated."
-        echo "Download the 'golden-screenshots' artifact"
-        echo "and commit them to tests/visual/golden/"
-        echo "=========================================="
-
-    - name: Upload golden screenshots (if generated)
-      if: steps.check-golden.outputs.missing == 'true'
-      uses: actions/upload-artifact@v4
-      with:
-        name: golden-screenshots
-        path: tests/visual/golden/
-        retention-days: 90
-
     - name: Run visual regression tests
-      id: visual-tests
-      if: steps.check-golden.outputs.missing == 'false'
-      run: |
-        python tests/visual/run_visual_tests.py
-      continue-on-error: true
-
-    - name: Skip tests (golden screenshots missing)
-      if: steps.check-golden.outputs.missing == 'true'
-      run: |
-        echo "Skipping visual regression tests because golden screenshots are missing."
-        echo "Download the 'golden-screenshots' artifact and commit them to the repository."
-        echo "Tests will run on subsequent pushes."
+      run: python tests/visual/run_visual_tests.py
 
     - name: Upload test report
       uses: actions/upload-artifact@v4
@@ -124,65 +78,3 @@ jobs:
         name: diff-images
         path: tests/visual/diff/
         retention-days: 7
-
-    - name: Check test results
-      if: steps.check-golden.outputs.missing == 'false' && steps.visual-tests.outcome == 'failure'
-      run: |
-        echo "Visual regression tests failed!"
-        echo "Download the test report artifact to see details."
-        exit 1
-
-  update-golden:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
-
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          libsdl2-dev \
-          cmake \
-          build-essential
-
-    - name: Setup Zig
-      uses: goto-bus-stop/setup-zig@v2
-      with:
-        version: 0.11.0
-
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-
-    - name: Install Python dependencies
-      run: |
-        pip install -r tests/visual/requirements.txt
-
-    - name: Build host emulator
-      run: |
-        cmake -B build
-        cmake --build build
-
-    - name: Build test_drawing app
-      run: |
-        cmake -B build-apps/test_drawing \
-          -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/toolchain-wasm.cmake \
-          -S src/apps/test_drawing
-        cmake --build build-apps/test_drawing
-
-    - name: Update golden screenshots
-      run: |
-        python tests/visual/run_visual_tests.py --update-golden
-
-    - name: Upload golden screenshots
-      uses: actions/upload-artifact@v4
-      with:
-        name: golden-screenshots
-        path: tests/visual/golden/
-        retention-days: 90

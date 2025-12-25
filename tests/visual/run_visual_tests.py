@@ -565,6 +565,14 @@ def generate_html_report(results: List[TestResult], output_path: Path):
     print(f"\nReport generated: {output_path}")
 
 
+def has_golden_screenshots() -> bool:
+    """Check if golden screenshots exist."""
+    if not GOLDEN_DIR.exists():
+        return False
+    ppm_files = list(GOLDEN_DIR.glob("*.ppm"))
+    return len(ppm_files) > 0
+
+
 def main():
     parser = argparse.ArgumentParser(description="Visual regression testing for FRI3D WASM Badge")
     parser.add_argument("--update-golden", action="store_true",
@@ -594,6 +602,22 @@ def main():
         update_golden_screenshots(scene_ids)
         print("\nGolden screenshots updated successfully!")
         return
+
+    # Check if golden screenshots exist
+    if not has_golden_screenshots():
+        print("=" * 60)
+        print("WARNING: No golden screenshots found!")
+        print("=" * 60)
+        print()
+        print("Visual regression tests cannot run without reference images.")
+        print("To generate golden screenshots, run:")
+        print()
+        print("    python scripts/update_golden_screenshots.py")
+        print()
+        print("Then commit the generated files in tests/visual/golden/")
+        print()
+        print("Skipping tests (this is not a failure).")
+        sys.exit(0)
 
     # Run tests
     print("Running visual regression tests...\n")
