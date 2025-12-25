@@ -245,13 +245,12 @@ static bool save_screenshot_ppm(const std::string& path) {
 static uint32_t call_wasm_get_scene_count() {
     if (!g_func_get_scene_count) return 0;
 
-    uint32_t result = 0;
-    if (wasm_runtime_call_wasm(g_exec_env, g_func_get_scene_count, 0, NULL)) {
-        result = *(uint32_t*)wasm_runtime_get_exec_env_singleton(g_module_inst);
-        // Get return value from stack
-        wasm_runtime_get_wasm_return(g_exec_env, 1, &result);
+    // In WAMR, return values are passed back through the argv array
+    uint32_t argv[1] = { 0 };
+    if (wasm_runtime_call_wasm(g_exec_env, g_func_get_scene_count, 0, argv)) {
+        return argv[0];
     }
-    return result;
+    return 0;
 }
 
 static void call_wasm_set_scene(uint32_t scene) {
