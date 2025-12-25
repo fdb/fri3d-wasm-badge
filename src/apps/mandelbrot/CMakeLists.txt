@@ -1,14 +1,13 @@
 cmake_minimum_required(VERSION 3.16)
-project(circles C)
+project(mandelbrot C)
 
-# SDK headers
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../sdk)
 
-add_executable(circles main.c)
+add_executable(mandelbrot main.c)
 
 # WASM linking options for Zig
 # Use reactor model and explicitly export functions needed by the host
-target_link_options(circles PRIVATE
+target_link_options(mandelbrot PRIVATE
     "-mexec-model=reactor"
     "-Wl,--export=render"
     "-Wl,--export=on_input"
