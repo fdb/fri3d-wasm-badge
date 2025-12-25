@@ -1,0 +1,2 @@
+# Python dependencies for visual regression testing
+Pillow>=9.0.0

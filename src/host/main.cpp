@@ -5,6 +5,8 @@
 #include <vector>
 #include <fstream>
 #include <random>
+#include <cstring>
+#include <string>
 
 // Screen dimensions
 const int SCREEN_WIDTH = 128;
@@ -27,6 +29,15 @@ static wasm_module_inst_t g_module_inst = nullptr;
 static wasm_exec_env_t g_exec_env = nullptr;
 static wasm_function_inst_t g_func_render = nullptr;
 static wasm_function_inst_t g_func_on_input = nullptr;
+static wasm_function_inst_t g_func_set_scene = nullptr;
+static wasm_function_inst_t g_func_get_scene = nullptr;
+static wasm_function_inst_t g_func_get_scene_count = nullptr;
+
+// Test mode configuration
+static bool g_test_mode = false;
+static int g_test_scene = -1;  // -1 means all scenes
+static std::string g_screenshot_path;
+static bool g_headless = false;
 
 // Dummy u8g2 callbacks (we only use the buffer)
 static uint8_t u8x8_gpio_and_delay_callback(u8x8_t* u8x8, uint8_t msg, uint8_t arg_int, void* arg_ptr) {
@@ -194,10 +205,81 @@ static NativeSymbol native_symbols[] = {
 };
 
 // ============================================================================
+// Screenshot Functions
+// ============================================================================
+
+static bool save_screenshot_ppm(const std::string& path) {
+    uint8_t* buffer = u8g2_GetBufferPtr(&g_u8g2);
+
+    std::ofstream file(path, std::ios::binary);
+    if (!file.is_open()) {
+        std::cerr << "Failed to open " << path << " for writing" << std::endl;
+        return false;
+    }
+
+    // PPM header (P6 = binary RGB)
+    file << "P6\n" << SCREEN_WIDTH << " " << SCREEN_HEIGHT << "\n255\n";
+
+    // Convert u8g2 buffer to RGB
+    for (int y = 0; y < SCREEN_HEIGHT; y++) {
+        for (int x = 0; x < SCREEN_WIDTH; x++) {
+            int byte_idx = x + (y / 8) * SCREEN_WIDTH;
+            int bit_idx = y % 8;
+            bool pixel = (buffer[byte_idx] >> bit_idx) & 1;
+            // Black pixels are "on" (1), white pixels are "off" (0)
+            uint8_t color = pixel ? 0 : 255;
+            file.put(color);
+            file.put(color);
+            file.put(color);
+        }
+    }
+
+    file.close();
+    return true;
+}
+
+// ============================================================================
+// WASM Helper Functions
+// ============================================================================
+
+static uint32_t call_wasm_get_scene_count() {
+    if (!g_func_get_scene_count) return 0;
+
+    uint32_t result = 0;
+    if (wasm_runtime_call_wasm(g_exec_env, g_func_get_scene_count, 0, NULL)) {
+        result = *(uint32_t*)wasm_runtime_get_exec_env_singleton(g_module_inst);
+        // Get return value from stack
+        wasm_runtime_get_wasm_return(g_exec_env, 1, &result);
+    }
+    return result;
+}
+
+static void call_wasm_set_scene(uint32_t scene) {
+    if (!g_func_set_scene) return;
+
+    uint32_t args[1] = { scene };
+    wasm_runtime_call_wasm(g_exec_env, g_func_set_scene, 1, args);
+}
+
+static void call_wasm_render() {
+    if (!g_func_render) return;
+
+    u8g2_ClearBuffer(&g_u8g2);
+    wasm_runtime_call_wasm(g_exec_env, g_func_render, 0, NULL);
+
+    if (wasm_runtime_get_exception(g_module_inst)) {
+        std::cerr << "WASM Exception in render: " << wasm_runtime_get_exception(g_module_inst) << std::endl;
+        wasm_runtime_clear_exception(g_module_inst);
+    }
+}
+
+// ============================================================================
 // Display Update
 // ============================================================================
 
 static void update_display() {
+    if (g_headless) return;
+
     uint8_t* buffer = u8g2_GetBufferPtr(&g_u8g2);
 
     void* pixels;
@@ -253,27 +335,73 @@ static int key_to_input_key(SDL_Keycode key) {
 }
 
 // ============================================================================
+// Usage
+// ============================================================================
+
+static void print_usage(const char* program) {
+    std::cerr << "Usage: " << program << " [options] <wasm_file>\n\n";
+    std::cerr << "Options:\n";
+    std::cerr << "  --test              Run in test mode (render and exit)\n";
+    std::cerr << "  --scene <n>         Set scene number (for test_drawing app)\n";
+    std::cerr << "  --screenshot <path> Save screenshot to path (PPM format)\n";
+    std::cerr << "  --headless          Run without display (requires --screenshot)\n";
+    std::cerr << "  --help              Show this help\n";
+}
+
+// ============================================================================
 // Main
 // ============================================================================
 
 int main(int argc, char* argv[]) {
-    if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <wasm_file>" << std::endl;
+    std::string wasm_file;
+
+    // Parse command line arguments
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--test") == 0) {
+            g_test_mode = true;
+        } else if (strcmp(argv[i], "--scene") == 0 && i + 1 < argc) {
+            g_test_scene = atoi(argv[++i]);
+        } else if (strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) {
+            g_screenshot_path = argv[++i];
+        } else if (strcmp(argv[i], "--headless") == 0) {
+            g_headless = true;
+        } else if (strcmp(argv[i], "--help") == 0) {
+            print_usage(argv[0]);
+            return 0;
+        } else if (argv[i][0] != '-') {
+            wasm_file = argv[i];
+        } else {
+            std::cerr << "Unknown option: " << argv[i] << std::endl;
+            print_usage(argv[0]);
+            return 1;
+        }
+    }
+
+    if (wasm_file.empty()) {
+        std::cerr << "Error: No WASM file specified" << std::endl;
+        print_usage(argv[0]);
         return 1;
     }
 
-    // Initialize SDL
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-        std::cerr << "SDL could not initialize! SDL_Error: " << SDL_GetError() << std::endl;
+    if (g_headless && g_screenshot_path.empty()) {
+        std::cerr << "Error: --headless requires --screenshot" << std::endl;
         return 1;
     }
 
-    window = SDL_CreateWindow("FRI3D Emulator", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                              SCREEN_WIDTH * SCALE_FACTOR, SCREEN_HEIGHT * SCALE_FACTOR, SDL_WINDOW_SHOWN);
-    if (!window) return 1;
+    // Initialize SDL (skip video init if headless)
+    if (!g_headless) {
+        if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+            std::cerr << "SDL could not initialize! SDL_Error: " << SDL_GetError() << std::endl;
+            return 1;
+        }
 
-    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-    texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, SCREEN_WIDTH, SCREEN_HEIGHT);
+        window = SDL_CreateWindow("FRI3D Emulator", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+                                  SCREEN_WIDTH * SCALE_FACTOR, SCREEN_HEIGHT * SCALE_FACTOR, SDL_WINDOW_SHOWN);
+        if (!window) return 1;
+
+        renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+        texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, SCREEN_WIDTH, SCREEN_HEIGHT);
+    }
 
     // Initialize u8g2
     u8g2_Setup_ssd1306_128x64_noname_f(&g_u8g2, U8G2_R0, u8x8_byte_callback, u8x8_gpio_and_delay_callback);
@@ -297,9 +425,9 @@ int main(int argc, char* argv[]) {
     wasm_runtime_register_natives("env", native_symbols, sizeof(native_symbols)/sizeof(NativeSymbol));
 
     // Load WASM file
-    std::ifstream file(argv[1], std::ios::binary | std::ios::ate);
+    std::ifstream file(wasm_file, std::ios::binary | std::ios::ate);
     if (!file.is_open()) {
-        std::cerr << "Failed to open " << argv[1] << std::endl;
+        std::cerr << "Failed to open " << wasm_file << std::endl;
         return 1;
     }
     std::streamsize size = file.tellg();
@@ -325,13 +453,50 @@ int main(int argc, char* argv[]) {
     // Look up app functions
     g_func_render = wasm_runtime_lookup_function(g_module_inst, "render");
     g_func_on_input = wasm_runtime_lookup_function(g_module_inst, "on_input");
+    g_func_set_scene = wasm_runtime_lookup_function(g_module_inst, "set_scene");
+    g_func_get_scene = wasm_runtime_lookup_function(g_module_inst, "get_scene");
+    g_func_get_scene_count = wasm_runtime_lookup_function(g_module_inst, "get_scene_count");
 
     if (!g_func_render) {
         std::cerr << "Could not find 'render' function in WASM" << std::endl;
         return 1;
     }
 
-    // Main loop
+    // Test mode: render one frame and optionally save screenshot
+    if (g_test_mode || !g_screenshot_path.empty()) {
+        if (g_test_scene >= 0 && g_func_set_scene) {
+            call_wasm_set_scene((uint32_t)g_test_scene);
+        }
+
+        call_wasm_render();
+
+        if (!g_screenshot_path.empty()) {
+            if (!save_screenshot_ppm(g_screenshot_path)) {
+                return 1;
+            }
+            std::cout << "Screenshot saved to " << g_screenshot_path << std::endl;
+        }
+
+        if (!g_headless) {
+            update_display();
+            SDL_Delay(100);  // Brief display before exit
+        }
+
+        // Cleanup and exit
+        wasm_runtime_destroy_exec_env(g_exec_env);
+        wasm_runtime_deinstantiate(g_module_inst);
+        wasm_runtime_unload(module);
+        wasm_runtime_destroy();
+        if (!g_headless) {
+            SDL_DestroyTexture(texture);
+            SDL_DestroyRenderer(renderer);
+            SDL_DestroyWindow(window);
+            SDL_Quit();
+        }
+        return 0;
+    }
+
+    // Main loop (interactive mode)
     bool quit = false;
     SDL_Event e;
 
@@ -341,6 +506,16 @@ int main(int argc, char* argv[]) {
             if (e.type == SDL_QUIT) {
                 quit = true;
             } else if (e.type == SDL_KEYDOWN || e.type == SDL_KEYUP) {
+                // S key for screenshot
+                if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_s) {
+                    static int screenshot_num = 0;
+                    std::string path = "screenshot_" + std::to_string(screenshot_num++) + ".ppm";
+                    if (save_screenshot_ppm(path)) {
+                        std::cout << "Screenshot saved to " << path << std::endl;
+                    }
+                    continue;
+                }
+
                 int input_key = key_to_input_key(e.key.keysym.sym);
                 if (input_key >= 0) {
                     uint32_t input_type = (e.type == SDL_KEYDOWN) ? 0 : 1; // Press = 0, Release = 1
@@ -350,15 +525,7 @@ int main(int argc, char* argv[]) {
         }
 
         // Clear canvas and call render
-        u8g2_ClearBuffer(&g_u8g2);
-
-        if (g_func_render) {
-            wasm_runtime_call_wasm(g_exec_env, g_func_render, 0, NULL);
-            if (wasm_runtime_get_exception(g_module_inst)) {
-                std::cerr << "WASM Exception in render: " << wasm_runtime_get_exception(g_module_inst) << std::endl;
-                quit = true;
-            }
-        }
+        call_wasm_render();
 
         // Update display
         update_display();
