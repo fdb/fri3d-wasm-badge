@@ -2,6 +2,25 @@
 
 ## Build Commands
 
+### Prerequisites: Git Submodules
+
+This project uses git submodules. Before building, ensure submodules are initialized:
+
+**After cloning the repository:**
+```bash
+git submodule update --init --recursive
+```
+
+**When pulling updates:**
+```bash
+git pull --recurse-submodules
+```
+
+Or manually update submodules:
+```bash
+git submodule update --init --recursive
+```
+
 ### Build Host Emulator
 ```bash
 cmake -B build
