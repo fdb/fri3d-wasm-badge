@@ -12,7 +12,14 @@ file(GLOB U8G2_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/../../libs/u8g2/csrc/*.c")
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../libs/u8g2/csrc)
 
-add_executable(circle_app main.c ${U8G2_SOURCES})
+add_executable(circle_app
+    main.c
+    canvas.c
+    random.c
+    viewport.c
+    frd_os.c
+    ${U8G2_SOURCES}
+)
 
 # We need to export on_tick
 target_link_options(circle_app PRIVATE 

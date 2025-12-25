@@ -5,6 +5,7 @@
 #include <fstream>
 #include <thread>
 #include <chrono>
+#include <random>
 
 // Screen dimensions
 const int SCREEN_WIDTH = 128;
@@ -17,6 +18,9 @@ SDL_Texture* texture = nullptr;
 
 // Input state
 uint32_t current_input = 0;
+
+// Random number generator
+static std::mt19937 g_rng(std::random_device{}());
 
 // Host Native Functions
 void native_lcd_update(wasm_exec_env_t exec_env, uint32_t buffer_offset, uint32_t size) {
@@ -92,11 +96,21 @@ void native_delay(wasm_exec_env_t exec_env, uint32_t ms) {
     SDL_Delay(ms);
 }
 
+void native_random_seed(wasm_exec_env_t exec_env, uint32_t seed) {
+    g_rng.seed(seed);
+}
+
+uint32_t native_random_get(wasm_exec_env_t exec_env) {
+    return g_rng();
+}
+
 // Native symbols to export to WASM
 static NativeSymbol native_symbols[] = {
     { "host_lcd_update", (void*)native_lcd_update, "(ii)", NULL },
     { "host_get_input", (void*)native_get_input, "()i", NULL },
-    { "host_delay", (void*)native_delay, "(i)", NULL }
+    { "host_delay", (void*)native_delay, "(i)", NULL },
+    { "host_random_seed", (void*)native_random_seed, "(i)", NULL },
+    { "host_random_get", (void*)native_random_get, "()i", NULL },
 };
 
 int main(int argc, char* argv[]) {
