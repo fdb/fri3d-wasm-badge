@@ -51,11 +51,53 @@ jobs:
           -S src/apps/test_drawing
         cmake --build build-apps/test_drawing
 
+    - name: Check for golden screenshots
+      id: check-golden
+      run: |
+        # Count PPM files in golden directory
+        count=$(find tests/visual/golden -name "*.ppm" 2>/dev/null | wc -l)
+        echo "Golden screenshot count: $count"
+        if [ "$count" -lt 12 ]; then
+          echo "missing=true" >> $GITHUB_OUTPUT
+          echo "Golden screenshots are missing or incomplete. Will generate them."
+        else
+          echo "missing=false" >> $GITHUB_OUTPUT
+          echo "Golden screenshots found."
+        fi
+
+    - name: Generate missing golden screenshots
+      if: steps.check-golden.outputs.missing == 'true'
+      run: |
+        echo "Generating golden screenshots..."
+        python tests/visual/run_visual_tests.py --update-golden
+        echo ""
+        echo "=========================================="
+        echo "NOTICE: Golden screenshots were generated."
+        echo "Download the 'golden-screenshots' artifact"
+        echo "and commit them to tests/visual/golden/"
+        echo "=========================================="
+
+    - name: Upload golden screenshots (if generated)
+      if: steps.check-golden.outputs.missing == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: golden-screenshots
+        path: tests/visual/golden/
+        retention-days: 90
+
     - name: Run visual regression tests
       id: visual-tests
+      if: steps.check-golden.outputs.missing == 'false'
       run: |
         python tests/visual/run_visual_tests.py
       continue-on-error: true
+
+    - name: Skip tests (golden screenshots missing)
+      if: steps.check-golden.outputs.missing == 'true'
+      run: |
+        echo "Skipping visual regression tests because golden screenshots are missing."
+        echo "Download the 'golden-screenshots' artifact and commit them to the repository."
+        echo "Tests will run on subsequent pushes."
 
     - name: Upload test report
       uses: actions/upload-artifact@v4
@@ -82,7 +124,7 @@ jobs:
         retention-days: 7
 
     - name: Check test results
-      if: steps.visual-tests.outcome == 'failure'
+      if: steps.check-golden.outputs.missing == 'false' && steps.visual-tests.outcome == 'failure'
       run: |
         echo "Visual regression tests failed!"
         echo "Download the test report artifact to see details."
