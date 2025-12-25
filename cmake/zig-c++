@@ -1,2 +1,2 @@
 #!/bin/sh
-/opt/homebrew/bin/zig c++ -target wasm32-wasi "$@"
+zig c++ -target wasm32-wasi "$@"
