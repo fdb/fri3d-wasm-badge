@@ -47,11 +47,38 @@ SCENES = [
 SCRIPT_DIR = Path(__file__).parent.absolute()
 PROJECT_ROOT = SCRIPT_DIR.parent.parent
 HOST_EMULATOR = PROJECT_ROOT / "build" / "src" / "host" / "host_emulator"
-TEST_APP = PROJECT_ROOT / "build-apps" / "test_drawing" / "test_drawing.wasm"
 GOLDEN_DIR = SCRIPT_DIR / "golden"
 ACTUAL_DIR = SCRIPT_DIR / "actual"
 DIFF_DIR = SCRIPT_DIR / "diff"
 REPORTS_DIR = SCRIPT_DIR / "reports"
+
+
+def find_test_app() -> Optional[Path]:
+    """Find the test_drawing WASM app, checking multiple possible locations."""
+    candidates = [
+        PROJECT_ROOT / "build-apps" / "test_drawing" / "test_drawing.wasm",
+        PROJECT_ROOT / "build-apps" / "test_drawing" / "test_drawing",
+    ]
+
+    # Also search for any .wasm file in the build directory
+    build_dir = PROJECT_ROOT / "build-apps" / "test_drawing"
+    if build_dir.exists():
+        for f in build_dir.glob("*.wasm"):
+            if f not in candidates:
+                candidates.append(f)
+        # Check for file without extension (Zig might not add .wasm)
+        for f in build_dir.iterdir():
+            if f.is_file() and f.suffix == "" and f.name == "test_drawing":
+                if f not in candidates:
+                    candidates.append(f)
+
+    for path in candidates:
+        if path.exists():
+            return path
+    return None
+
+
+TEST_APP: Optional[Path] = None  # Will be set by find_test_app()
 
 
 class TestResult(NamedTuple):
@@ -75,18 +102,25 @@ def ensure_directories():
 
 def check_prerequisites() -> bool:
     """Check if host emulator and test app exist."""
+    global TEST_APP
+
     if not HOST_EMULATOR.exists():
         print(f"Error: Host emulator not found at {HOST_EMULATOR}")
         print("Run 'cmake -B build && cmake --build build' to build the host emulator.")
         return False
 
-    if not TEST_APP.exists():
-        print(f"Error: Test app not found at {TEST_APP}")
+    TEST_APP = find_test_app()
+    if TEST_APP is None:
+        build_dir = PROJECT_ROOT / "build-apps" / "test_drawing"
+        print(f"Error: Test app not found in {build_dir}")
+        if build_dir.exists():
+            print(f"Files in build directory: {list(build_dir.iterdir())}")
         print("Run the build script to compile the test_drawing app:")
         print(f"  cmake -B build-apps/test_drawing -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-wasm.cmake -S src/apps/test_drawing")
         print(f"  cmake --build build-apps/test_drawing")
         return False
 
+    print(f"Found test app: {TEST_APP}")
     return True
 
 

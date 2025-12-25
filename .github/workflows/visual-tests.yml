@@ -50,6 +50,8 @@ jobs:
           -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/toolchain-wasm.cmake \
           -S src/apps/test_drawing
         cmake --build build-apps/test_drawing
+        echo "Build output:"
+        ls -la build-apps/test_drawing/
 
     - name: Check for golden screenshots
       id: check-golden
