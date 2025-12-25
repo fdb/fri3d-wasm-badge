@@ -1,10 +1,9 @@
 #include <SDL.h>
 #include <wasm_export.h>
+#include <u8g2.h>
 #include <iostream>
 #include <vector>
 #include <fstream>
-#include <thread>
-#include <chrono>
 #include <random>
 
 // Screen dimensions
@@ -12,106 +11,250 @@ const int SCREEN_WIDTH = 128;
 const int SCREEN_HEIGHT = 64;
 const int SCALE_FACTOR = 4;
 
+// SDL
 SDL_Window* window = nullptr;
 SDL_Renderer* renderer = nullptr;
 SDL_Texture* texture = nullptr;
 
-// Input state
-uint32_t current_input = 0;
+// u8g2 for drawing
+static u8g2_t g_u8g2;
 
 // Random number generator
 static std::mt19937 g_rng(std::random_device{}());
 
-// Host Native Functions
-void native_lcd_update(wasm_exec_env_t exec_env, uint32_t buffer_offset, uint32_t size) {
+// WASM module instance (needed for calling app functions)
+static wasm_module_inst_t g_module_inst = nullptr;
+static wasm_exec_env_t g_exec_env = nullptr;
+static wasm_function_inst_t g_func_render = nullptr;
+static wasm_function_inst_t g_func_on_input = nullptr;
+
+// Dummy u8g2 callbacks (we only use the buffer)
+static uint8_t u8x8_gpio_and_delay_callback(u8x8_t* u8x8, uint8_t msg, uint8_t arg_int, void* arg_ptr) {
+    (void)u8x8; (void)msg; (void)arg_int; (void)arg_ptr;
+    return 1;
+}
+
+static uint8_t u8x8_byte_callback(u8x8_t* u8x8, uint8_t msg, uint8_t arg_int, void* arg_ptr) {
+    (void)u8x8; (void)msg; (void)arg_int; (void)arg_ptr;
+    return 1;
+}
+
+// ============================================================================
+// Canvas Native Functions
+// ============================================================================
+
+extern "C" {
+
+void native_canvas_clear(wasm_exec_env_t exec_env) {
+    (void)exec_env;
+    u8g2_ClearBuffer(&g_u8g2);
+}
+
+uint32_t native_canvas_width(wasm_exec_env_t exec_env) {
+    (void)exec_env;
+    return SCREEN_WIDTH;
+}
+
+uint32_t native_canvas_height(wasm_exec_env_t exec_env) {
+    (void)exec_env;
+    return SCREEN_HEIGHT;
+}
+
+void native_canvas_set_color(wasm_exec_env_t exec_env, uint32_t color) {
+    (void)exec_env;
+    u8g2_SetDrawColor(&g_u8g2, (uint8_t)color);
+}
+
+void native_canvas_set_font(wasm_exec_env_t exec_env, uint32_t font) {
+    (void)exec_env;
+    switch (font) {
+    case 0: // FontPrimary
+        u8g2_SetFont(&g_u8g2, u8g2_font_6x10_tf);
+        break;
+    case 1: // FontSecondary
+        u8g2_SetFont(&g_u8g2, u8g2_font_5x7_tf);
+        break;
+    case 2: // FontKeyboard
+        u8g2_SetFont(&g_u8g2, u8g2_font_5x8_tf);
+        break;
+    case 3: // FontBigNumbers
+        u8g2_SetFont(&g_u8g2, u8g2_font_10x20_tf);
+        break;
+    default:
+        u8g2_SetFont(&g_u8g2, u8g2_font_6x10_tf);
+        break;
+    }
+}
+
+void native_canvas_draw_dot(wasm_exec_env_t exec_env, int32_t x, int32_t y) {
+    (void)exec_env;
+    u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)x, (u8g2_uint_t)y);
+}
+
+void native_canvas_draw_line(wasm_exec_env_t exec_env, int32_t x1, int32_t y1, int32_t x2, int32_t y2) {
+    (void)exec_env;
+    u8g2_DrawLine(&g_u8g2, (u8g2_uint_t)x1, (u8g2_uint_t)y1, (u8g2_uint_t)x2, (u8g2_uint_t)y2);
+}
+
+void native_canvas_draw_frame(wasm_exec_env_t exec_env, int32_t x, int32_t y, uint32_t w, uint32_t h) {
+    (void)exec_env;
+    u8g2_DrawFrame(&g_u8g2, (u8g2_uint_t)x, (u8g2_uint_t)y, (u8g2_uint_t)w, (u8g2_uint_t)h);
+}
+
+void native_canvas_draw_box(wasm_exec_env_t exec_env, int32_t x, int32_t y, uint32_t w, uint32_t h) {
+    (void)exec_env;
+    u8g2_DrawBox(&g_u8g2, (u8g2_uint_t)x, (u8g2_uint_t)y, (u8g2_uint_t)w, (u8g2_uint_t)h);
+}
+
+void native_canvas_draw_rframe(wasm_exec_env_t exec_env, int32_t x, int32_t y, uint32_t w, uint32_t h, uint32_t r) {
+    (void)exec_env;
+    u8g2_DrawRFrame(&g_u8g2, (u8g2_uint_t)x, (u8g2_uint_t)y, (u8g2_uint_t)w, (u8g2_uint_t)h, (u8g2_uint_t)r);
+}
+
+void native_canvas_draw_rbox(wasm_exec_env_t exec_env, int32_t x, int32_t y, uint32_t w, uint32_t h, uint32_t r) {
+    (void)exec_env;
+    u8g2_DrawRBox(&g_u8g2, (u8g2_uint_t)x, (u8g2_uint_t)y, (u8g2_uint_t)w, (u8g2_uint_t)h, (u8g2_uint_t)r);
+}
+
+void native_canvas_draw_circle(wasm_exec_env_t exec_env, int32_t x, int32_t y, uint32_t r) {
+    (void)exec_env;
+    u8g2_DrawCircle(&g_u8g2, (u8g2_uint_t)x, (u8g2_uint_t)y, (u8g2_uint_t)r, U8G2_DRAW_ALL);
+}
+
+void native_canvas_draw_disc(wasm_exec_env_t exec_env, int32_t x, int32_t y, uint32_t r) {
+    (void)exec_env;
+    u8g2_DrawDisc(&g_u8g2, (u8g2_uint_t)x, (u8g2_uint_t)y, (u8g2_uint_t)r, U8G2_DRAW_ALL);
+}
+
+void native_canvas_draw_str(wasm_exec_env_t exec_env, int32_t x, int32_t y, uint32_t str_offset) {
     wasm_module_inst_t module_inst = wasm_runtime_get_module_inst(exec_env);
-    if (!wasm_runtime_validate_app_addr(module_inst, buffer_offset, size)) {
-        printf("Invalid access to LCD buffer!\n");
+    if (!wasm_runtime_validate_app_str_addr(module_inst, str_offset)) {
         return;
     }
+    const char* str = (const char*)wasm_runtime_addr_app_to_native(module_inst, str_offset);
+    u8g2_DrawUTF8(&g_u8g2, (u8g2_uint_t)x, (u8g2_uint_t)y, str);
+}
 
-    uint8_t* buffer = (uint8_t*)wasm_runtime_addr_app_to_native(module_inst, buffer_offset);
-    
-    // Convert 1-bit buffer (u8g2 default usually) to RGBA for SDL
-    // Assuming 128x64 bits = 1024 bytes.
-    // However, u8g2 buffer format depends on the driver. we will assume a linear buffer for now or handle it later.
-    // For simplicity, let's assume the app sends a full byte-per-pixel buffer or we convert it.
-    // Actually, to support u8g2 easily, we might want to make the app render to a simple linear buffer.
-    
-    // For this prototype, let's just copy it to the texture assuming it's RGBA or similar?
-    // No, u8g2 on embedded is usually monochrome. 
-    // Let's assume the WASM app sends 1 byte per pixel for now (grayscale) or just packed bits?
-    // Let's implement a simple unpacking if needed, or ask the app to send 8-bit.
-    // Update: User said "raw PCB" look, probably monochrome.
-    
-    // Let's assume input is 1 byte per 8 pixels (standard monochrome).
-    // Width 128, Height 64. 
-    // Rows = 64. Bytes per row = 128/8 = 16. Total = 1024 bytes.
-    
-    // NOTE: u8g2 buffer layout depends on the device. proper page addressing etc.
-    // Let's assume the app sends us a linear Framebuffer for now.
-    
+uint32_t native_canvas_string_width(wasm_exec_env_t exec_env, uint32_t str_offset) {
+    wasm_module_inst_t module_inst = wasm_runtime_get_module_inst(exec_env);
+    if (!wasm_runtime_validate_app_str_addr(module_inst, str_offset)) {
+        return 0;
+    }
+    const char* str = (const char*)wasm_runtime_addr_app_to_native(module_inst, str_offset);
+    return u8g2_GetStrWidth(&g_u8g2, str);
+}
+
+// ============================================================================
+// Random Native Functions
+// ============================================================================
+
+void native_random_seed(wasm_exec_env_t exec_env, uint32_t seed) {
+    (void)exec_env;
+    g_rng.seed(seed);
+}
+
+uint32_t native_random_get(wasm_exec_env_t exec_env) {
+    (void)exec_env;
+    return g_rng();
+}
+
+uint32_t native_random_range(wasm_exec_env_t exec_env, uint32_t max) {
+    (void)exec_env;
+    if (max == 0) return 0;
+    return g_rng() % max;
+}
+
+} // extern "C"
+
+// ============================================================================
+// Native Symbols Table
+// ============================================================================
+
+static NativeSymbol native_symbols[] = {
+    // Canvas
+    { "canvas_clear", (void*)native_canvas_clear, "()", NULL },
+    { "canvas_width", (void*)native_canvas_width, "()i", NULL },
+    { "canvas_height", (void*)native_canvas_height, "()i", NULL },
+    { "canvas_set_color", (void*)native_canvas_set_color, "(i)", NULL },
+    { "canvas_set_font", (void*)native_canvas_set_font, "(i)", NULL },
+    { "canvas_draw_dot", (void*)native_canvas_draw_dot, "(ii)", NULL },
+    { "canvas_draw_line", (void*)native_canvas_draw_line, "(iiii)", NULL },
+    { "canvas_draw_frame", (void*)native_canvas_draw_frame, "(iiii)", NULL },
+    { "canvas_draw_box", (void*)native_canvas_draw_box, "(iiii)", NULL },
+    { "canvas_draw_rframe", (void*)native_canvas_draw_rframe, "(iiiii)", NULL },
+    { "canvas_draw_rbox", (void*)native_canvas_draw_rbox, "(iiiii)", NULL },
+    { "canvas_draw_circle", (void*)native_canvas_draw_circle, "(iii)", NULL },
+    { "canvas_draw_disc", (void*)native_canvas_draw_disc, "(iii)", NULL },
+    { "canvas_draw_str", (void*)native_canvas_draw_str, "(ii*)", NULL },
+    { "canvas_string_width", (void*)native_canvas_string_width, "(*)i", NULL },
+    // Random
+    { "random_seed", (void*)native_random_seed, "(i)", NULL },
+    { "random_get", (void*)native_random_get, "()i", NULL },
+    { "random_range", (void*)native_random_range, "(i)i", NULL },
+};
+
+// ============================================================================
+// Display Update
+// ============================================================================
+
+static void update_display() {
+    uint8_t* buffer = u8g2_GetBufferPtr(&g_u8g2);
+
     void* pixels;
     int pitch;
     SDL_LockTexture(texture, NULL, &pixels, &pitch);
-    
-    // Simple 1-bit to RGB32 expansion
-    // Assuming vertical paging (typical SSD1306) or linear?
-    // Let's start with assuming linear byte-per-pixel for simplicity in the first pass
-    // OR we can make the WASM app send R,G,B buffer.
-    
-    // Let's just blindly copy for now if size matches, otherwise fill with dummy.
-    // Just to get it running: Assume 1 byte per pixel for now (easier debugging)
-    
-    if (size == SCREEN_WIDTH * SCREEN_HEIGHT) {
-        uint32_t* dst = (uint32_t*)pixels;
-        for (int i = 0; i < size; i++) {
-            uint8_t val = buffer[i];
-            dst[i] = (val > 0) ? 0xFFFFFFFF : 0x000000FF; // White or Black
-        }
-    } else {
-        // Fallback for monochrome packed if size is small (1024 bytes)
-        // Assume linear mapping 1 bit = 1 pixel
-        if (size == (SCREEN_WIDTH * SCREEN_HEIGHT) / 8) {
-            uint32_t* dst = (uint32_t*)pixels;
-            for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; i++) {
-                int byte_idx = i / 8;
-                int bit_idx = i % 8;
-                bool pixel = (buffer[byte_idx] >> bit_idx) & 1;
-                 dst[i] = pixel ? 0xFFFFFFFF : 0x000000FF;
-            }
+
+    uint32_t* dst = (uint32_t*)pixels;
+
+    // u8g2 SSD1306 buffer layout: each byte is 8 vertical pixels
+    // Byte 0: pixels (0,0)-(0,7), Byte 1: pixels (1,0)-(1,7), etc.
+    for (int y = 0; y < SCREEN_HEIGHT; y++) {
+        for (int x = 0; x < SCREEN_WIDTH; x++) {
+            int byte_idx = x + (y / 8) * SCREEN_WIDTH;
+            int bit_idx = y % 8;
+            bool pixel = (buffer[byte_idx] >> bit_idx) & 1;
+            dst[y * SCREEN_WIDTH + x] = pixel ? 0xFFFFFFFF : 0x000000FF;
         }
     }
-    
+
     SDL_UnlockTexture(texture);
     SDL_RenderCopy(renderer, texture, NULL, NULL);
     SDL_RenderPresent(renderer);
 }
 
-uint32_t native_get_input(wasm_exec_env_t exec_env) {
-    return current_input;
+// ============================================================================
+// Input Handling
+// ============================================================================
+
+static void call_on_input(uint32_t key, uint32_t type) {
+    if (!g_func_on_input) return;
+
+    uint32_t args[2] = { key, type };
+    wasm_runtime_call_wasm(g_exec_env, g_func_on_input, 2, args);
+
+    if (wasm_runtime_get_exception(g_module_inst)) {
+        std::cerr << "WASM Exception in on_input: " << wasm_runtime_get_exception(g_module_inst) << std::endl;
+        wasm_runtime_clear_exception(g_module_inst);
+    }
 }
 
-void native_delay(wasm_exec_env_t exec_env, uint32_t ms) {
-    SDL_Delay(ms);
+static int key_to_input_key(SDL_Keycode key) {
+    switch (key) {
+        case SDLK_UP: return 0;      // InputKeyUp
+        case SDLK_DOWN: return 1;    // InputKeyDown
+        case SDLK_LEFT: return 2;    // InputKeyLeft
+        case SDLK_RIGHT: return 3;   // InputKeyRight
+        case SDLK_RETURN:
+        case SDLK_z: return 4;       // InputKeyOk
+        case SDLK_BACKSPACE:
+        case SDLK_x: return 5;       // InputKeyBack
+        default: return -1;
+    }
 }
 
-void native_random_seed(wasm_exec_env_t exec_env, uint32_t seed) {
-    g_rng.seed(seed);
-}
-
-uint32_t native_random_get(wasm_exec_env_t exec_env) {
-    return g_rng();
-}
-
-// Native symbols to export to WASM
-static NativeSymbol native_symbols[] = {
-    { "host_lcd_update", (void*)native_lcd_update, "(ii)", NULL },
-    { "host_get_input", (void*)native_get_input, "()i", NULL },
-    { "host_delay", (void*)native_delay, "(i)", NULL },
-    { "host_random_seed", (void*)native_random_seed, "(i)", NULL },
-    { "host_random_get", (void*)native_random_get, "()i", NULL },
-};
+// ============================================================================
+// Main
+// ============================================================================
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
@@ -119,19 +262,26 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // Initialize SDL
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         std::cerr << "SDL could not initialize! SDL_Error: " << SDL_GetError() << std::endl;
         return 1;
     }
 
-    window = SDL_CreateWindow("FRI3D Emulator", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 
+    window = SDL_CreateWindow("FRI3D Emulator", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
                               SCREEN_WIDTH * SCALE_FACTOR, SCREEN_HEIGHT * SCALE_FACTOR, SDL_WINDOW_SHOWN);
     if (!window) return 1;
 
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, SCREEN_WIDTH, SCREEN_HEIGHT);
 
-    // WAMR Initialization
+    // Initialize u8g2
+    u8g2_Setup_ssd1306_128x64_noname_f(&g_u8g2, U8G2_R0, u8x8_byte_callback, u8x8_gpio_and_delay_callback);
+    u8g2_InitDisplay(&g_u8g2);
+    u8g2_SetPowerSave(&g_u8g2, 0);
+    u8g2_ClearBuffer(&g_u8g2);
+
+    // Initialize WAMR
     RuntimeInitArgs init_args;
     memset(&init_args, 0, sizeof(RuntimeInitArgs));
     init_args.mem_alloc_type = Alloc_With_Pool;
@@ -142,11 +292,11 @@ int main(int argc, char* argv[]) {
         std::cerr << "Init runtime environment failed." << std::endl;
         return 1;
     }
-    
-    // Register natives
+
+    // Register native functions
     wasm_runtime_register_natives("env", native_symbols, sizeof(native_symbols)/sizeof(NativeSymbol));
 
-    // Load WASM
+    // Load WASM file
     std::ifstream file(argv[1], std::ios::binary | std::ios::ate);
     if (!file.is_open()) {
         std::cerr << "Failed to open " << argv[1] << std::endl;
@@ -164,60 +314,62 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    wasm_module_inst_t module_inst = wasm_runtime_instantiate(module, 16 * 1024, 16 * 1024, error_buf, sizeof(error_buf));
-    if (!module_inst) {
+    g_module_inst = wasm_runtime_instantiate(module, 16 * 1024, 16 * 1024, error_buf, sizeof(error_buf));
+    if (!g_module_inst) {
         std::cerr << "Instantiate wasm module failed. error: " << error_buf << std::endl;
+        return 1;
+    }
+
+    g_exec_env = wasm_runtime_create_exec_env(g_module_inst, 16 * 1024);
+
+    // Look up app functions
+    g_func_render = wasm_runtime_lookup_function(g_module_inst, "render");
+    g_func_on_input = wasm_runtime_lookup_function(g_module_inst, "on_input");
+
+    if (!g_func_render) {
+        std::cerr << "Could not find 'render' function in WASM" << std::endl;
         return 1;
     }
 
     // Main loop
     bool quit = false;
     SDL_Event e;
-    
-    // Look for on_tick function
-    wasm_function_inst_t func_on_tick = wasm_runtime_lookup_function(module_inst, "on_tick"); // signature not needed anymore
-    if (!func_on_tick) {
-        std::cerr << "Could not find on_tick function in WASM" << std::endl;
-        // Try looking for main?
-    }
-
-    wasm_exec_env_t exec_env = wasm_runtime_create_exec_env(module_inst, 16 * 1024);
 
     while (!quit) {
+        // Process events
         while (SDL_PollEvent(&e) != 0) {
-            if (e.type == SDL_QUIT) quit = true;
-            else if (e.type == SDL_KEYDOWN || e.type == SDL_KEYUP) {
-                // Map keys to bitmask
-                // Bit 0: Up, 1: Down, 2: Left, 3: Right, 4: A (Enter/Z), 5: B (Backspace/X)
-                uint32_t mask = 0;
-                switch (e.key.keysym.sym) {
-                    case SDLK_UP: mask = 1 << 0; break;
-                    case SDLK_DOWN: mask = 1 << 1; break;
-                    case SDLK_LEFT: mask = 1 << 2; break;
-                    case SDLK_RIGHT: mask = 1 << 3; break;
-                    case SDLK_RETURN: case SDLK_z: mask = 1 << 4; break;
-                    case SDLK_BACKSPACE: case SDLK_x: mask = 1 << 5; break;
+            if (e.type == SDL_QUIT) {
+                quit = true;
+            } else if (e.type == SDL_KEYDOWN || e.type == SDL_KEYUP) {
+                int input_key = key_to_input_key(e.key.keysym.sym);
+                if (input_key >= 0) {
+                    uint32_t input_type = (e.type == SDL_KEYDOWN) ? 0 : 1; // Press = 0, Release = 1
+                    call_on_input((uint32_t)input_key, input_type);
                 }
-                
-                if (e.type == SDL_KEYDOWN) current_input |= mask;
-                else current_input &= ~mask;
             }
         }
 
-        if (func_on_tick) {
-            wasm_runtime_call_wasm(exec_env, func_on_tick, 0, NULL);
-            // Check for exception
-             if (wasm_runtime_get_exception(module_inst)) {
-                std::cerr << "WASM Exception: " << wasm_runtime_get_exception(module_inst) << std::endl;
+        // Clear canvas and call render
+        u8g2_ClearBuffer(&g_u8g2);
+
+        if (g_func_render) {
+            wasm_runtime_call_wasm(g_exec_env, g_func_render, 0, NULL);
+            if (wasm_runtime_get_exception(g_module_inst)) {
+                std::cerr << "WASM Exception in render: " << wasm_runtime_get_exception(g_module_inst) << std::endl;
                 quit = true;
             }
-        } else {
-             SDL_Delay(16); // Idle if no app
         }
+
+        // Update display
+        update_display();
+
+        // ~60 FPS
+        SDL_Delay(16);
     }
 
-    wasm_runtime_destroy_exec_env(exec_env);
-    wasm_runtime_deinstantiate(module_inst);
+    // Cleanup
+    wasm_runtime_destroy_exec_env(g_exec_env);
+    wasm_runtime_deinstantiate(g_module_inst);
     wasm_runtime_unload(module);
     wasm_runtime_destroy();
     SDL_DestroyTexture(texture);

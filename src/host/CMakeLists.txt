@@ -16,12 +16,14 @@ add_subdirectory(${WAMR_ROOT_DIR} ${CMAKE_CURRENT_BINARY_DIR}/wamr)
 
 add_executable(host_emulator main.cpp)
 
-target_include_directories(host_emulator PRIVATE 
+target_include_directories(host_emulator PRIVATE
     ${SDL2_INCLUDE_DIRS}
     ${WAMR_ROOT_DIR}/core/iwasm/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../libs/u8g2/csrc
 )
 
-target_link_libraries(host_emulator PRIVATE 
+target_link_libraries(host_emulator PRIVATE
     ${SDL2_LIBRARIES}
     vmlib
+    u8g2
 )
