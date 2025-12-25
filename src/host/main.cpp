@@ -1,6 +1,7 @@
 #include <SDL.h>
 #include <wasm_export.h>
 #include <u8g2.h>
+#include <lodepng.h>
 #include <iostream>
 #include <vector>
 #include <fstream>
@@ -208,19 +209,13 @@ static NativeSymbol native_symbols[] = {
 // Screenshot Functions
 // ============================================================================
 
-static bool save_screenshot_ppm(const std::string& path) {
+static bool save_screenshot_png(const std::string& path) {
     uint8_t* buffer = u8g2_GetBufferPtr(&g_u8g2);
 
-    std::ofstream file(path, std::ios::binary);
-    if (!file.is_open()) {
-        std::cerr << "Failed to open " << path << " for writing" << std::endl;
-        return false;
-    }
+    // Create RGBA image data (lodepng expects RGBA by default)
+    std::vector<unsigned char> image(SCREEN_WIDTH * SCREEN_HEIGHT * 4);
 
-    // PPM header (P6 = binary RGB)
-    file << "P6\n" << SCREEN_WIDTH << " " << SCREEN_HEIGHT << "\n255\n";
-
-    // Convert u8g2 buffer to RGB
+    // Convert u8g2 buffer to RGBA
     for (int y = 0; y < SCREEN_HEIGHT; y++) {
         for (int x = 0; x < SCREEN_WIDTH; x++) {
             int byte_idx = x + (y / 8) * SCREEN_WIDTH;
@@ -228,13 +223,20 @@ static bool save_screenshot_ppm(const std::string& path) {
             bool pixel = (buffer[byte_idx] >> bit_idx) & 1;
             // Black pixels are "on" (1), white pixels are "off" (0)
             uint8_t color = pixel ? 0 : 255;
-            file.put(color);
-            file.put(color);
-            file.put(color);
+            size_t idx = 4 * (y * SCREEN_WIDTH + x);
+            image[idx + 0] = color; // R
+            image[idx + 1] = color; // G
+            image[idx + 2] = color; // B
+            image[idx + 3] = 255;   // A (fully opaque)
         }
     }
 
-    file.close();
+    unsigned error = lodepng::encode(path, image, SCREEN_WIDTH, SCREEN_HEIGHT);
+    if (error) {
+        std::cerr << "PNG encoder error: " << lodepng_error_text(error) << std::endl;
+        return false;
+    }
+
     return true;
 }
 
@@ -342,7 +344,7 @@ static void print_usage(const char* program) {
     std::cerr << "Options:\n";
     std::cerr << "  --test              Run in test mode (render and exit)\n";
     std::cerr << "  --scene <n>         Set scene number (for test_drawing app)\n";
-    std::cerr << "  --screenshot <path> Save screenshot to path (PPM format)\n";
+    std::cerr << "  --screenshot <path> Save screenshot to path (PNG format)\n";
     std::cerr << "  --headless          Run without display (requires --screenshot)\n";
     std::cerr << "  --help              Show this help\n";
 }
@@ -470,7 +472,7 @@ int main(int argc, char* argv[]) {
         call_wasm_render();
 
         if (!g_screenshot_path.empty()) {
-            if (!save_screenshot_ppm(g_screenshot_path)) {
+            if (!save_screenshot_png(g_screenshot_path)) {
                 return 1;
             }
             std::cout << "Screenshot saved to " << g_screenshot_path << std::endl;
@@ -508,8 +510,8 @@ int main(int argc, char* argv[]) {
                 // S key for screenshot
                 if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_s) {
                     static int screenshot_num = 0;
-                    std::string path = "screenshot_" + std::to_string(screenshot_num++) + ".ppm";
-                    if (save_screenshot_ppm(path)) {
+                    std::string path = "screenshot_" + std::to_string(screenshot_num++) + ".png";
+                    if (save_screenshot_png(path)) {
                         std::cout << "Screenshot saved to " << path << std::endl;
                     }
                     continue;
