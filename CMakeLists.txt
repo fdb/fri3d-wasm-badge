@@ -3,9 +3,10 @@ project(fri3d-wasm-badge)
 
 set(CMAKE_CXX_STANDARD 14)
 
-# Submodules
+# u8g2 graphics library (from submodule)
 add_subdirectory(libs/u8g2)
-# WAMR is a bit more complex, often best to include just what we need or use its provided CMake if compatible. 
+
+# WAMR is a bit more complex, often best to include just what we need or use its provided CMake if compatible.
 # For a host build, we usually want to build 'vmlib' (the core runtime).
 # We will tackle WAMR inclusion in the host specific CMake or here.
 # For now, let's keep it clean and handle WAMR in src/host if possible, or here if it needs global flags.

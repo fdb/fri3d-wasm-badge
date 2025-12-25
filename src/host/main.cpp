@@ -138,21 +138,19 @@ void native_canvas_draw_disc(wasm_exec_env_t exec_env, int32_t x, int32_t y, uin
     u8g2_DrawDisc(&g_u8g2, (u8g2_uint_t)x, (u8g2_uint_t)y, (u8g2_uint_t)r, U8G2_DRAW_ALL);
 }
 
-void native_canvas_draw_str(wasm_exec_env_t exec_env, int32_t x, int32_t y, uint32_t str_offset) {
-    wasm_module_inst_t module_inst = wasm_runtime_get_module_inst(exec_env);
-    if (!wasm_runtime_validate_app_str_addr(module_inst, str_offset)) {
+void native_canvas_draw_str(wasm_exec_env_t exec_env, int32_t x, int32_t y, const char* str) {
+    (void)exec_env;
+    if (str == nullptr) {
         return;
     }
-    const char* str = (const char*)wasm_runtime_addr_app_to_native(module_inst, str_offset);
     u8g2_DrawUTF8(&g_u8g2, (u8g2_uint_t)x, (u8g2_uint_t)y, str);
 }
 
-uint32_t native_canvas_string_width(wasm_exec_env_t exec_env, uint32_t str_offset) {
-    wasm_module_inst_t module_inst = wasm_runtime_get_module_inst(exec_env);
-    if (!wasm_runtime_validate_app_str_addr(module_inst, str_offset)) {
+uint32_t native_canvas_string_width(wasm_exec_env_t exec_env, const char* str) {
+    (void)exec_env;
+    if (str == nullptr) {
         return 0;
     }
-    const char* str = (const char*)wasm_runtime_addr_app_to_native(module_inst, str_offset);
     return u8g2_GetStrWidth(&g_u8g2, str);
 }
 
