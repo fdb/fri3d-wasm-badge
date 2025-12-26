@@ -53,6 +53,16 @@ cmake --build build-app
 ./build/host/host_emulator build-app/circle_app.wasm
 ```
 
+## Running tests
+
+```bash
+# Run all visual tests and produce a report
+uv run tests/visual/run_visual_tests.py
+
+# Update the "golden master" visual outputs
+uv run tests/visual/run_visual_tests.py --update-golden
+```
+
 ## Project Structure
 
 - `src/host/` - Host emulator (C++ with SDL2)
