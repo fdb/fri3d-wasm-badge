@@ -1,146 +1,116 @@
 # Visual Regression Testing
 
-This directory contains the visual regression testing infrastructure for the FRI3D WASM Badge project.
+Visual regression tests for FRI3D WASM Badge apps.
 
-## Overview
+## Quick Start
 
-The visual regression testing system allows you to:
-- Capture screenshots of drawing primitives rendered by the test_drawing app
-- Compare screenshots against "golden" reference images
-- Generate detailed HTML reports showing expected, actual, and diff images
-- Detect pixel-level differences (green = added pixels, red = removed pixels)
+```bash
+# Run all tests
+uv run tests/visual/run_visual_tests.py
+
+# Test a specific app
+uv run tests/visual/run_visual_tests.py --app test_drawing
+
+# Update golden images after intentional changes
+uv run tests/visual/run_visual_tests.py --update-golden
+```
 
 ## Directory Structure
 
 ```
 tests/visual/
-├── golden/           # Reference screenshots (committed to git)
-├── actual/           # Generated during test runs (gitignored)
-├── diff/             # Diff images (gitignored)
-├── reports/          # HTML test reports (gitignored)
-├── run_visual_tests.py   # Main test runner script
-├── requirements.txt      # Python dependencies
-└── README.md            # This file
+├── apps/                    # App test configurations
+│   ├── test_drawing/
+│   │   ├── config.yaml      # App metadata and scene list
+│   │   └── golden/          # Reference images (0.png, 1.png, ...)
+│   ├── circles/
+│   │   ├── config.yaml
+│   │   └── golden/
+│   └── mandelbrot/
+│       ├── config.yaml
+│       └── golden/
+├── output/                  # Test output (gitignored)
+├── reports/                 # HTML reports (gitignored)
+└── run_visual_tests.py      # Test runner (uses uv inline dependencies)
 ```
+
+## Adding a New App
+
+1. Create `tests/visual/apps/{app_name}/config.yaml`:
+
+```yaml
+name: My App
+description: What this app does
+
+scenes:
+  - name: Default View
+  - name: Another Scene
+```
+
+2. Add scene control exports to your app's C code:
+
+```c
+uint32_t get_scene(void) { return current_scene; }
+void set_scene(uint32_t scene) { current_scene = scene; }
+uint32_t get_scene_count(void) { return SCENE_COUNT; }
+```
+
+3. Generate golden images:
+
+```bash
+uv run tests/visual/run_visual_tests.py --app my_app --update-golden
+```
+
+## Config Format
+
+Each `config.yaml` defines the app name and its scenes:
+
+```yaml
+name: Human Readable Name
+description: Brief description of what this app tests
+
+scenes:
+  - name: Scene Zero    # Index 0 → golden/0.png
+  - name: Scene One     # Index 1 → golden/1.png
+  - name: Scene Two     # Index 2 → golden/2.png
+```
+
+Scene indices are implicit based on position in the list.
 
 ## Prerequisites
 
-1. **Host emulator built:**
-   ```bash
-   cmake -B build
-   cmake --build build
-   ```
+Build the host emulator and apps before running tests:
 
-2. **test_drawing WASM app built:**
-   ```bash
-   cmake -B build-apps/test_drawing \
-     -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-wasm.cmake \
-     -S src/apps/test_drawing
-   cmake --build build-apps/test_drawing
-   ```
-
-3. **Python 3 with Pillow:**
-   ```bash
-   pip install -r tests/visual/requirements.txt
-   ```
-
-## Usage
-
-### Run All Tests
 ```bash
-python tests/visual/run_visual_tests.py
+# Host emulator
+cmake -B build && cmake --build build
+
+# All apps
+for app in test_drawing circles mandelbrot; do
+  cmake -B build-apps/$app \
+    -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-wasm.cmake \
+    -S src/apps/$app
+  cmake --build build-apps/$app
+done
 ```
 
-### Update Golden Screenshots
-When you intentionally change the rendering output, update the golden screenshots:
-```bash
-python tests/visual/run_visual_tests.py --update-golden
-```
+## Diff Legend
 
-### Test a Single Scene
-```bash
-python tests/visual/run_visual_tests.py --scene 0
-```
+The HTML report shows three images per test:
 
-### Skip Report Generation
-```bash
-python tests/visual/run_visual_tests.py --no-report
-```
+| Image | Description |
+|-------|-------------|
+| Expected | Golden reference image |
+| Actual | Current output |
+| Diff | Visual comparison |
 
-## Test Scenes
-
-The test_drawing app includes the following scenes:
-
-| ID | Name | Description |
-|----|------|-------------|
-| 0 | horizontal_lines | Tests horizontal line rendering |
-| 1 | vertical_lines | Tests vertical line rendering |
-| 2 | diagonal_lines | Tests diagonal line rendering |
-| 3 | random_pixels | Tests pixel plotting with seeded random |
-| 4 | circles | Tests circle outlines |
-| 5 | filled_circles | Tests filled circles (discs) |
-| 6 | rectangles | Tests rectangle outlines |
-| 7 | filled_rectangles | Tests filled rectangles |
-| 8 | rounded_rectangles | Tests rounded rectangles |
-| 9 | text_rendering | Tests text rendering with different fonts |
-| 10 | mixed_primitives | Tests combination of primitives |
-| 11 | checkerboard | Tests checkerboard pattern |
-
-## Interpreting Results
-
-The HTML report shows three images for each test:
-
-- **Expected (Golden):** The reference image that represents correct output
-- **Actual:** The screenshot captured during the test run
-- **Diff:** Highlights differences between expected and actual:
-  - **Green pixels:** Present in actual but not in golden (added)
-  - **Red pixels:** Present in golden but not in actual (removed)
-  - **Dark gray:** Unchanged black pixels
-  - **Light gray:** Unchanged white pixels
-
-## Deterministic Output
-
-The test_drawing app uses a fixed random seed (12345) to ensure deterministic output. This means:
-- Random pixel positions are always the same
-- Tests can reliably compare pixel-by-pixel
-- No anti-aliasing is used, ensuring pixel-perfect matching
+Diff colors:
+- **Green**: Pixels added (in actual but not golden)
+- **Red**: Pixels removed (in golden but not actual)
+- **Dark gray**: Unchanged black pixels
+- **Light gray**: Unchanged white pixels
 
 ## CI Integration
 
-The test runner returns exit code 0 if all tests pass, and exit code 1 if any test fails. This makes it suitable for CI integration:
-
-```yaml
-# Example GitHub Actions step
-- name: Run Visual Tests
-  run: python tests/visual/run_visual_tests.py
-```
-
-## Host Emulator Options
-
-The host emulator supports several options for testing:
-
-```
-host_emulator [options] <wasm_file>
-
-Options:
-  --test              Run in test mode (render and exit)
-  --scene <n>         Set scene number (for test_drawing app)
-  --screenshot <path> Save screenshot to path (PPM format)
-  --headless          Run without display (requires --screenshot)
-  --help              Show help
-```
-
-Example: Capture a screenshot of scene 3:
-```bash
-./build/src/host/host_emulator \
-  --headless \
-  --scene 3 \
-  --screenshot output.ppm \
-  build-apps/test_drawing/test_drawing.wasm
-```
-
-## Interactive Mode
-
-Press 'S' during interactive mode to save a screenshot to the current directory.
-
-Use arrow keys to cycle through scenes in the test_drawing app.
+The script exits with code 1 on failures, making it CI-ready.
+Dependencies are embedded via PEP 723 inline script metadata—just run with `uv`.

@@ -8,6 +8,11 @@ static float g_x_zoom = 3.5f;
 static float g_y_zoom = 2.24f;
 static float g_zoom = 1.0f;
 
+// Scene control for visual testing (single scene app)
+uint32_t get_scene(void) { return 0; }
+void set_scene(uint32_t scene) { (void)scene; }
+uint32_t get_scene_count(void) { return 1; }
+
 static bool mandelbrot_pixel(int x, int y) {
     float x0 = (x / 128.0f) * g_x_zoom - g_x_offset;
     float y0 = (y / 64.0f) * g_y_zoom - g_y_offset;
