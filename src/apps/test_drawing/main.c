@@ -140,7 +140,7 @@ static void render_filled_rectangles(void) {
     canvas_draw_box(88, 34, 30, 20);
     // Center box with XOR
     canvas_set_color(ColorXOR);
-    canvas_draw_box(44, 22, 40, 20);
+    canvas_draw_box(30, 20, 68, 24);
 }
 
 static void render_rounded_rectangles(void) {
