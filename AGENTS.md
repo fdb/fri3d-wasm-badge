@@ -45,7 +45,16 @@ rm -rf build build-app
 
 ## Testing
 
-This project does not currently have automated tests. Manual testing:
+### Visual Regression Tests
+```bash
+# Run all visual tests and produce a report
+uv run tests/visual/run_visual_tests.py
+
+# Update the "golden master" visual outputs
+uv run tests/visual/run_visual_tests.py --update-golden
+```
+
+### Manual Testing
 1. Build host emulator
 2. Build WASM app
 3. Run emulator with WASM file
