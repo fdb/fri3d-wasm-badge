@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fri3d Badge Emulator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+            font-size: 24px;
+            color: #fff;
+        }
+
+        .emulator-container {
+            background: #16213e;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        #canvas {
+            display: block;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            border: 4px solid #0f3460;
+            border-radius: 8px;
+        }
+
+        .controls {
+            margin-top: 20px;
+            text-align: center;
+            color: #aaa;
+            font-size: 14px;
+        }
+
+        .controls h3 {
+            margin-bottom: 10px;
+            color: #fff;
+        }
+
+        .key {
+            display: inline-block;
+            background: #0f3460;
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin: 2px;
+            font-family: monospace;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .loading .spinner {
+            border: 4px solid #0f3460;
+            border-top: 4px solid #e94560;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        #output {
+            margin-top: 20px;
+            padding: 10px;
+            background: #0f0f1a;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 150px;
+            overflow-y: auto;
+            width: 100%;
+            max-width: 512px;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <h1>Fri3d Badge Emulator</h1>
+
+    <div class="emulator-container">
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Loading emulator...</p>
+        </div>
+
+        <canvas id="canvas" class="hidden" width="512" height="256"></canvas>
+
+        <div id="controls" class="controls hidden">
+            <h3>Controls</h3>
+            <p>
+                <span class="key">↑</span>
+                <span class="key">↓</span>
+                <span class="key">←</span>
+                <span class="key">→</span>
+                Navigate
+            </p>
+            <p>
+                <span class="key">Z</span> / <span class="key">Enter</span>
+                Select / OK
+            </p>
+            <p>
+                <span class="key">X</span> / <span class="key">Backspace</span>
+                Back
+            </p>
+            <p>
+                <span class="key">←</span> + <span class="key">X</span> (hold)
+                Return to launcher
+            </p>
+        </div>
+    </div>
+
+    <div id="output"></div>
+
+    <script>
+        var Module = {
+            canvas: (function() {
+                var canvas = document.getElementById('canvas');
+                return canvas;
+            })(),
+            print: function(text) {
+                var output = document.getElementById('output');
+                output.innerHTML += text + '<br>';
+                output.scrollTop = output.scrollHeight;
+                console.log(text);
+            },
+            printErr: function(text) {
+                var output = document.getElementById('output');
+                output.innerHTML += '<span style="color: #e94560;">' + text + '</span><br>';
+                output.scrollTop = output.scrollHeight;
+                console.error(text);
+            },
+            onRuntimeInitialized: function() {
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('canvas').classList.remove('hidden');
+                document.getElementById('controls').classList.remove('hidden');
+            }
+        };
+    </script>
+    {{{ SCRIPT }}}
+</body>
+</html>

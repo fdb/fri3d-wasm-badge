@@ -1,85 +1,119 @@
-# FRI3D WASM Badge
+# Fri3d WASM Badge
 
-A WebAssembly-based badge emulator for the FRI3D camp badge, featuring a 128x64 OLED display simulation.
+A WebAssembly-based badge platform for the Fri3d camp badge, featuring a 128x64 OLED display. Includes a desktop emulator (SDL), web emulator (Emscripten), and ESP32-S3 firmware.
 
 ## Getting Started
 
 ### Cloning the Repository
 
-This project uses git submodules for dependencies (WAMR, u8g2, lodepng). When cloning, use one of these methods:
+This project uses git submodules for dependencies. When cloning:
 
-**Option 1: Clone with submodules in one step**
 ```bash
 git clone --recursive https://github.com/fdb/fri3d-wasm-badge.git
+cd fri3d-wasm-badge
 ```
 
-**Option 2: Clone first, then initialize submodules**
+Or clone first, then initialize submodules:
 ```bash
 git clone https://github.com/fdb/fri3d-wasm-badge.git
 cd fri3d-wasm-badge
 git submodule update --init --recursive
 ```
 
-### Updating Submodules
-
-If you've already cloned the repository and need to update the submodules:
-
-```bash
-git pull --recurse-submodules
-```
-
-Or manually update submodules:
-
-```bash
-git submodule update --init --recursive
-```
-
 ## Building
 
-See [AGENTS.md](AGENTS.md) for detailed build instructions and development guidelines.
-
-### Quick Build
+### Quick Build (All Components)
 
 ```bash
-# Build host emulator
-cmake -B build
-cmake --build build
-
-# Build WASM application
-cmake -B build-app -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-wasm.cmake -S src/app
-cmake --build build-app
-
-# Run
-./build/host/host_emulator build-app/circle_app.wasm
+./build_all.sh
 ```
 
-## Running tests
+This builds the desktop emulator and all WASM apps.
+
+### Desktop Emulator Only
 
 ```bash
-# Run all visual tests and produce a report
+cmake -B build/emulator
+cmake --build build/emulator
+```
+
+### WASM Apps Only
+
+Requires [Zig](https://ziglang.org/) for the WASM toolchain:
+
+```bash
+cmake -B build/apps/circles -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-wasm.cmake -S src/apps/circles
+cmake --build build/apps/circles
+```
+
+### Running the Emulator
+
+```bash
+# Show built-in launcher
+./build/emulator/src/emulator/fri3d_emulator
+
+# Run a specific app
+./build/emulator/src/emulator/fri3d_emulator build/apps/circles/circles.wasm
+```
+
+### Controls
+
+- Arrow keys: Navigate
+- Z / Enter: OK / Select
+- X / Backspace: Back
+- S: Screenshot
+- Left + X (hold 500ms): Return to launcher
+
+## Running Tests
+
+```bash
+# Run all visual tests
 uv run tests/visual/run_visual_tests.py
 
-# Update the "golden master" visual outputs
+# Update golden images
 uv run tests/visual/run_visual_tests.py --update-golden
 ```
 
 ## Project Structure
 
-- `src/host/` - Host emulator (C++ with SDL2)
-- `src/app/` - WASM applications (C)
-- `libs/` - Git submodules (WAMR, u8g2, lodepng)
-- `cmake/` - CMake toolchain files
-- `tests/` - Visual regression tests
+```
+src/
+├── sdk/          # WASM SDK headers (API for apps)
+├── apps/         # WASM applications
+│   ├── circles/
+│   ├── mandelbrot/
+│   └── test_drawing/
+├── runtime/      # Shared runtime code (canvas, WASM runner, input handling)
+├── emulator/     # Desktop SDL emulator
+├── firmware/     # ESP32-S3 PlatformIO project
+└── web/          # Web/Emscripten build
+
+libs/             # Git submodules (WAMR, u8g2, lodepng)
+cmake/            # CMake toolchain files
+tests/            # Visual regression tests
+```
+
+### Platform Targets
+
+| Platform | Directory | Build System | Status |
+|----------|-----------|--------------|--------|
+| Desktop Emulator | `src/emulator/` | CMake + SDL2 | Working |
+| Web Emulator | `src/web/` | Emscripten | Skeleton |
+| ESP32-S3 Firmware | `src/firmware/` | PlatformIO | Skeleton |
+| WASM Apps | `src/apps/` | CMake + Zig | Working |
 
 ## Dependencies
 
-- CMake 3.16+
-- SDL2
-- Zig (for WASM compilation)
-- Git submodules:
-  - WASM Micro Runtime (WAMR)
-  - u8g2 graphics library
-  - lodepng
+- **CMake** 3.16+
+- **SDL2** (for desktop emulator)
+- **Zig** (for WASM compilation)
+- **PlatformIO** (for ESP32 firmware, optional)
+- **Emscripten** (for web build, optional)
+
+Git submodules:
+- WASM Micro Runtime (WAMR)
+- u8g2 graphics library
+- lodepng (PNG encoding)
 
 ## License
 

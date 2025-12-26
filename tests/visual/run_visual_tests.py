@@ -40,7 +40,7 @@ from PIL import Image
 
 SCRIPT_DIR = Path(__file__).parent.absolute()
 PROJECT_ROOT = SCRIPT_DIR.parent.parent
-HOST_EMULATOR = PROJECT_ROOT / "build" / "src" / "host" / "host_emulator"
+HOST_EMULATOR = PROJECT_ROOT / "build" / "emulator" / "src" / "emulator" / "fri3d_emulator"
 APPS_DIR = SCRIPT_DIR / "apps"
 OUTPUT_DIR = SCRIPT_DIR / "output"
 REPORTS_DIR = SCRIPT_DIR / "reports"
@@ -115,7 +115,7 @@ def discover_apps() -> list[App]:
 
 def find_wasm_binary(app_id: str) -> Optional[Path]:
     """Find the compiled WASM binary for an app."""
-    build_dir = PROJECT_ROOT / "build-apps" / app_id
+    build_dir = PROJECT_ROOT / "build" / "apps" / app_id
 
     if not build_dir.exists():
         return None
@@ -420,8 +420,9 @@ def generate_html_report(results: list[TestResult], output_path: Path):
 def check_prerequisites(apps: list[App]) -> bool:
     """Verify host emulator and app binaries exist."""
     if not HOST_EMULATOR.exists():
-        print(f"Error: Host emulator not found at {HOST_EMULATOR}")
-        print("Build with: cmake -B build && cmake --build build")
+        print(f"Error: Emulator not found at {HOST_EMULATOR}")
+        print("Build with: ./build_all.sh or:")
+        print("  cmake -B build/emulator && cmake --build build/emulator")
         return False
 
     missing = []
@@ -431,10 +432,10 @@ def check_prerequisites(apps: list[App]) -> bool:
 
     if missing:
         print(f"Error: WASM binaries not found for: {', '.join(missing)}")
-        print("Build apps with:")
+        print("Build apps with: ./build_all.sh or:")
         for app_id in missing:
-            print(f"  cmake -B build-apps/{app_id} -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-wasm.cmake -S src/apps/{app_id}")
-            print(f"  cmake --build build-apps/{app_id}")
+            print(f"  cmake -B build/apps/{app_id} -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-wasm.cmake -S src/apps/{app_id}")
+            print(f"  cmake --build build/apps/{app_id}")
         return False
 
     return True
