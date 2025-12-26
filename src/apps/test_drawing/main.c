@@ -114,7 +114,7 @@ static void render_filled_circles(void) {
     canvas_draw_disc(64, 48, 8);
     // Use XOR for overlapping effect
     canvas_set_color(ColorXOR);
-    canvas_draw_disc(64, 32, 15);
+    canvas_draw_disc(64, 32, 18);
 }
 
 static void render_rectangles(void) {

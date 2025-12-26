@@ -128,14 +128,107 @@ void native_canvas_draw_rbox(wasm_exec_env_t exec_env, int32_t x, int32_t y, uin
     u8g2_DrawRBox(&g_u8g2, (u8g2_uint_t)x, (u8g2_uint_t)y, (u8g2_uint_t)w, (u8g2_uint_t)h, (u8g2_uint_t)r);
 }
 
+// XOR-safe disc drawing using scanline approach (private helper)
+// Each pixel is drawn exactly once, avoiding the duplicate pixel issue in XOR mode
+static void draw_xor_disc(int32_t x0, int32_t y0, uint32_t r) {
+    if (r == 0) {
+        u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)x0, (u8g2_uint_t)y0);
+        return;
+    }
+
+    int32_t radius = (int32_t)r;
+
+    // Draw horizontal scanlines from top to bottom
+    // For each y, calculate x extent using circle equation: x² + y² = r²
+    for (int32_t dy = -radius; dy <= radius; dy++) {
+        // x_extent = sqrt(r² - y²)
+        int32_t y_sq = dy * dy;
+        int32_t r_sq = radius * radius;
+        if (y_sq > r_sq) continue;
+
+        // Integer square root approximation
+        int32_t x_extent = 0;
+        while ((x_extent + 1) * (x_extent + 1) <= r_sq - y_sq) {
+            x_extent++;
+        }
+
+        // Draw horizontal line from x0-x_extent to x0+x_extent
+        int32_t line_y = y0 + dy;
+        int32_t line_x = x0 - x_extent;
+        uint32_t line_w = (uint32_t)(2 * x_extent + 1);
+
+        u8g2_DrawHLine(&g_u8g2, (u8g2_uint_t)line_x, (u8g2_uint_t)line_y, (u8g2_uint_t)line_w);
+    }
+}
+
+// XOR-safe circle outline drawing (private helper)
+// Uses midpoint algorithm but ensures no pixel is drawn twice
+static void draw_xor_circle(int32_t x0, int32_t y0, uint32_t r) {
+    if (r == 0) {
+        u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)x0, (u8g2_uint_t)y0);
+        return;
+    }
+
+    int32_t x = 0;
+    int32_t y = (int32_t)r;
+    int32_t d = 1 - (int32_t)r;
+
+    while (x <= y) {
+        // Draw 8 octants, but when x == y, only draw 4 pixels (not 8)
+        // to avoid duplicates at the 45-degree points
+
+        if (x == y) {
+            // At 45 degrees: only 4 unique pixels
+            u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x0 + x), (u8g2_uint_t)(y0 + y));  // lower right
+            u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x0 - x), (u8g2_uint_t)(y0 + y));  // lower left
+            u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x0 + x), (u8g2_uint_t)(y0 - y));  // upper right
+            u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x0 - x), (u8g2_uint_t)(y0 - y));  // upper left
+        } else if (x == 0) {
+            // On axes: 4 unique pixels
+            u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x0), (u8g2_uint_t)(y0 + y));      // bottom
+            u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x0), (u8g2_uint_t)(y0 - y));      // top
+            u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x0 + y), (u8g2_uint_t)(y0));      // right
+            u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x0 - y), (u8g2_uint_t)(y0));      // left
+        } else {
+            // General case: 8 unique pixels
+            u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x0 + x), (u8g2_uint_t)(y0 + y));
+            u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x0 - x), (u8g2_uint_t)(y0 + y));
+            u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x0 + x), (u8g2_uint_t)(y0 - y));
+            u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x0 - x), (u8g2_uint_t)(y0 - y));
+            u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x0 + y), (u8g2_uint_t)(y0 + x));
+            u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x0 - y), (u8g2_uint_t)(y0 + x));
+            u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x0 + y), (u8g2_uint_t)(y0 - x));
+            u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x0 - y), (u8g2_uint_t)(y0 - x));
+        }
+
+        if (d < 0) {
+            d += 2 * x + 3;
+        } else {
+            d += 2 * (x - y) + 5;
+            y--;
+        }
+        x++;
+    }
+}
+
 void native_canvas_draw_circle(wasm_exec_env_t exec_env, int32_t x, int32_t y, uint32_t r) {
     (void)exec_env;
-    u8g2_DrawCircle(&g_u8g2, (u8g2_uint_t)x, (u8g2_uint_t)y, (u8g2_uint_t)r, U8G2_DRAW_ALL);
+    // Use XOR-safe version when in XOR mode (color 2) to avoid ragged edges
+    if (u8g2_GetDrawColor(&g_u8g2) == 2) {
+        draw_xor_circle(x, y, r);
+    } else {
+        u8g2_DrawCircle(&g_u8g2, (u8g2_uint_t)x, (u8g2_uint_t)y, (u8g2_uint_t)r, U8G2_DRAW_ALL);
+    }
 }
 
 void native_canvas_draw_disc(wasm_exec_env_t exec_env, int32_t x, int32_t y, uint32_t r) {
     (void)exec_env;
-    u8g2_DrawDisc(&g_u8g2, (u8g2_uint_t)x, (u8g2_uint_t)y, (u8g2_uint_t)r, U8G2_DRAW_ALL);
+    // Use XOR-safe version when in XOR mode (color 2) to avoid ragged edges
+    if (u8g2_GetDrawColor(&g_u8g2) == 2) {
+        draw_xor_disc(x, y, r);
+    } else {
+        u8g2_DrawDisc(&g_u8g2, (u8g2_uint_t)x, (u8g2_uint_t)y, (u8g2_uint_t)r, U8G2_DRAW_ALL);
+    }
 }
 
 void native_canvas_draw_str(wasm_exec_env_t exec_env, int32_t x, int32_t y, const char* str) {
