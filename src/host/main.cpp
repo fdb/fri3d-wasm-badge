@@ -130,12 +130,73 @@ void native_canvas_draw_rbox(wasm_exec_env_t exec_env, int32_t x, int32_t y, uin
 
 void native_canvas_draw_circle(wasm_exec_env_t exec_env, int32_t x, int32_t y, uint32_t r) {
     (void)exec_env;
-    u8g2_DrawCircle(&g_u8g2, (u8g2_uint_t)x, (u8g2_uint_t)y, (u8g2_uint_t)r, U8G2_DRAW_ALL);
+    // u8g2's DrawCircle doesn't support XOR mode properly because the midpoint
+    // circle algorithm draws some edge pixels multiple times. In XOR mode,
+    // this causes those pixels to toggle twice, creating gaps in the circle.
+    // When in XOR mode (color 2), we use a custom implementation that draws
+    // each pixel exactly once using the midpoint circle algorithm carefully.
+    uint8_t color = u8g2_GetDrawColor(&g_u8g2);
+    if (color == 2) {
+        // XOR mode: use midpoint circle algorithm but only draw each pixel once
+        // by only drawing the 8 octant points without overlap
+        int32_t xi = 0;
+        int32_t yi = (int32_t)r;
+        int32_t d = 1 - (int32_t)r;
+
+        // Draw initial points on axes (4 points)
+        u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x + r), (u8g2_uint_t)y);
+        u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x - r), (u8g2_uint_t)y);
+        u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)x, (u8g2_uint_t)(y + r));
+        u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)x, (u8g2_uint_t)(y - r));
+
+        while (xi < yi) {
+            xi++;
+            if (d < 0) {
+                d += 2 * xi + 1;
+            } else {
+                yi--;
+                d += 2 * (xi - yi) + 1;
+            }
+
+            // Draw 8 octant points, but avoid duplicates when xi == yi
+            if (xi < yi) {
+                u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x + xi), (u8g2_uint_t)(y + yi));
+                u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x - xi), (u8g2_uint_t)(y + yi));
+                u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x + xi), (u8g2_uint_t)(y - yi));
+                u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x - xi), (u8g2_uint_t)(y - yi));
+                u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x + yi), (u8g2_uint_t)(y + xi));
+                u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x - yi), (u8g2_uint_t)(y + xi));
+                u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x + yi), (u8g2_uint_t)(y - xi));
+                u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x - yi), (u8g2_uint_t)(y - xi));
+            } else if (xi == yi) {
+                // On the diagonal, only draw 4 points to avoid duplicates
+                u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x + xi), (u8g2_uint_t)(y + yi));
+                u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x - xi), (u8g2_uint_t)(y + yi));
+                u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x + xi), (u8g2_uint_t)(y - yi));
+                u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x - xi), (u8g2_uint_t)(y - yi));
+            }
+        }
+    } else {
+        u8g2_DrawCircle(&g_u8g2, (u8g2_uint_t)x, (u8g2_uint_t)y, (u8g2_uint_t)r, U8G2_DRAW_ALL);
+    }
 }
 
 void native_canvas_draw_disc(wasm_exec_env_t exec_env, int32_t x, int32_t y, uint32_t r) {
     (void)exec_env;
-    u8g2_DrawDisc(&g_u8g2, (u8g2_uint_t)x, (u8g2_uint_t)y, (u8g2_uint_t)r, U8G2_DRAW_ALL);
+    // u8g2's DrawDisc doesn't support XOR mode properly because the midpoint
+    // circle algorithm draws some edge pixels multiple times. In XOR mode,
+    // this causes those pixels to toggle twice, creating "ragged edges".
+    // To ensure consistent pixel coverage between normal and XOR drawing,
+    // we use our own implementation that draws each pixel exactly once.
+    // This way, XOR operations will cleanly align with previously drawn discs.
+    int32_t r_sq = (int32_t)(r * r);
+    for (int32_t dy = -(int32_t)r; dy <= (int32_t)r; dy++) {
+        for (int32_t dx = -(int32_t)r; dx <= (int32_t)r; dx++) {
+            if (dx * dx + dy * dy <= r_sq) {
+                u8g2_DrawPixel(&g_u8g2, (u8g2_uint_t)(x + dx), (u8g2_uint_t)(y + dy));
+            }
+        }
+    }
 }
 
 void native_canvas_draw_str(wasm_exec_env_t exec_env, int32_t x, int32_t y, const char* str) {
