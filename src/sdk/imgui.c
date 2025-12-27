@@ -12,6 +12,7 @@
 
 #define UI_MAX_LAYOUT_DEPTH 8
 #define UI_MAX_FOCUSABLE 32
+#define UI_MAX_DEFERRED 16
 #define UI_FONT_HEIGHT_PRIMARY 12
 #define UI_FONT_HEIGHT_SECONDARY 10
 #define UI_BUTTON_PADDING_X 4
@@ -32,14 +33,18 @@ typedef struct {
     UiLayoutDirection direction;
     int16_t spacing;
     int16_t cursor;  // Current position in layout direction
+    bool centered;   // For hstacks: defer drawing until end_stack for centering
 } UiLayoutStack;
 
+// Deferred button draw operation
 typedef struct {
     int16_t x;
     int16_t y;
     int16_t width;
     int16_t height;
-} UiWidgetRect;
+    const char* text;
+    bool focused;
+} UiDeferredButton;
 
 typedef struct {
     // Layout stack
@@ -72,6 +77,10 @@ typedef struct {
     bool use_absolute;
     int16_t abs_x;
     int16_t abs_y;
+
+    // Deferred drawing for centered hstacks
+    UiDeferredButton deferred_buttons[UI_MAX_DEFERRED];
+    int8_t deferred_count;
 
 } UiContext;
 
@@ -146,6 +155,25 @@ static bool ui_check_activated(int16_t widget_idx) {
     return ui_check_focused(widget_idx) && g_ctx.ok_pressed;
 }
 
+static bool ui_in_centered_hstack(void) {
+    UiLayoutStack* layout = ui_current_layout();
+    return layout && layout->direction == UI_LAYOUT_HORIZONTAL && layout->centered;
+}
+
+static void ui_draw_button_internal(int16_t x, int16_t y, int16_t w, int16_t h, const char* text, bool focused) {
+    canvas_set_font(FontSecondary);
+    if (focused) {
+        canvas_set_color(ColorBlack);
+        canvas_draw_rbox(x, y, w, h, 2);
+        canvas_set_color(ColorWhite);
+        canvas_draw_str(x + UI_BUTTON_PADDING_X, y + h - UI_BUTTON_PADDING_Y, text);
+    } else {
+        canvas_set_color(ColorBlack);
+        canvas_draw_rframe(x, y, w, h, 2);
+        canvas_draw_str(x + UI_BUTTON_PADDING_X, y + h - UI_BUTTON_PADDING_Y, text);
+    }
+}
+
 // ----------------------------------------------------------------------------
 // Context Management
 // ----------------------------------------------------------------------------
@@ -178,6 +206,9 @@ void ui_begin(void) {
 
     // Reset position override
     g_ctx.use_absolute = false;
+
+    // Reset deferred drawing
+    g_ctx.deferred_count = 0;
 
     // Consume the ok_pressed flag (checked by widgets during this frame)
     // It was set by ui_input and will be cleared at end of frame
@@ -286,26 +317,81 @@ void ui_hstack(int16_t spacing) {
         .direction = UI_LAYOUT_HORIZONTAL,
         .spacing = spacing,
         .cursor = 0,
+        .centered = false,
+    };
+}
+
+void ui_hstack_centered(int16_t spacing) {
+    if (g_ctx.layout_depth >= UI_MAX_LAYOUT_DEPTH - 1) return;
+
+    UiLayoutStack* parent = ui_current_layout();
+    int16_t new_x = parent ? parent->x : 0;
+    int16_t new_y = parent ? (parent->y + parent->cursor) : 0;
+    int16_t new_width = parent ? parent->width : UI_SCREEN_WIDTH;
+
+    // Reset deferred buffer for this centered stack
+    g_ctx.deferred_count = 0;
+
+    g_ctx.layout_depth++;
+    g_ctx.layout_stack[g_ctx.layout_depth] = (UiLayoutStack){
+        .x = new_x,
+        .y = new_y,
+        .width = new_width,
+        .height = UI_SCREEN_HEIGHT - new_y,
+        .direction = UI_LAYOUT_HORIZONTAL,
+        .spacing = spacing,
+        .cursor = 0,
+        .centered = true,
     };
 }
 
 void ui_end_stack(void) {
     if (g_ctx.layout_depth <= 0) return;
 
-    // Get the height used by this stack
     UiLayoutStack* ending = &g_ctx.layout_stack[g_ctx.layout_depth];
-    int16_t used_height = ending->cursor;
-    if (ending->spacing > 0 && used_height > 0) {
-        used_height -= ending->spacing;  // Remove trailing spacing
+
+    // Handle centered hstack: draw deferred buttons with centering offset
+    if (ending->centered && ending->direction == UI_LAYOUT_HORIZONTAL) {
+        int16_t content_width = ending->cursor;
+        if (ending->spacing > 0 && content_width > 0) {
+            content_width -= ending->spacing;  // Remove trailing spacing
+        }
+
+        // Calculate centering offset
+        int16_t offset = (ending->width - content_width) / 2;
+
+        // Draw all deferred buttons with offset
+        for (int8_t i = 0; i < g_ctx.deferred_count; i++) {
+            UiDeferredButton* btn = &g_ctx.deferred_buttons[i];
+            ui_draw_button_internal(
+                btn->x + offset,
+                btn->y,
+                btn->width,
+                btn->height,
+                btn->text,
+                btn->focused
+            );
+        }
+
+        // Clear deferred buffer
+        g_ctx.deferred_count = 0;
+    }
+
+    // Get the height/width used by this stack
+    int16_t used_size = ending->cursor;
+    if (ending->spacing > 0 && used_size > 0) {
+        used_size -= ending->spacing;  // Remove trailing spacing
     }
 
     g_ctx.layout_depth--;
 
-    // Advance parent cursor by the height used
+    // Advance parent cursor
     UiLayoutStack* parent = ui_current_layout();
     if (parent) {
         if (parent->direction == UI_LAYOUT_VERTICAL) {
-            parent->cursor += used_height + parent->spacing;
+            // For vstack parent, advance by height of the hstack content
+            int16_t height = UI_FONT_HEIGHT_SECONDARY + UI_BUTTON_PADDING_Y * 2;  // Button height
+            parent->cursor += height + parent->spacing;
         }
         // For horizontal parent, we'd need width tracking
     }
@@ -376,26 +462,27 @@ bool ui_button(const char* text) {
     int16_t x, y, w;
     ui_layout_next(btn_width, btn_height, &x, &y, &w);
 
-    // Center button in layout width
-    int16_t btn_x = x + (w - btn_width) / 2;
-
     // Register for focus
     int16_t idx = ui_register_focusable();
     bool focused = ui_check_focused(idx);
     bool activated = ui_check_activated(idx);
 
-    // Draw button
-    if (focused) {
-        // Focused: filled box with inverted text
-        canvas_set_color(ColorBlack);
-        canvas_draw_rbox(btn_x, y, btn_width, btn_height, 2);
-        canvas_set_color(ColorWhite);
-        canvas_draw_str(btn_x + UI_BUTTON_PADDING_X, y + btn_height - UI_BUTTON_PADDING_Y, text);
+    // Check if we're in a centered hstack - defer drawing
+    if (ui_in_centered_hstack()) {
+        if (g_ctx.deferred_count < UI_MAX_DEFERRED) {
+            g_ctx.deferred_buttons[g_ctx.deferred_count++] = (UiDeferredButton){
+                .x = x,
+                .y = y,
+                .width = btn_width,
+                .height = btn_height,
+                .text = text,
+                .focused = focused,
+            };
+        }
     } else {
-        // Normal: outline with black text
-        canvas_set_color(ColorBlack);
-        canvas_draw_rframe(btn_x, y, btn_width, btn_height, 2);
-        canvas_draw_str(btn_x + UI_BUTTON_PADDING_X, y + btn_height - UI_BUTTON_PADDING_Y, text);
+        // Center button in layout width for vertical stacks
+        int16_t btn_x = x + (w - btn_width) / 2;
+        ui_draw_button_internal(btn_x, y, btn_width, btn_height, text, focused);
     }
 
     return activated;

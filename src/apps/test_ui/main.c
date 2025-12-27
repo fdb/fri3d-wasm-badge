@@ -66,8 +66,8 @@ static void render_counter(void) {
     ui_label(buf, UI_FONT_SECONDARY, UI_ALIGN_CENTER);
     ui_spacer(8);
 
-    // Buttons in horizontal layout
-    ui_hstack(4);
+    // Buttons in centered horizontal layout
+    ui_hstack_centered(4);
     if (ui_button("+")) {
         g_counter++;
     }

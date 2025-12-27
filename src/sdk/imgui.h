@@ -82,6 +82,9 @@ void ui_vstack(int16_t spacing);
 // Begin a horizontal stack with specified pixel spacing between items
 void ui_hstack(int16_t spacing);
 
+// Begin a centered horizontal stack (contents will be centered in parent width)
+void ui_hstack_centered(int16_t spacing);
+
 // End the current stack and return to parent layout
 void ui_end_stack(void);
 
