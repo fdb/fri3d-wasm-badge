@@ -14,10 +14,19 @@ cd fri3d-wasm-badge
 ```
 
 Or clone first, then initialize submodules:
+
 ```bash
 git clone https://github.com/fdb/fri3d-wasm-badge.git
 cd fri3d-wasm-badge
 git submodule update --init --recursive
+```
+
+## Prerequisites
+
+### macOS
+
+```
+brew install cmake zig sdl2
 ```
 
 ## Building
@@ -95,12 +104,12 @@ tests/            # Visual regression tests
 
 ### Platform Targets
 
-| Platform | Directory | Build System | Status |
-|----------|-----------|--------------|--------|
-| Desktop Emulator | `src/emulator/` | CMake + SDL2 | Working |
-| Web Emulator | `src/web/` | Emscripten | Skeleton |
-| ESP32-S3 Firmware | `src/firmware/` | PlatformIO | Skeleton |
-| WASM Apps | `src/apps/` | CMake + Zig | Working |
+| Platform          | Directory       | Build System | Status   |
+| ----------------- | --------------- | ------------ | -------- |
+| Desktop Emulator  | `src/emulator/` | CMake + SDL2 | Working  |
+| Web Emulator      | `src/web/`      | Emscripten   | Skeleton |
+| ESP32-S3 Firmware | `src/firmware/` | PlatformIO   | Skeleton |
+| WASM Apps         | `src/apps/`     | CMake + Zig  | Working  |
 
 ## Dependencies
 
@@ -111,6 +120,7 @@ tests/            # Visual regression tests
 - **Emscripten** (for web build, optional)
 
 Git submodules:
+
 - WASM Micro Runtime (WAMR)
 - u8g2 graphics library
 - lodepng (PNG encoding)
