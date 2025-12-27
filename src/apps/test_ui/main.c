@@ -66,18 +66,18 @@ static void render_counter(void) {
     ui_label(buf, UI_FONT_SECONDARY, UI_ALIGN_CENTER);
     ui_spacer(8);
 
-    // Buttons
-    if (ui_button("Increment")) {
+    // Buttons in horizontal layout
+    ui_hstack(4);
+    if (ui_button("+")) {
         g_counter++;
     }
-
-    if (ui_button("Decrement")) {
+    if (ui_button("-")) {
         g_counter--;
     }
-
     if (ui_button("Reset")) {
         g_counter = 0;
     }
+    ui_end_stack();
 
     ui_end();
 }
