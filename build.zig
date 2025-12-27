@@ -436,6 +436,15 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(test_ui_zig);
 
     // ========================================================================
+    // WASM-only build step (no SDL2/native dependencies needed)
+    // ========================================================================
+    const wasm_step = b.step("wasm", "Build only WASM apps (no native deps)");
+
+    // Add all WASM app artifacts to the wasm step
+    wasm_step.dependOn(&b.addInstallArtifact(circles_zig, .{}).step);
+    wasm_step.dependOn(&b.addInstallArtifact(test_ui_zig, .{}).step);
+
+    // ========================================================================
     // Run command
     // ========================================================================
     const run_cmd = b.addRunArtifact(emulator);
@@ -459,9 +468,12 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&test_cmd.step);
 
     // ========================================================================
-    // Web build step - copy web files and WASM apps to www/
+    // Web build step - build WASM apps and copy to www/
     // ========================================================================
-    const web_step = b.step("web", "Build web version (copy files to www/)");
+    const web_step = b.step("web", "Build web version (WASM apps + web files)");
+
+    // Web step depends on building the WASM apps
+    web_step.dependOn(wasm_step);
 
     // Copy web platform files
     const copy_html = b.addInstallFile(b.path("src/ports/web/index.html"), "../www/index.html");
@@ -470,14 +482,11 @@ pub fn build(b: *std.Build) void {
     web_step.dependOn(&copy_html.step);
     web_step.dependOn(&copy_js.step);
 
-    // Copy all WASM apps
-    const wasm_apps_web = [_][]const u8{ "circles", "mandelbrot", "test_drawing", "test_ui", "circles_zig", "test_ui_zig" };
+    // Copy all WASM apps to www/
+    const wasm_apps_web = [_][]const u8{ "circles_zig", "test_ui_zig" };
     for (wasm_apps_web) |app_name| {
         const dest_path = b.fmt("../www/{s}.wasm", .{app_name});
         const copy_wasm = b.addInstallFile(b.path(b.fmt("zig-out/bin/{s}.wasm", .{app_name})), dest_path);
         web_step.dependOn(&copy_wasm.step);
     }
-
-    // Make web depend on building the apps first
-    web_step.dependOn(b.getInstallStep());
 }
