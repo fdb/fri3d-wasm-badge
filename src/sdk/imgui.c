@@ -514,12 +514,26 @@ void ui_menu_begin(int16_t* scroll, int16_t visible, int16_t total) {
 bool ui_menu_item(const char* text, int16_t index) {
     if (!g_ctx.menu.active || !g_ctx.menu.scroll) return false;
 
+    // Register for focus first (all items, visible or not)
+    int16_t idx = ui_register_focusable();
+    bool focused = ui_check_focused(idx);
+    bool activated = ui_check_activated(idx);
+
+    // Update scroll to keep focused item visible BEFORE visibility check
+    if (focused) {
+        int16_t scroll = *g_ctx.menu.scroll;
+        if (index < scroll) {
+            *g_ctx.menu.scroll = index;
+        } else if (index >= scroll + g_ctx.menu.visible) {
+            *g_ctx.menu.scroll = index - g_ctx.menu.visible + 1;
+        }
+    }
+
+    // Now read scroll (may have been updated)
     int16_t scroll = *g_ctx.menu.scroll;
 
     // Check if item is visible
     if (index < scroll || index >= scroll + g_ctx.menu.visible) {
-        // Still register for focus even if not visible
-        ui_register_focusable();
         return false;
     }
 
@@ -528,20 +542,6 @@ bool ui_menu_item(const char* text, int16_t index) {
     // Calculate position within visible area
     int16_t visible_index = index - scroll;
     int16_t y = g_ctx.menu.y_start + visible_index * UI_MENU_ITEM_HEIGHT;
-
-    // Register for focus
-    int16_t idx = ui_register_focusable();
-    bool focused = ui_check_focused(idx);
-    bool activated = ui_check_activated(idx);
-
-    // Update scroll to keep focused item visible
-    if (focused) {
-        if (index < scroll) {
-            *g_ctx.menu.scroll = index;
-        } else if (index >= scroll + g_ctx.menu.visible) {
-            *g_ctx.menu.scroll = index - g_ctx.menu.visible + 1;
-        }
-    }
 
     // Calculate width (leave room for scrollbar)
     int16_t item_width = UI_SCREEN_WIDTH - UI_SCROLLBAR_WIDTH - 2;
@@ -563,12 +563,26 @@ bool ui_menu_item(const char* text, int16_t index) {
 bool ui_menu_item_value(const char* label, const char* value, int16_t index) {
     if (!g_ctx.menu.active || !g_ctx.menu.scroll) return false;
 
+    // Register for focus first (all items, visible or not)
+    int16_t idx = ui_register_focusable();
+    bool focused = ui_check_focused(idx);
+    bool activated = ui_check_activated(idx);
+
+    // Update scroll to keep focused item visible BEFORE visibility check
+    if (focused) {
+        int16_t scroll = *g_ctx.menu.scroll;
+        if (index < scroll) {
+            *g_ctx.menu.scroll = index;
+        } else if (index >= scroll + g_ctx.menu.visible) {
+            *g_ctx.menu.scroll = index - g_ctx.menu.visible + 1;
+        }
+    }
+
+    // Now read scroll (may have been updated)
     int16_t scroll = *g_ctx.menu.scroll;
 
     // Check if item is visible
     if (index < scroll || index >= scroll + g_ctx.menu.visible) {
-        // Still register for focus even if not visible
-        ui_register_focusable();
         return false;
     }
 
@@ -577,20 +591,6 @@ bool ui_menu_item_value(const char* label, const char* value, int16_t index) {
     // Calculate position within visible area
     int16_t visible_index = index - scroll;
     int16_t y = g_ctx.menu.y_start + visible_index * UI_MENU_ITEM_HEIGHT;
-
-    // Register for focus
-    int16_t idx = ui_register_focusable();
-    bool focused = ui_check_focused(idx);
-    bool activated = ui_check_activated(idx);
-
-    // Update scroll to keep focused item visible
-    if (focused) {
-        if (index < scroll) {
-            *g_ctx.menu.scroll = index;
-        } else if (index >= scroll + g_ctx.menu.visible) {
-            *g_ctx.menu.scroll = index - g_ctx.menu.visible + 1;
-        }
-    }
 
     // Calculate width (leave room for scrollbar)
     int16_t item_width = UI_SCREEN_WIDTH - UI_SCROLLBAR_WIDTH - 2;
