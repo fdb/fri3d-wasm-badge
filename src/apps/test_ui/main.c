@@ -246,16 +246,13 @@ static void render_footer(void) {
     static int left_count = 0;
     static int right_count = 0;
 
+    // Show both counters on one line
     char buf[32];
-    snprintf(buf, sizeof(buf), "Left: %d", left_count);
-    ui_label(buf, UI_FONT_SECONDARY, UI_ALIGN_CENTER);
-
-    snprintf(buf, sizeof(buf), "Right: %d", right_count);
+    snprintf(buf, sizeof(buf), "Left: %d   Right: %d", left_count, right_count);
     ui_label(buf, UI_FONT_SECONDARY, UI_ALIGN_CENTER);
 
     ui_spacer(4);
-    ui_label("Use footer buttons", UI_FONT_SECONDARY, UI_ALIGN_CENTER);
-    ui_label("to change counters", UI_FONT_SECONDARY, UI_ALIGN_CENTER);
+    ui_label("Press </> to change", UI_FONT_SECONDARY, UI_ALIGN_CENTER);
 
     // Footer buttons
     if (ui_footer_left("Dec")) {
