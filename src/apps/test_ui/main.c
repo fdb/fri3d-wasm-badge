@@ -136,24 +136,21 @@ static void render_layout(void) {
     ui_begin();
 
     ui_label("Layout Demo", UI_FONT_PRIMARY, UI_ALIGN_CENTER);
-    ui_spacer(4);
+    ui_spacer(2);
 
-    // Vertical stack with custom spacing
-    ui_vstack(2);
-    ui_label("VStack items:", UI_FONT_SECONDARY, UI_ALIGN_LEFT);
-    ui_label("  Item 1", UI_FONT_SECONDARY, UI_ALIGN_LEFT);
-    ui_label("  Item 2", UI_FONT_SECONDARY, UI_ALIGN_LEFT);
-    ui_label("  Item 3", UI_FONT_SECONDARY, UI_ALIGN_LEFT);
-    ui_end_stack();
-
-    ui_spacer(4);
-    ui_separator();
-    ui_spacer(4);
-
-    // Labels with different alignments
+    // Show text alignment options
     ui_label("Left", UI_FONT_SECONDARY, UI_ALIGN_LEFT);
     ui_label("Center", UI_FONT_SECONDARY, UI_ALIGN_CENTER);
     ui_label("Right", UI_FONT_SECONDARY, UI_ALIGN_RIGHT);
+
+    ui_separator();
+
+    // Centered button row
+    ui_hstack_centered(4);
+    ui_button("A");
+    ui_button("B");
+    ui_button("C");
+    ui_end_stack();
 
     ui_end();
 }

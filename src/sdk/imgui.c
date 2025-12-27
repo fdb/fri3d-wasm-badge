@@ -377,23 +377,23 @@ void ui_end_stack(void) {
         g_ctx.deferred_count = 0;
     }
 
-    // Get the height/width used by this stack
+    // Get the size used by this stack
     int16_t used_size = ending->cursor;
     if (ending->spacing > 0 && used_size > 0) {
         used_size -= ending->spacing;  // Remove trailing spacing
     }
 
+    // For hstacks, track the max height (for now, assume button height)
+    int16_t used_height = (ending->direction == UI_LAYOUT_HORIZONTAL)
+        ? (UI_FONT_HEIGHT_SECONDARY + UI_BUTTON_PADDING_Y * 2)
+        : used_size;
+
     g_ctx.layout_depth--;
 
-    // Advance parent cursor
+    // Advance parent cursor by the space this stack used
     UiLayoutStack* parent = ui_current_layout();
-    if (parent) {
-        if (parent->direction == UI_LAYOUT_VERTICAL) {
-            // For vstack parent, advance by height of the hstack content
-            int16_t height = UI_FONT_HEIGHT_SECONDARY + UI_BUTTON_PADDING_Y * 2;  // Button height
-            parent->cursor += height + parent->spacing;
-        }
-        // For horizontal parent, we'd need width tracking
+    if (parent && parent->direction == UI_LAYOUT_VERTICAL) {
+        parent->cursor += used_height + parent->spacing;
     }
 }
 
