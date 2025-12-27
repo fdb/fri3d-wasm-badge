@@ -5,7 +5,21 @@
 Migrate from C/C++ to Zig with a clean "Port" architecture where:
 - **Apps** are WASM modules that export `render()`, `on_input()`, etc.
 - **Ports** are platform-specific implementations that own the main loop
-- **The Platform Interface** is the contract between apps and ports
+- **The Platform Interface** is a **minimal** contract (just framebuffer + input)
+- **All rendering code lives in Zig SDK** (compiled into apps, not platform)
+
+### Key Architectural Decision: Zig-Native Rendering
+
+**All drawing code (fonts, lines, circles, boxes, text) is implemented in Zig and compiles INTO the WASM apps.** The platform only provides:
+1. A framebuffer to draw into
+2. Input events
+3. Time/random utilities
+
+This means:
+- **No u8g2 dependency** - pure Zig rendering
+- **Pixel-perfect consistency** across all platforms
+- **One implementation** to maintain
+- **Platforms become thin** - just framebuffer display + input handling
 
 ### Key Principle: "Don't Call Us, We'll Call You"
 
@@ -27,25 +41,28 @@ The app only:
 │                      WASM Apps                              │
 │           (Zig source → compiled to .wasm)                 │
 │                                                             │
-│  Includes: App logic + SDK (imgui, etc.)                   │
+│  Includes: App logic + FULL SDK                            │
+│    - canvas.zig (all drawing: lines, circles, fonts, etc.) │
+│    - imgui.zig (UI framework)                              │
+│    - App-specific code                                      │
+│                                                             │
 │  Exports: render(), on_input(), scene functions            │
-│  Imports: Platform Interface functions                      │
+│  Imports: MINIMAL platform interface (framebuffer only)    │
 └─────────────────────────┬──────────────────────────────────┘
                           │
                           ▼
 ┌────────────────────────────────────────────────────────────┐
-│                  Platform Interface                         │
+│              Platform Interface (MINIMAL)                   │
 │                                                             │
-│  The ABI contract that all ports must implement:           │
+│  Only what CANNOT be done in pure Zig:                     │
 │                                                             │
 │  ┌─────────────┬─────────────────────────────────────────┐ │
-│  │ DISPLAY     │ canvas_clear, canvas_draw_*, present    │ │
+│  │ FRAMEBUFFER │ fb_ptr, fb_width, fb_height, fb_present │ │
 │  │ INPUT       │ (port calls app's on_input export)      │ │
-│  │ TIME        │ time_get_ms, time_sleep_ms              │ │
-│  │ RANDOM      │ random_seed, random_get, random_range   │ │
-│  │ STORAGE     │ storage_read, storage_write, storage_*  │ │
-│  │ NETWORK     │ http_request, ws_connect, ws_send       │ │
-│  │ SYSTEM      │ sys_get_battery, sys_get_info           │ │
+│  │ TIME        │ time_get_ms                             │ │
+│  │ RANDOM      │ random_get (hardware RNG if available)  │ │
+│  │ STORAGE     │ storage_read, storage_write (future)    │ │
+│  │ NETWORK     │ http_request, ws_* (future)             │ │
 │  └─────────────┴─────────────────────────────────────────┘ │
 └─────────────────────────┬──────────────────────────────────┘
                           │
@@ -55,16 +72,29 @@ The app only:
 │ Desktop Port │  │   Web Port   │  │  ESP32 Port  │
 │    (SDL)     │  │    (JS)      │  │   (Native)   │
 │              │  │              │  │              │
-│ Language:    │  │ Language:    │  │ Language:    │
-│ Zig          │  │ JavaScript   │  │ Zig          │
+│ Provides:    │  │ Provides:    │  │ Provides:    │
+│ - Framebuffer│  │ - Framebuffer│  │ - Framebuffer│
+│ - SDL events │  │ - KB/touch   │  │ - GPIO btns  │
+│ - Display FB │  │ - Canvas2D   │  │ - SPI OLED   │
 │              │  │              │  │              │
-│ WASM Engine: │  │ WASM Engine: │  │ WASM Engine: │
-│ WAMR         │  │ Browser      │  │ WAMR         │
-│              │  │              │  │              │
-│ Main Loop:   │  │ Main Loop:   │  │ Main Loop:   │
-│ SDL events   │  │ rAF + events │  │ FreeRTOS     │
+│ NO drawing   │  │ NO drawing   │  │ NO drawing   │
+│ code here!   │  │ code here!   │  │ code here!   │
 └──────────────┘  └──────────────┘  └──────────────┘
 ```
+
+### What Lives Where
+
+| Component | Location | Why |
+|-----------|----------|-----|
+| Line drawing | Zig SDK (canvas.zig) | Pure math, no platform dependency |
+| Circle/disc | Zig SDK (canvas.zig) | Pure math |
+| Rectangle/box | Zig SDK (canvas.zig) | Pure math |
+| Font data | Zig SDK (font.zig) | Static data |
+| Text rendering | Zig SDK (canvas.zig) | Uses font data |
+| IMGUI widgets | Zig SDK (imgui.zig) | Uses canvas |
+| Framebuffer memory | Platform | Platform allocates, shares ptr |
+| Display to screen | Platform | Hardware-specific |
+| Input handling | Platform | Hardware-specific |
 
 ## Why This Architecture?
 
@@ -167,25 +197,42 @@ fri3d-wasm-badge/
 
 ## Platform Interface Specification
 
-### Display
+### Framebuffer (MINIMAL - platform provides)
 
 ```zig
-// Provided by platform as WASM imports
-extern fn canvas_clear() void;
-extern fn canvas_width() u32;
-extern fn canvas_height() u32;
-extern fn canvas_set_color(color: u32) void;
-extern fn canvas_set_font(font: u32) void;
-extern fn canvas_draw_dot(x: i32, y: i32) void;
-extern fn canvas_draw_line(x1: i32, y1: i32, x2: i32, y2: i32) void;
-extern fn canvas_draw_frame(x: i32, y: i32, w: u32, h: u32) void;
-extern fn canvas_draw_box(x: i32, y: i32, w: u32, h: u32) void;
-extern fn canvas_draw_rframe(x: i32, y: i32, w: u32, h: u32, r: u32) void;
-extern fn canvas_draw_rbox(x: i32, y: i32, w: u32, h: u32, r: u32) void;
-extern fn canvas_draw_circle(x: i32, y: i32, r: u32) void;
-extern fn canvas_draw_disc(x: i32, y: i32, r: u32) void;
-extern fn canvas_draw_str(x: i32, y: i32, str: [*:0]const u8) void;
-extern fn canvas_string_width(str: [*:0]const u8) u32;
+// Platform imports - ONLY these are provided by the platform
+extern fn fb_ptr() [*]u8;      // Pointer to framebuffer (128*64 bytes for 128x64 1bpp)
+extern fn fb_width() u32;       // Framebuffer width (128)
+extern fn fb_height() u32;      // Framebuffer height (64)
+extern fn fb_present() void;    // Tell platform to display the framebuffer
+
+// Time
+extern fn time_ms() u32;        // Milliseconds since start
+
+// Random (optional - can use Zig PRNG if not provided)
+extern fn random_hw() u32;      // Hardware random number (if available)
+```
+
+### Canvas (Zig SDK - compiled into app)
+
+```zig
+// src/sdk/zig/canvas.zig - ALL drawing implemented in Zig
+const canvas = @import("canvas");
+
+// These are NOT platform imports - they're Zig functions that write to framebuffer
+canvas.clear();
+canvas.setColor(.white);  // .black, .white, .xor
+canvas.setFont(.primary); // .primary, .secondary, .keyboard, .big_numbers
+canvas.drawDot(x, y);
+canvas.drawLine(x1, y1, x2, y2);
+canvas.drawFrame(x, y, w, h);
+canvas.drawBox(x, y, w, h);
+canvas.drawRFrame(x, y, w, h, r);
+canvas.drawRBox(x, y, w, h, r);
+canvas.drawCircle(x, y, r);
+canvas.drawDisc(x, y, r);
+canvas.drawStr(x, y, "Hello");
+canvas.stringWidth("Hello");
 ```
 
 ### Input
@@ -270,36 +317,40 @@ extern fn sys_vibrate(duration_ms: u32) void;
 
 ## Migration Phases
 
-### Phase 1: Foundation (Current Focus)
+### Phase 1: Foundation ✅ DONE
 - [x] Plan architecture
-- [ ] Create `build.zig`
-- [ ] Define platform interface types in `src/sdk/platform.zig`
-- [ ] Port one simple app (circles) to Zig
+- [x] Create `build.zig`
+- [x] Define platform interface types in `src/sdk/zig/platform.zig`
+- [x] Port circles app to Zig
+- [x] Basic web port with JS rendering
 
-### Phase 2: SDK Migration
-- [ ] Migrate canvas.h → canvas.zig
-- [ ] Migrate input.h → input.zig
-- [ ] Migrate random.h → random.zig
-- [ ] Migrate imgui.c → imgui.zig (biggest piece)
+### Phase 2: Zig-Native Rendering (CURRENT)
+- [x] Migrate imgui.c → imgui.zig
+- [ ] **Create canvas.zig with full drawing implementation**
+  - [ ] Framebuffer management (get ptr from platform)
+  - [ ] setPixel with color modes (black/white/xor)
+  - [ ] drawLine (Bresenham)
+  - [ ] drawFrame, drawBox
+  - [ ] drawRFrame, drawRBox (rounded)
+  - [ ] drawCircle, drawDisc (midpoint algorithm)
+  - [ ] Font data (5x7 bitmap font)
+  - [ ] drawStr, stringWidth
+- [ ] **Update platform.zig to minimal framebuffer interface**
+- [ ] **Simplify web platform.js to just framebuffer display**
+- [ ] Update existing Zig apps to use new canvas module
 
 ### Phase 3: Desktop Port
 - [ ] Create `src/ports/desktop/main.zig`
-- [ ] Implement display using SDL + u8g2
+- [ ] Implement framebuffer display using SDL (just blit pixels)
 - [ ] Implement input from SDL events
 - [ ] Wire up WAMR for app loading
+- [ ] No u8g2 dependency needed!
 
-### Phase 4: Web Port
-- [ ] Create `src/ports/web/platform.js`
-- [ ] Implement canvas using HTML5 Canvas API
-- [ ] Implement input from keyboard/touch events
-- [ ] App loading via fetch() + WebAssembly API
-- [ ] Basic app switching
-
-### Phase 5: Polish & Future
+### Phase 4: Polish & Testing
+- [ ] Visual regression testing with Zig apps
 - [ ] ESP32 port skeleton
 - [ ] Storage interface design
 - [ ] Network interface design
-- [ ] App store prototype
 
 ## Benefits Summary
 
@@ -312,6 +363,9 @@ extern fn sys_vibrate(duration_ms: u32) void;
 | Safety | Manual | Compile-time checked |
 | Portability | OK | Excellent (clean ports) |
 | Extensibility | Add to each platform | Define interface, implement per-port |
+| **Graphics lib** | **u8g2 (C, 3rd party)** | **Pure Zig (no dependency)** |
+| **Rendering** | **Per-platform impl** | **One Zig impl for all** |
+| **Platform code** | **Complex (drawing)** | **Thin (just framebuffer)** |
 
 ## Open Questions
 
