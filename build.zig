@@ -287,12 +287,16 @@ pub fn build(b: *std.Build) void {
     lodepng.root_module.addIncludePath(b.path("libs/lodepng"));
 
     // ========================================================================
-    // Desktop Emulator (SDL)
+    // Desktop Emulator (SDL) - C++ based, uses root_module pattern
     // ========================================================================
     const emulator = b.addExecutable(.{
         .name = "fri3d_emulator",
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+            .link_libcpp = true,
+        }),
     });
 
     emulator.root_module.addCSourceFiles(.{
@@ -324,13 +328,11 @@ pub fn build(b: *std.Build) void {
     emulator.linkLibrary(wamr);
     emulator.linkLibrary(lodepng);
     emulator.linkSystemLibrary("SDL2");
-    emulator.root_module.link_libcpp = true;
-    emulator.root_module.link_libc = true;
 
     b.installArtifact(emulator);
 
     // ========================================================================
-    // WASM Apps (using WASI for libc support)
+    // WASM Apps (using WASI for libc support) - C based
     // ========================================================================
     const wasm_target = b.resolveTargetQuery(.{
         .cpu_arch = .wasm32,
@@ -342,11 +344,12 @@ pub fn build(b: *std.Build) void {
     for (apps) |app_name| {
         const app = b.addExecutable(.{
             .name = app_name,
-            .target = wasm_target,
-            .optimize = .ReleaseSmall,
+            .root_module = b.createModule(.{
+                .target = wasm_target,
+                .optimize = .ReleaseSmall,
+                .link_libc = true,
+            }),
         });
-
-        app.root_module.link_libc = true;
 
         // For now, compile the C version of apps
         const main_path = b.fmt("src/apps/{s}/main.c", .{app_name});
@@ -398,12 +401,16 @@ pub fn build(b: *std.Build) void {
     // Circles app in pure Zig
     const circles_zig = b.addExecutable(.{
         .name = "circles_zig",
-        .root_source_file = b.path("src/apps/circles_zig/main.zig"),
-        .target = zig_wasm_target,
-        .optimize = .ReleaseSmall,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/apps/circles_zig/main.zig"),
+            .target = zig_wasm_target,
+            .optimize = .ReleaseSmall,
+            .imports = &.{
+                .{ .name = "platform", .module = platform_module },
+            },
+        }),
     });
 
-    circles_zig.root_module.addImport("platform", platform_module);
     circles_zig.rdynamic = true;
     circles_zig.entry = .disabled;
 
@@ -412,13 +419,17 @@ pub fn build(b: *std.Build) void {
     // Test UI app in pure Zig (uses IMGUI)
     const test_ui_zig = b.addExecutable(.{
         .name = "test_ui_zig",
-        .root_source_file = b.path("src/apps/test_ui_zig/main.zig"),
-        .target = zig_wasm_target,
-        .optimize = .ReleaseSmall,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/apps/test_ui_zig/main.zig"),
+            .target = zig_wasm_target,
+            .optimize = .ReleaseSmall,
+            .imports = &.{
+                .{ .name = "platform", .module = platform_module },
+                .{ .name = "imgui", .module = imgui_module },
+            },
+        }),
     });
 
-    test_ui_zig.root_module.addImport("platform", platform_module);
-    test_ui_zig.root_module.addImport("imgui", imgui_module);
     test_ui_zig.rdynamic = true;
     test_ui_zig.entry = .disabled;
 
