@@ -705,11 +705,11 @@ bool ui_menu_item_value(const char* label, const char* value, int16_t index) {
 void ui_menu_end(void) {
     if (!g_ctx.menu.active) return;
 
-    // Draw scrollbar if needed
+    // Draw scrollbar if needed (Flipper Zero style: dotted track + solid thumb)
     if (g_ctx.menu.total > g_ctx.menu.visible) {
         int16_t scroll = g_ctx.menu.scroll ? *g_ctx.menu.scroll : 0;
         int16_t scrollbar_height = g_ctx.menu.visible * UI_MENU_ITEM_HEIGHT;
-        int16_t scrollbar_x = UI_SCREEN_WIDTH - UI_SCROLLBAR_WIDTH;
+        int16_t scrollbar_x = UI_SCREEN_WIDTH - 2;  // Single pixel column near edge
 
         // Calculate thumb position and size
         int16_t thumb_height = (scrollbar_height * g_ctx.menu.visible) / g_ctx.menu.total;
@@ -718,12 +718,15 @@ void ui_menu_end(void) {
         int16_t thumb_y = g_ctx.menu.y_start +
             ((scrollbar_height - thumb_height) * scroll) / (g_ctx.menu.total - g_ctx.menu.visible);
 
-        // Draw scrollbar track
         canvas_set_color(ColorBlack);
-        canvas_draw_frame(scrollbar_x, g_ctx.menu.y_start, UI_SCROLLBAR_WIDTH, scrollbar_height);
 
-        // Draw scrollbar thumb
-        canvas_draw_box(scrollbar_x, thumb_y, UI_SCROLLBAR_WIDTH, thumb_height);
+        // Draw dotted track line
+        for (int16_t y = g_ctx.menu.y_start; y < g_ctx.menu.y_start + scrollbar_height; y += 2) {
+            canvas_draw_dot(scrollbar_x, y);
+        }
+
+        // Draw solid thumb (thicker, 3px wide)
+        canvas_draw_box(scrollbar_x - 1, thumb_y, 3, thumb_height);
     }
 
     // Advance layout cursor
