@@ -1,4 +1,4 @@
-# FRI3D WASM Badge - Agent Guidelines
+# Fri3d WASM Badge - Agent Guidelines
 
 ## Build Commands
 
@@ -6,109 +6,135 @@
 
 This project uses git submodules. Before building, ensure submodules are initialized:
 
-**After cloning the repository:**
 ```bash
 git submodule update --init --recursive
 ```
 
-**When pulling updates:**
+### Build Everything
+
 ```bash
-git pull --recurse-submodules
+./build_all.sh
 ```
 
-Or manually update submodules:
+### Build Desktop Emulator Only
+
 ```bash
-git submodule update --init --recursive
+cmake -B build/emulator
+cmake --build build/emulator
 ```
 
-### Build Host Emulator
-```bash
-cmake -B build
-cmake --build build
-```
+### Build WASM Apps
 
-### Build WASM Application
+Requires Zig for the WASM toolchain:
+
 ```bash
-cmake -B build-app -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-wasm.cmake -S src/app
-cmake --build build-app
+cmake -B build/apps/circles -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-wasm.cmake -S src/apps/circles
+cmake --build build/apps/circles
 ```
 
 ### Run Emulator
+
 ```bash
-./build/host/host_emulator build-app/circle_app.wasm
+# Show launcher
+./build/emulator/src/emulator/fri3d_emulator
+
+# Run specific app
+./build/emulator/src/emulator/fri3d_emulator build/apps/circles/circles.wasm
 ```
 
 ### Clean Build
+
 ```bash
-rm -rf build build-app
+rm -rf build
 ```
 
 ## Testing
 
 ### Visual Regression Tests
+
 ```bash
-# Run all visual tests and produce a report
+# Run all visual tests
 uv run tests/visual/run_visual_tests.py
 
-# Update the "golden master" visual outputs
+# Update golden images
 uv run tests/visual/run_visual_tests.py --update-golden
 ```
 
-### Manual Testing
-1. Build host emulator
-2. Build WASM app
-3. Run emulator with WASM file
-4. Verify display output and input handling (Arrow keys for movement, Z/X for A/B buttons)
+## Project Structure
+
+```
+src/
+├── sdk/          # WASM SDK headers (API for apps)
+│   ├── canvas.h
+│   ├── input.h
+│   ├── random.h
+│   └── frd.h
+├── apps/         # WASM applications
+│   ├── circles/
+│   ├── mandelbrot/
+│   └── test_drawing/
+├── runtime/      # Shared runtime (canvas, WASM runner, input handling)
+├── emulator/     # Desktop SDL emulator
+├── firmware/     # ESP32-S3 PlatformIO project
+└── web/          # Web/Emscripten build
+```
 
 ## Code Style Guidelines
 
-### C++ (Host Code - src/host/)
-- **Standard**: C++14 (CMAKE_CXX_STANDARD=14)
-- **Indentation**: 4 spaces
-- **Line length**: Prefer under 80 characters
-- **Brace style**: Opening brace on same line for control statements, on new line for functions
-- **Naming**: 
-  - Variables/functions: `snake_case`
-  - Native functions: `native_` prefix
-  - Classes/types: `PascalCase` (rarely used)
-- **Error handling**: Check return values, print errors to `std::cerr` before returning non-zero
+### C++ (Runtime & Emulator - src/runtime/, src/emulator/)
 
-### C (WASM App Code - src/app/)
-- **Indentation**: 4 spaces (follows u8g2 conventions)
-- **Naming**: 
-  - Functions: `snake_case`
-  - WASM imports: `host_` prefix
-  - Use `WASM_IMPORT()` macro for imported functions
-- **Globals**: Keep to minimum, mark `static` when possible
+- **Standard**: C++14
+- **Indentation**: 4 spaces
+- **Naming**:
+  - Variables/functions: `camelCase` for class members, `snake_case` for C-style
+  - Classes: `PascalCase`
+  - Private members: `m_` prefix
+- **Namespace**: `fri3d`
+
+### C (WASM Apps - src/apps/)
+
+- **Indentation**: 4 spaces
+- **Naming**: `snake_case`
+- **Use**: `WASM_IMPORT()` macro for host function imports
+- **Required exports**: `render()`, optionally `on_input()`
 
 ### CMakeLists.txt
+
 - **Minimum version**: 3.16
-- **Naming**: Variables in uppercase with underscores
-- **Structure**: 
-  - Use `find_package()` for dependencies (SDL2)
-  - Use `add_subdirectory()` for submodules
-  - For WASM, use toolchain file cmake/toolchain-wasm.cmake
+- For WASM apps: use `cmake/toolchain-wasm.cmake`
 
-### Imports and Includes
-- **C++**: System includes first (`#include <SDL.h>`), then project includes
-- **C**: System headers first (`#include <stdint.h>`), then library headers (`#include <u8g2.h>`)
+## Platform-Specific Notes
 
-### WASM-Specific Conventions
-- Export `on_tick()` function as main entry point
-- Use `__attribute__((import_module("env"), import_name(name)))` for host imports
-- For u8g2: use full buffer mode (`u8g2_Setup_ssd1306_128x64_noname_f`)
-- Buffer size: 1024 bytes for 128x64 monochrome display
+### Desktop Emulator
 
-### Error Handling
-- **Host code**: Validate WASM memory addresses with `wasm_runtime_validate_app_addr()`
-- Check for exceptions after WASM calls with `wasm_runtime_get_exception()`
-- Print descriptive error messages to stderr before returning error codes
+- Uses SDL2 for window/input
+- u8g2 for graphics buffer (SSD1306 128x64)
+- WAMR for WASM execution
 
-### Formatting
-- Project inherits WAMR's .clang-format (Mozilla style, 4-space indent, 80-char limit)
-- Run `clang-format -i <file>` to format if needed
+### ESP32 Firmware
 
-### Platform Notes
-- macOS: SDL2 installation via Homebrew required
-- WASM compilation uses Zig toolchain via `cmake/toolchain-wasm.cmake`
-- WAMR runtime configured for interpreter mode (no JIT)
+- ESP32-S3-WROOM-1 target
+- PlatformIO with ESP-IDF framework
+- SPI display (SSD1306)
+- Button GPIO pins configurable
+
+### Web Build
+
+- Emscripten compilation
+- SDL2 via Emscripten
+- WASM apps fetched from /apps/ directory
+
+## Input Handling
+
+- **Short press**: < 300ms
+- **Long press**: >= 500ms
+- **Reset combo**: LEFT + BACK held for 500ms returns to launcher
+
+## WASM App Requirements
+
+Apps must export:
+- `void render()` - Called each frame
+- `void on_input(InputKey key, InputType type)` - Optional, for input handling
+- `uint32_t get_scene_count()` - Optional, for multi-scene test apps
+- `void set_scene(uint32_t scene)` - Optional
+- `uint32_t get_scene()` - Optional

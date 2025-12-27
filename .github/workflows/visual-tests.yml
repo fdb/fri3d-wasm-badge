@@ -33,19 +33,19 @@ jobs:
     - name: Install uv
       uses: astral-sh/setup-uv@v4
 
-    - name: Build host emulator
+    - name: Build emulator
       run: |
-        cmake -B build
-        cmake --build build
+        cmake -B build/emulator
+        cmake --build build/emulator
 
     - name: Build WASM apps
       run: |
         for app in test_drawing circles mandelbrot; do
           echo "Building $app..."
-          cmake -B build-apps/$app \
+          cmake -B build/apps/$app \
             -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/toolchain-wasm.cmake \
             -S src/apps/$app
-          cmake --build build-apps/$app
+          cmake --build build/apps/$app
         done
 
     - name: Run visual regression tests
