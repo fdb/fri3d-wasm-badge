@@ -91,6 +91,7 @@ int main(int argc, char* argv[]) {
     appManager.addApp("Circles", "build/apps/circles/circles.wasm");
     appManager.addApp("Mandelbrot", "build/apps/mandelbrot/mandelbrot.wasm");
     appManager.addApp("Test Drawing", "build/apps/test_drawing/test_drawing.wasm");
+    appManager.addApp("Test UI", "build/apps/test_ui/test_ui.wasm");
 
     // If a WASM file was specified, launch it directly
     if (!opts.wasmFile.empty()) {
