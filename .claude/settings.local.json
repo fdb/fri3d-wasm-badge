@@ -4,7 +4,9 @@
       "Bash(./build_web.sh:*)",
       "Bash(./build_all.sh:*)",
       "Bash(ls:*)",
-      "Bash(cmake --build:*)"
+      "Bash(cmake --build:*)",
+      "Bash(mv:*)",
+      "Bash(chmod:*)"
     ]
   }
 }
