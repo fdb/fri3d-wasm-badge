@@ -132,9 +132,9 @@
         <div id="app-selector" class="app-selector hidden">
             <select id="app-select">
                 <option value="">-- Select an app --</option>
-                <option value="/apps/circles/circles">Circles</option>
-                <option value="/apps/mandelbrot/mandelbrot">Mandelbrot</option>
-                <option value="/apps/test_drawing/test_drawing">Test Drawing</option>
+                <option value="/apps/circles/circles.wasm">Circles</option>
+                <option value="/apps/mandelbrot/mandelbrot.wasm">Mandelbrot</option>
+                <option value="/apps/test_drawing/test_drawing.wasm">Test Drawing</option>
             </select>
         </div>
 
@@ -365,7 +365,7 @@
                     });
 
                     // Auto-load first app
-                    const firstApp = '/apps/circles/circles';
+                    const firstApp = '/apps/circles/circles.wasm';
                     document.getElementById('app-select').value = firstApp;
                     Fri3dRuntime.loadApp(firstApp);
                 }

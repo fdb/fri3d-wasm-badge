@@ -5,6 +5,9 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../sdk)
 
 add_executable(mandelbrot main.c)
 
+# Output with .wasm extension
+set_target_properties(mandelbrot PROPERTIES SUFFIX ".wasm")
+
 # WASM linking options for Zig
 # Use reactor model and explicitly export functions needed by the host
 target_link_options(mandelbrot PRIVATE
