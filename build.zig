@@ -369,6 +369,34 @@ pub fn build(b: *std.Build) void {
     }
 
     // ========================================================================
+    // Pure Zig WASM Apps
+    // ========================================================================
+    const zig_wasm_target = b.resolveTargetQuery(.{
+        .cpu_arch = .wasm32,
+        .os_tag = .freestanding,
+    });
+
+    // Circles app in pure Zig
+    const circles_zig = b.addExecutable(.{
+        .name = "circles_zig",
+        .root_source_file = b.path("src/apps/circles_zig/main.zig"),
+        .target = zig_wasm_target,
+        .optimize = .ReleaseSmall,
+    });
+
+    // Add the SDK module
+    circles_zig.root_module.addImport("platform", b.createModule(.{
+        .root_source_file = b.path("src/sdk/zig/platform.zig"),
+        .target = zig_wasm_target,
+        .optimize = .ReleaseSmall,
+    }));
+
+    circles_zig.rdynamic = true;
+    circles_zig.entry = .disabled;
+
+    b.installArtifact(circles_zig);
+
+    // ========================================================================
     // Run command
     // ========================================================================
     const run_cmd = b.addRunArtifact(emulator);
@@ -382,12 +410,12 @@ pub fn build(b: *std.Build) void {
     run_step.dependOn(&run_cmd.step);
 
     // ========================================================================
-    // Test step (run with test app)
+    // Test step (run with Zig circles app)
     // ========================================================================
     const test_cmd = b.addRunArtifact(emulator);
     test_cmd.step.dependOn(b.getInstallStep());
-    test_cmd.addArgs(&.{ "--test", "zig-out/bin/circles.wasm" });
+    test_cmd.addArgs(&.{ "--test", "zig-out/bin/circles_zig.wasm" });
 
-    const test_step = b.step("test", "Run emulator with test app");
+    const test_step = b.step("test", "Run emulator with Zig circles app");
     test_step.dependOn(&test_cmd.step);
 }
