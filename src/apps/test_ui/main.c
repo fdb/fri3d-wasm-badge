@@ -166,28 +166,26 @@ static void render_progress(void) {
     ui_begin();
 
     ui_label("Progress Demo", UI_FONT_PRIMARY, UI_ALIGN_CENTER);
-    ui_spacer(8);
+    ui_spacer(4);
 
-    // Animated progress (increments each frame when focused)
+    // Animated progress
     ui_label("Loading:", UI_FONT_SECONDARY, UI_ALIGN_LEFT);
+    ui_spacer(2);
     ui_progress(g_progress, 0);
     ui_spacer(4);
 
-    // Fixed progress bars
+    // Fixed progress bars at different values
     ui_label("25%:", UI_FONT_SECONDARY, UI_ALIGN_LEFT);
-    ui_progress(0.25f, 100);
     ui_spacer(2);
+    ui_progress(0.25f, 0);
 
     ui_label("50%:", UI_FONT_SECONDARY, UI_ALIGN_LEFT);
-    ui_progress(0.50f, 100);
     ui_spacer(2);
+    ui_progress(0.50f, 0);
 
     ui_label("75%:", UI_FONT_SECONDARY, UI_ALIGN_LEFT);
-    ui_progress(0.75f, 100);
     ui_spacer(2);
-
-    ui_label("100%:", UI_FONT_SECONDARY, UI_ALIGN_LEFT);
-    ui_progress(1.0f, 100);
+    ui_progress(0.75f, 0);
 
     // Animate the loading bar
     g_progress += 0.02f;

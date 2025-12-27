@@ -501,7 +501,8 @@ void ui_progress(float value, int16_t width) {
     int16_t x, y, w;
     ui_layout_next(width, bar_height, &x, &y, &w);
 
-    int16_t bar_width = (width > 0) ? width : w;
+    // Use layout width minus margins if width=0
+    int16_t bar_width = (width > 0) ? width : (w - 8);  // 4px margin each side
     int16_t bar_x = x + (w - bar_width) / 2;
 
     // Draw outline
