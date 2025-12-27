@@ -1,0 +1,10 @@
+name: Test UI
+description: Comprehensive test suite for IMGUI components
+
+scenes:
+  - name: Counter Demo
+  - name: Settings Menu
+  - name: Layout Demo
+  - name: Progress Demo
+  - name: Checkbox Demo
+  - name: Footer Demo
