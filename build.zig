@@ -74,21 +74,17 @@ pub fn build(b: *std.Build) void {
     // ========================================================================
     const web_step = b.step("web", "Build web version (WASM apps + web files)");
 
-    // Web step depends on building the WASM apps
-    web_step.dependOn(wasm_step);
-
-    // Copy web platform files
+    // Copy web platform files (these are source files, use b.path)
     const copy_html = b.addInstallFile(b.path("src/ports/web/index.html"), "../www/index.html");
     const copy_js = b.addInstallFile(b.path("src/ports/web/platform.js"), "../www/platform.js");
 
     web_step.dependOn(&copy_html.step);
     web_step.dependOn(&copy_js.step);
 
-    // Copy all WASM apps to www/
-    const wasm_apps_web = [_][]const u8{ "circles_zig", "test_ui_zig" };
-    for (wasm_apps_web) |app_name| {
-        const dest_path = b.fmt("../www/{s}.wasm", .{app_name});
-        const copy_wasm = b.addInstallFile(b.path(b.fmt("zig-out/bin/{s}.wasm", .{app_name})), dest_path);
-        web_step.dependOn(&copy_wasm.step);
-    }
+    // Copy WASM artifacts to www/ (use getEmittedBin for build outputs)
+    const copy_circles = b.addInstallFile(circles_zig.getEmittedBin(), "../www/circles_zig.wasm");
+    const copy_test_ui = b.addInstallFile(test_ui_zig.getEmittedBin(), "../www/test_ui_zig.wasm");
+
+    web_step.dependOn(&copy_circles.step);
+    web_step.dependOn(&copy_test_ui.step);
 }
