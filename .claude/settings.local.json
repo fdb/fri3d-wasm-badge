@@ -1,6 +1,7 @@
 {
   "permissions": {
     "allow": [
+      "Bash(./build_emulator.sh:*)",
       "Bash(./build_web.sh:*)",
       "Bash(./build_all.sh:*)",
       "Bash(ls:*)",
