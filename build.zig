@@ -8,10 +8,14 @@ pub fn build(b: *std.Build) void {
     // ========================================================================
     // u8g2 Graphics Library (compiled from C source)
     // ========================================================================
-    const u8g2 = b.addStaticLibrary(.{
+    const u8g2 = b.addLibrary(.{
         .name = "u8g2",
-        .target = target,
-        .optimize = optimize,
+        .linkage = .static,
+        .root_module = b.createModule(.{
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        }),
     });
 
     // Add all u8g2 C source files (129 files for all display drivers)
@@ -147,24 +151,26 @@ pub fn build(b: *std.Build) void {
         "libs/u8g2/csrc/u8x8_u8toa.c",
     };
 
-    u8g2.addCSourceFiles(.{
+    u8g2.root_module.addCSourceFiles(.{
         .files = &u8g2_sources,
         .flags = &.{"-std=c99"},
     });
-    u8g2.addIncludePath(b.path("libs/u8g2/csrc"));
-    u8g2.linkLibC();
+    u8g2.root_module.addIncludePath(b.path("libs/u8g2/csrc"));
 
     // ========================================================================
     // WAMR (WebAssembly Micro Runtime) - compiled from C source
     // ========================================================================
-    const wamr = b.addStaticLibrary(.{
+    const wamr = b.addLibrary(.{
         .name = "vmlib",
-        .target = target,
-        .optimize = optimize,
+        .linkage = .static,
+        .root_module = b.createModule(.{
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        }),
     });
 
     // WAMR configuration defines
-    // Note: OS_ENABLE_HW_BOUND_CHECK is defined by the platform header for X86_64
     const wamr_defines = [_][]const u8{
         "-DWASM_ENABLE_INTERP=1",
         "-DWASM_ENABLE_FAST_INTERP=1",
@@ -209,11 +215,9 @@ pub fn build(b: *std.Build) void {
 
     // Core WAMR sources
     const wamr_sources = [_][]const u8{
-        // Interpreter
         "libs/wasm-micro-runtime/core/iwasm/interpreter/wasm_loader.c",
         "libs/wasm-micro-runtime/core/iwasm/interpreter/wasm_runtime.c",
         "libs/wasm-micro-runtime/core/iwasm/interpreter/wasm_interp_fast.c",
-        // Common
         "libs/wasm-micro-runtime/core/iwasm/common/wasm_runtime_common.c",
         "libs/wasm-micro-runtime/core/iwasm/common/wasm_native.c",
         "libs/wasm-micro-runtime/core/iwasm/common/wasm_exec_env.c",
@@ -223,9 +227,7 @@ pub fn build(b: *std.Build) void {
         "libs/wasm-micro-runtime/core/iwasm/common/wasm_loader_common.c",
         "libs/wasm-micro-runtime/core/iwasm/common/wasm_blocking_op.c",
         "libs/wasm-micro-runtime/core/iwasm/common/arch/invokeNative_general.c",
-        // Libc builtin
         "libs/wasm-micro-runtime/core/iwasm/libraries/libc-builtin/libc_builtin_wrapper.c",
-        // Shared utilities
         "libs/wasm-micro-runtime/core/shared/utils/bh_assert.c",
         "libs/wasm-micro-runtime/core/shared/utils/bh_common.c",
         "libs/wasm-micro-runtime/core/shared/utils/bh_hashmap.c",
@@ -235,12 +237,10 @@ pub fn build(b: *std.Build) void {
         "libs/wasm-micro-runtime/core/shared/utils/bh_queue.c",
         "libs/wasm-micro-runtime/core/shared/utils/bh_vector.c",
         "libs/wasm-micro-runtime/core/shared/utils/runtime_timer.c",
-        // Memory allocator
         "libs/wasm-micro-runtime/core/shared/mem-alloc/mem_alloc.c",
         "libs/wasm-micro-runtime/core/shared/mem-alloc/ems/ems_alloc.c",
         "libs/wasm-micro-runtime/core/shared/mem-alloc/ems/ems_hmu.c",
         "libs/wasm-micro-runtime/core/shared/mem-alloc/ems/ems_kfc.c",
-        // Platform - Linux
         "libs/wasm-micro-runtime/core/shared/platform/linux/platform_init.c",
         "libs/wasm-micro-runtime/core/shared/platform/common/posix/posix_thread.c",
         "libs/wasm-micro-runtime/core/shared/platform/common/posix/posix_time.c",
@@ -250,39 +250,41 @@ pub fn build(b: *std.Build) void {
         "libs/wasm-micro-runtime/core/shared/platform/common/memory/mremap.c",
     };
 
-    wamr.addCSourceFiles(.{
+    wamr.root_module.addCSourceFiles(.{
         .files = &wamr_sources,
         .flags = &wamr_defines,
     });
 
     // WAMR include paths
-    wamr.addIncludePath(b.path("libs/wasm-micro-runtime/core/iwasm/include"));
-    wamr.addIncludePath(b.path("libs/wasm-micro-runtime/core/iwasm/interpreter"));
-    wamr.addIncludePath(b.path("libs/wasm-micro-runtime/core/iwasm/common"));
-    wamr.addIncludePath(b.path("libs/wasm-micro-runtime/core/iwasm/libraries/libc-builtin"));
-    wamr.addIncludePath(b.path("libs/wasm-micro-runtime/core/shared/include"));
-    wamr.addIncludePath(b.path("libs/wasm-micro-runtime/core/shared/utils"));
-    wamr.addIncludePath(b.path("libs/wasm-micro-runtime/core/shared/utils/uncommon"));
-    wamr.addIncludePath(b.path("libs/wasm-micro-runtime/core/shared/mem-alloc"));
-    wamr.addIncludePath(b.path("libs/wasm-micro-runtime/core/shared/mem-alloc/ems"));
-    wamr.addIncludePath(b.path("libs/wasm-micro-runtime/core/shared/platform/include"));
-    wamr.addIncludePath(b.path("libs/wasm-micro-runtime/core/shared/platform/linux"));
-    wamr.linkLibC();
+    wamr.root_module.addIncludePath(b.path("libs/wasm-micro-runtime/core/iwasm/include"));
+    wamr.root_module.addIncludePath(b.path("libs/wasm-micro-runtime/core/iwasm/interpreter"));
+    wamr.root_module.addIncludePath(b.path("libs/wasm-micro-runtime/core/iwasm/common"));
+    wamr.root_module.addIncludePath(b.path("libs/wasm-micro-runtime/core/iwasm/libraries/libc-builtin"));
+    wamr.root_module.addIncludePath(b.path("libs/wasm-micro-runtime/core/shared/include"));
+    wamr.root_module.addIncludePath(b.path("libs/wasm-micro-runtime/core/shared/utils"));
+    wamr.root_module.addIncludePath(b.path("libs/wasm-micro-runtime/core/shared/utils/uncommon"));
+    wamr.root_module.addIncludePath(b.path("libs/wasm-micro-runtime/core/shared/mem-alloc"));
+    wamr.root_module.addIncludePath(b.path("libs/wasm-micro-runtime/core/shared/mem-alloc/ems"));
+    wamr.root_module.addIncludePath(b.path("libs/wasm-micro-runtime/core/shared/platform/include"));
+    wamr.root_module.addIncludePath(b.path("libs/wasm-micro-runtime/core/shared/platform/linux"));
 
     // ========================================================================
     // lodepng (for screenshots)
     // ========================================================================
-    const lodepng = b.addStaticLibrary(.{
+    const lodepng = b.addLibrary(.{
         .name = "lodepng",
-        .target = target,
-        .optimize = optimize,
+        .linkage = .static,
+        .root_module = b.createModule(.{
+            .target = target,
+            .optimize = optimize,
+            .link_libcpp = true,
+        }),
     });
-    lodepng.addCSourceFiles(.{
+    lodepng.root_module.addCSourceFiles(.{
         .files = &.{"libs/lodepng/lodepng.cpp"},
         .flags = &.{"-std=c++14"},
     });
-    lodepng.addIncludePath(b.path("libs/lodepng"));
-    lodepng.linkLibCpp();
+    lodepng.root_module.addIncludePath(b.path("libs/lodepng"));
 
     // ========================================================================
     // Desktop Emulator (SDL)
@@ -293,7 +295,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    emulator.addCSourceFiles(.{
+    emulator.root_module.addCSourceFiles(.{
         .files = &.{
             "src/emulator/main.cpp",
             "src/emulator/display_sdl.cpp",
@@ -311,19 +313,19 @@ pub fn build(b: *std.Build) void {
     });
 
     // Include paths for emulator
-    emulator.addIncludePath(b.path("src/runtime"));
-    emulator.addIncludePath(b.path("src/emulator"));
-    emulator.addIncludePath(b.path("libs/u8g2/csrc"));
-    emulator.addIncludePath(b.path("libs/lodepng"));
-    emulator.addIncludePath(b.path("libs/wasm-micro-runtime/core/iwasm/include"));
+    emulator.root_module.addIncludePath(b.path("src/runtime"));
+    emulator.root_module.addIncludePath(b.path("src/emulator"));
+    emulator.root_module.addIncludePath(b.path("libs/u8g2/csrc"));
+    emulator.root_module.addIncludePath(b.path("libs/lodepng"));
+    emulator.root_module.addIncludePath(b.path("libs/wasm-micro-runtime/core/iwasm/include"));
 
     // Link libraries
     emulator.linkLibrary(u8g2);
     emulator.linkLibrary(wamr);
     emulator.linkLibrary(lodepng);
     emulator.linkSystemLibrary("SDL2");
-    emulator.linkLibCpp();
-    emulator.linkLibC();
+    emulator.root_module.link_libcpp = true;
+    emulator.root_module.link_libc = true;
 
     b.installArtifact(emulator);
 
@@ -342,23 +344,24 @@ pub fn build(b: *std.Build) void {
             .name = app_name,
             .target = wasm_target,
             .optimize = .ReleaseSmall,
-            .link_libc = true,
         });
+
+        app.root_module.link_libc = true;
 
         // For now, compile the C version of apps
         const main_path = b.fmt("src/apps/{s}/main.c", .{app_name});
-        app.addCSourceFiles(.{
+        app.root_module.addCSourceFiles(.{
             .files = &.{main_path},
             .flags = &.{ "-O3", "-D__wasi__" },
         });
 
         // IMGUI library (compiled into each app)
-        app.addCSourceFiles(.{
+        app.root_module.addCSourceFiles(.{
             .files = &.{"src/sdk/imgui.c"},
             .flags = &.{ "-O3", "-D__wasi__" },
         });
 
-        app.addIncludePath(b.path("src/sdk"));
+        app.root_module.addIncludePath(b.path("src/sdk"));
 
         // Export functions for WASM
         app.rdynamic = true;
@@ -459,10 +462,8 @@ pub fn build(b: *std.Build) void {
     // Copy all WASM apps
     const wasm_apps_web = [_][]const u8{ "circles", "mandelbrot", "test_drawing", "test_ui", "circles_zig", "test_ui_zig" };
     for (wasm_apps_web) |app_name| {
-        const src_path = b.fmt("bin/{s}.wasm", .{app_name});
         const dest_path = b.fmt("../www/{s}.wasm", .{app_name});
         const copy_wasm = b.addInstallFile(b.path(b.fmt("zig-out/bin/{s}.wasm", .{app_name})), dest_path);
-        _ = src_path;
         web_step.dependOn(&copy_wasm.step);
     }
 
