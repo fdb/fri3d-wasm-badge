@@ -376,6 +376,22 @@ pub fn build(b: *std.Build) void {
         .os_tag = .freestanding,
     });
 
+    // Create shared modules for Zig WASM apps
+    const platform_module = b.createModule(.{
+        .root_source_file = b.path("src/sdk/zig/platform.zig"),
+        .target = zig_wasm_target,
+        .optimize = .ReleaseSmall,
+    });
+
+    const imgui_module = b.createModule(.{
+        .root_source_file = b.path("src/sdk/zig/imgui.zig"),
+        .target = zig_wasm_target,
+        .optimize = .ReleaseSmall,
+        .imports = &.{
+            .{ .name = "platform", .module = platform_module },
+        },
+    });
+
     // Circles app in pure Zig
     const circles_zig = b.addExecutable(.{
         .name = "circles_zig",
@@ -384,17 +400,26 @@ pub fn build(b: *std.Build) void {
         .optimize = .ReleaseSmall,
     });
 
-    // Add the SDK module
-    circles_zig.root_module.addImport("platform", b.createModule(.{
-        .root_source_file = b.path("src/sdk/zig/platform.zig"),
-        .target = zig_wasm_target,
-        .optimize = .ReleaseSmall,
-    }));
-
+    circles_zig.root_module.addImport("platform", platform_module);
     circles_zig.rdynamic = true;
     circles_zig.entry = .disabled;
 
     b.installArtifact(circles_zig);
+
+    // Test UI app in pure Zig (uses IMGUI)
+    const test_ui_zig = b.addExecutable(.{
+        .name = "test_ui_zig",
+        .root_source_file = b.path("src/apps/test_ui_zig/main.zig"),
+        .target = zig_wasm_target,
+        .optimize = .ReleaseSmall,
+    });
+
+    test_ui_zig.root_module.addImport("platform", platform_module);
+    test_ui_zig.root_module.addImport("imgui", imgui_module);
+    test_ui_zig.rdynamic = true;
+    test_ui_zig.entry = .disabled;
+
+    b.installArtifact(test_ui_zig);
 
     // ========================================================================
     // Run command
@@ -432,7 +457,7 @@ pub fn build(b: *std.Build) void {
     web_step.dependOn(&copy_js.step);
 
     // Copy all WASM apps
-    const wasm_apps_web = [_][]const u8{ "circles", "mandelbrot", "test_drawing", "test_ui", "circles_zig" };
+    const wasm_apps_web = [_][]const u8{ "circles", "mandelbrot", "test_drawing", "test_ui", "circles_zig", "test_ui_zig" };
     for (wasm_apps_web) |app_name| {
         const src_path = b.fmt("bin/{s}.wasm", .{app_name});
         const dest_path = b.fmt("../www/{s}.wasm", .{app_name});
