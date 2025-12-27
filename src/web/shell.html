@@ -44,6 +44,21 @@
             border-radius: 8px;
         }
 
+        .app-selector {
+            margin-top: 15px;
+            text-align: center;
+        }
+
+        .app-selector select {
+            background: #0f3460;
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
         .controls {
             margin-top: 20px;
             text-align: center;
@@ -114,26 +129,25 @@
 
         <canvas id="canvas" class="hidden" width="512" height="256"></canvas>
 
+        <div id="app-selector" class="app-selector hidden">
+            <select id="app-select">
+                <option value="">-- Select an app --</option>
+                <option value="/apps/circles/circles">Circles</option>
+                <option value="/apps/mandelbrot/mandelbrot">Mandelbrot</option>
+                <option value="/apps/test_drawing/test_drawing">Test Drawing</option>
+            </select>
+        </div>
+
         <div id="controls" class="controls hidden">
             <h3>Controls</h3>
             <p>
-                <span class="key">↑</span>
-                <span class="key">↓</span>
-                <span class="key">←</span>
-                <span class="key">→</span>
-                Navigate
+                <span class="key">Arrow Keys</span> Navigate
             </p>
             <p>
-                <span class="key">Z</span> / <span class="key">Enter</span>
-                Select / OK
+                <span class="key">Z</span> / <span class="key">Enter</span> Select
             </p>
             <p>
-                <span class="key">X</span> / <span class="key">Backspace</span>
-                Back
-            </p>
-            <p>
-                <span class="key">←</span> + <span class="key">X</span> (hold)
-                Return to launcher
+                <span class="key">X</span> / <span class="key">Backspace</span> Back
             </p>
         </div>
     </div>
@@ -141,27 +155,222 @@
     <div id="output"></div>
 
     <script>
+        // Fri3d WASM App Runtime
+        // Bridges browser's WebAssembly to the C++ canvas/display code
+
+        const Fri3dRuntime = {
+            currentApp: null,
+            appMemory: null,
+            animationId: null,
+
+            // Wrapper functions for C++ exports (set after Module loads)
+            canvas: null,
+            random: null,
+
+            init: function() {
+                // Create wrapper functions using cwrap
+                this.canvas = {
+                    clear: Module.cwrap('js_canvas_clear', null, []),
+                    width: Module.cwrap('js_canvas_width', 'number', []),
+                    height: Module.cwrap('js_canvas_height', 'number', []),
+                    setColor: Module.cwrap('js_canvas_set_color', null, ['number']),
+                    setFont: Module.cwrap('js_canvas_set_font', null, ['number']),
+                    drawDot: Module.cwrap('js_canvas_draw_dot', null, ['number', 'number']),
+                    drawLine: Module.cwrap('js_canvas_draw_line', null, ['number', 'number', 'number', 'number']),
+                    drawFrame: Module.cwrap('js_canvas_draw_frame', null, ['number', 'number', 'number', 'number']),
+                    drawBox: Module.cwrap('js_canvas_draw_box', null, ['number', 'number', 'number', 'number']),
+                    drawRFrame: Module.cwrap('js_canvas_draw_rframe', null, ['number', 'number', 'number', 'number', 'number']),
+                    drawRBox: Module.cwrap('js_canvas_draw_rbox', null, ['number', 'number', 'number', 'number', 'number']),
+                    drawCircle: Module.cwrap('js_canvas_draw_circle', null, ['number', 'number', 'number']),
+                    drawDisc: Module.cwrap('js_canvas_draw_disc', null, ['number', 'number', 'number']),
+                    drawStr: Module.cwrap('js_canvas_draw_str', null, ['number', 'number', 'string']),
+                    stringWidth: Module.cwrap('js_canvas_string_width', 'number', ['string']),
+                };
+
+                this.random = {
+                    seed: Module.cwrap('js_random_seed', null, ['number']),
+                    get: Module.cwrap('js_random_get', 'number', []),
+                    range: Module.cwrap('js_random_range', 'number', ['number']),
+                };
+
+                this.displayFlush = Module.cwrap('js_display_flush', null, []);
+                this.pollInput = Module.cwrap('js_poll_input', 'number', []);
+                this.hasInputEvent = Module.cwrap('js_has_input_event', 'number', []);
+                this.getInputEvent = Module.cwrap('js_get_input_event', 'number', []);
+
+                console.log('Fri3d Runtime initialized');
+                console.log('Canvas size:', this.canvas.width(), 'x', this.canvas.height());
+            },
+
+            // Read a null-terminated string from WASM memory
+            readString: function(ptr) {
+                if (!this.appMemory || ptr === 0) return '';
+                const bytes = new Uint8Array(this.appMemory.buffer);
+                let str = '';
+                let i = ptr;
+                while (bytes[i] !== 0 && i < bytes.length) {
+                    str += String.fromCharCode(bytes[i]);
+                    i++;
+                }
+                return str;
+            },
+
+            // Create import object for WASM apps
+            createImports: function() {
+                const self = this;
+                return {
+                    env: {
+                        canvas_clear: () => self.canvas.clear(),
+                        canvas_width: () => self.canvas.width(),
+                        canvas_height: () => self.canvas.height(),
+                        canvas_set_color: (color) => self.canvas.setColor(color),
+                        canvas_set_font: (font) => self.canvas.setFont(font),
+                        canvas_draw_dot: (x, y) => self.canvas.drawDot(x, y),
+                        canvas_draw_line: (x1, y1, x2, y2) => self.canvas.drawLine(x1, y1, x2, y2),
+                        canvas_draw_frame: (x, y, w, h) => self.canvas.drawFrame(x, y, w, h),
+                        canvas_draw_box: (x, y, w, h) => self.canvas.drawBox(x, y, w, h),
+                        canvas_draw_rframe: (x, y, w, h, r) => self.canvas.drawRFrame(x, y, w, h, r),
+                        canvas_draw_rbox: (x, y, w, h, r) => self.canvas.drawRBox(x, y, w, h, r),
+                        canvas_draw_circle: (x, y, r) => self.canvas.drawCircle(x, y, r),
+                        canvas_draw_disc: (x, y, r) => self.canvas.drawDisc(x, y, r),
+                        canvas_draw_str: (x, y, strPtr) => {
+                            const str = self.readString(strPtr);
+                            self.canvas.drawStr(x, y, str);
+                        },
+                        canvas_string_width: (strPtr) => {
+                            const str = self.readString(strPtr);
+                            return self.canvas.stringWidth(str);
+                        },
+                        random_seed: (seed) => self.random.seed(seed),
+                        random_get: () => self.random.get(),
+                        random_range: (max) => self.random.range(max),
+                    }
+                };
+            },
+
+            // Load and run a WASM app
+            loadApp: async function(path) {
+                console.log('Loading app:', path);
+
+                // Stop current app
+                this.stopApp();
+
+                try {
+                    // Read file from Emscripten's virtual filesystem
+                    const data = FS.readFile(path);
+                    const imports = this.createImports();
+                    const result = await WebAssembly.instantiate(data, imports);
+
+                    this.currentApp = result.instance;
+                    this.appMemory = result.instance.exports.memory;
+
+                    console.log('App loaded successfully');
+                    console.log('Exports:', Object.keys(result.instance.exports));
+
+                    // Start render loop
+                    this.startRenderLoop();
+
+                } catch (e) {
+                    console.error('Failed to load app:', e);
+                    this.log('Error loading app: ' + e.message);
+                }
+            },
+
+            startRenderLoop: function() {
+                const self = this;
+
+                function frame() {
+                    if (!self.currentApp) return;
+
+                    // Poll input from SDL
+                    self.pollInput();
+
+                    // Handle input events
+                    while (self.hasInputEvent()) {
+                        const event = self.getInputEvent();
+                        if (event >= 0 && self.currentApp.exports.on_input) {
+                            const key = (event >> 8) & 0xFF;
+                            const type = event & 0xFF;
+                            self.currentApp.exports.on_input(key, type);
+                        }
+                    }
+
+                    // Render
+                    if (self.currentApp.exports.render) {
+                        self.canvas.clear();
+                        self.currentApp.exports.render();
+                        self.displayFlush();
+                    }
+
+                    self.animationId = requestAnimationFrame(frame);
+                }
+
+                this.animationId = requestAnimationFrame(frame);
+            },
+
+            stopApp: function() {
+                if (this.animationId) {
+                    cancelAnimationFrame(this.animationId);
+                    this.animationId = null;
+                }
+                this.currentApp = null;
+                this.appMemory = null;
+            },
+
+            log: function(msg) {
+                const output = document.getElementById('output');
+                output.innerHTML += msg + '<br>';
+                output.scrollTop = output.scrollHeight;
+            }
+        };
+
+        // Emscripten Module configuration
         var Module = {
             canvas: (function() {
-                var canvas = document.getElementById('canvas');
-                return canvas;
+                return document.getElementById('canvas');
             })(),
             print: function(text) {
-                var output = document.getElementById('output');
-                output.innerHTML += text + '<br>';
-                output.scrollTop = output.scrollHeight;
+                Fri3dRuntime.log(text);
                 console.log(text);
             },
             printErr: function(text) {
-                var output = document.getElementById('output');
-                output.innerHTML += '<span style="color: #e94560;">' + text + '</span><br>';
-                output.scrollTop = output.scrollHeight;
+                Fri3dRuntime.log('<span style="color: #e94560;">' + text + '</span>');
                 console.error(text);
             },
             onRuntimeInitialized: function() {
                 document.getElementById('loading').classList.add('hidden');
                 document.getElementById('canvas').classList.remove('hidden');
+                document.getElementById('app-selector').classList.remove('hidden');
                 document.getElementById('controls').classList.remove('hidden');
+
+                // Wait for C++ to initialize (canvas becomes non-zero size)
+                function waitForCanvas() {
+                    Fri3dRuntime.init();
+                    const width = Fri3dRuntime.canvas.width();
+                    if (width === 0) {
+                        console.log('Waiting for canvas initialization...');
+                        setTimeout(waitForCanvas, 100);
+                        return;
+                    }
+
+                    console.log('Canvas ready:', width, 'x', Fri3dRuntime.canvas.height());
+
+                    // Setup app selector
+                    document.getElementById('app-select').addEventListener('change', function(e) {
+                        if (e.target.value) {
+                            Fri3dRuntime.loadApp(e.target.value);
+                        } else {
+                            Fri3dRuntime.stopApp();
+                        }
+                    });
+
+                    // Auto-load first app
+                    const firstApp = '/apps/circles/circles';
+                    document.getElementById('app-select').value = firstApp;
+                    Fri3dRuntime.loadApp(firstApp);
+                }
+
+                waitForCanvas();
             }
         };
     </script>

@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./build_web.sh:*)",
+      "Bash(./build_all.sh:*)",
+      "Bash(ls:*)",
+      "Bash(cmake --build:*)"
+    ]
+  }
+}

@@ -16,22 +16,27 @@ option(BUILD_WEB "Build the web/Emscripten version" OFF)
 add_subdirectory(libs/u8g2)
 
 # WAMR (WebAssembly Micro Runtime)
-set(WAMR_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs/wasm-micro-runtime)
+# Skip for Emscripten builds - web version uses browser's native WebAssembly
+if(NOT EMSCRIPTEN)
+    set(WAMR_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs/wasm-micro-runtime)
 
-# WAMR configuration
-set(WAMR_BUILD_INTERP 1 CACHE BOOL "Enable Interpreter")
-set(WAMR_BUILD_FAST_INTERP 1 CACHE BOOL "Enable Fast Interpreter")
-set(WAMR_BUILD_JIT 0 CACHE BOOL "Disable JIT")
-set(WAMR_BUILD_LIBC_BUILTIN 1 CACHE BOOL "Enable builtin libc")
-set(WAMR_BUILD_SIMD 0 CACHE BOOL "Disable SIMD")
-# Auto-detect platform for WAMR
-if(APPLE)
-    set(WAMR_BUILD_PLATFORM "darwin" CACHE STRING "Platform")
-else()
-    set(WAMR_BUILD_PLATFORM "linux" CACHE STRING "Platform")
+    # WAMR configuration
+    set(WAMR_BUILD_INTERP 1 CACHE BOOL "Enable Interpreter")
+    set(WAMR_BUILD_FAST_INTERP 1 CACHE BOOL "Enable Fast Interpreter")
+    set(WAMR_BUILD_JIT 0 CACHE BOOL "Disable JIT")
+    set(WAMR_BUILD_AOT 0 CACHE BOOL "Disable AOT")
+    set(WAMR_BUILD_LIBC_BUILTIN 1 CACHE BOOL "Enable builtin libc")
+    set(WAMR_BUILD_SIMD 0 CACHE BOOL "Disable SIMD")
+
+    # Auto-detect platform for WAMR
+    if(APPLE)
+        set(WAMR_BUILD_PLATFORM "darwin" CACHE STRING "Platform")
+    else()
+        set(WAMR_BUILD_PLATFORM "linux" CACHE STRING "Platform")
+    endif()
+
+    add_subdirectory(${WAMR_ROOT_DIR} ${CMAKE_CURRENT_BINARY_DIR}/wamr)
 endif()
-
-add_subdirectory(${WAMR_ROOT_DIR} ${CMAKE_CURRENT_BINARY_DIR}/wamr)
 
 # ============================================================================
 # Shared Runtime Library
