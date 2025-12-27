@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fri3d Badge Emulator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #1a1a2e;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: #eee;
+        }
+        h1 {
+            margin-bottom: 20px;
+            font-weight: 300;
+            color: #4cc9f0;
+        }
+        #display-container {
+            background: #000;
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+        #display {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            border: 2px solid #333;
+        }
+        #controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            padding: 10px 20px;
+            background: #4361ee;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        .btn:hover {
+            background: #3a56d4;
+        }
+        #keyboard-hint {
+            margin-top: 20px;
+            color: #888;
+            font-size: 12px;
+            text-align: center;
+        }
+        #app-selector {
+            margin-bottom: 20px;
+        }
+        select {
+            padding: 8px 16px;
+            font-size: 14px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            background: #16213e;
+            color: #eee;
+        }
+    </style>
+</head>
+<body>
+    <h1>Fri3d Badge Emulator</h1>
+
+    <div id="app-selector">
+        <select id="app-select">
+            <option value="circles_zig.wasm">Circles (Zig)</option>
+            <option value="circles.wasm">Circles (C)</option>
+            <option value="mandelbrot.wasm">Mandelbrot</option>
+            <option value="test_drawing.wasm">Test Drawing</option>
+            <option value="test_ui.wasm">Test UI</option>
+        </select>
+        <button class="btn" onclick="loadSelectedApp()">Load App</button>
+    </div>
+
+    <div id="display-container">
+        <canvas id="display" width="512" height="256"></canvas>
+    </div>
+
+    <div id="controls">
+        <button class="btn" onclick="platform.sendKey('up', 'press')">Up</button>
+        <button class="btn" onclick="platform.sendKey('down', 'press')">Down</button>
+        <button class="btn" onclick="platform.sendKey('left', 'press')">Left</button>
+        <button class="btn" onclick="platform.sendKey('right', 'press')">Right</button>
+        <button class="btn" onclick="platform.sendKey('ok', 'press')">OK</button>
+        <button class="btn" onclick="platform.sendKey('back', 'press')">Back</button>
+    </div>
+
+    <div id="keyboard-hint">
+        Keyboard: Arrow keys for navigation, Enter/Z for OK, Backspace/X for Back
+    </div>
+
+    <script src="platform.js"></script>
+    <script>
+        // Initialize platform
+        const platform = new Fri3dPlatform(document.getElementById('display'));
+
+        // Load default app
+        async function loadSelectedApp() {
+            const select = document.getElementById('app-select');
+            const appName = select.value;
+            await platform.loadApp(appName);
+        }
+
+        // Start with default app
+        loadSelectedApp();
+    </script>
+</body>
+</html>

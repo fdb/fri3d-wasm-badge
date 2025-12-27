@@ -418,4 +418,29 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run emulator with Zig circles app");
     test_step.dependOn(&test_cmd.step);
+
+    // ========================================================================
+    // Web build step - copy web files and WASM apps to www/
+    // ========================================================================
+    const web_step = b.step("web", "Build web version (copy files to www/)");
+
+    // Copy web platform files
+    const copy_html = b.addInstallFile(b.path("src/ports/web/index.html"), "../www/index.html");
+    const copy_js = b.addInstallFile(b.path("src/ports/web/platform.js"), "../www/platform.js");
+
+    web_step.dependOn(&copy_html.step);
+    web_step.dependOn(&copy_js.step);
+
+    // Copy all WASM apps
+    const wasm_apps_web = [_][]const u8{ "circles", "mandelbrot", "test_drawing", "test_ui", "circles_zig" };
+    for (wasm_apps_web) |app_name| {
+        const src_path = b.fmt("bin/{s}.wasm", .{app_name});
+        const dest_path = b.fmt("../www/{s}.wasm", .{app_name});
+        const copy_wasm = b.addInstallFile(b.path(b.fmt("zig-out/bin/{s}.wasm", .{app_name})), dest_path);
+        _ = src_path;
+        web_step.dependOn(&copy_wasm.step);
+    }
+
+    // Make web depend on building the apps first
+    web_step.dependOn(b.getInstallStep());
 }
