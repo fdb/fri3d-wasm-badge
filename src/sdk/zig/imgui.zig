@@ -5,8 +5,10 @@
 
 const platform = @import("platform");
 const canvas = platform.canvas;
-const Color = platform.Color;
-const Font = platform.Font;
+// Use types from canvas.zig (where the drawing functions expect them)
+const Color = canvas.Color;
+const Font = canvas.Font;
+// Input types are in platform.zig
 const InputKey = platform.InputKey;
 const InputType = platform.InputType;
 

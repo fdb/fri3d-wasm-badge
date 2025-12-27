@@ -19,28 +19,22 @@
 const std = @import("std");
 
 // ============================================================================
-// Display Constants
+// Canvas API - Re-export from canvas.zig
 // ============================================================================
+// Canvas owns the framebuffer and all drawing code.
+// Re-export here for convenience so apps can use platform.canvas.*
 
-pub const SCREEN_WIDTH: u32 = 128;
-pub const SCREEN_HEIGHT: u32 = 64;
+pub const canvas = @import("canvas.zig");
+
+// Re-export display types from canvas for convenience
+pub const Color = canvas.Color;
+pub const Font = canvas.Font;
+pub const SCREEN_WIDTH = canvas.SCREEN_WIDTH;
+pub const SCREEN_HEIGHT = canvas.SCREEN_HEIGHT;
 
 // ============================================================================
-// Types (shared between platform and apps)
+// Input Types (platform-specific, not in canvas)
 // ============================================================================
-
-pub const Color = enum(u32) {
-    black = 0,
-    white = 1,
-    xor = 2,
-};
-
-pub const Font = enum(u32) {
-    primary = 0, // 6x10
-    secondary = 1, // 5x7
-    keyboard = 2, // 5x8
-    big_numbers = 3, // 10x20
-};
 
 pub const InputKey = enum(u32) {
     up = 0,
@@ -90,17 +84,6 @@ pub const random = struct {
         return get() % max;
     }
 };
-
-// ============================================================================
-// Canvas API - Re-export from canvas.zig for convenience
-// ============================================================================
-// Apps can either:
-//   const canvas = @import("canvas");
-// Or:
-//   const platform = @import("platform");
-//   platform.canvas.drawLine(...);
-
-pub const canvas = @import("canvas.zig");
 
 // ============================================================================
 // Future: Storage API
