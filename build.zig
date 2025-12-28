@@ -68,6 +68,52 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(test_ui_zig);
 
     // ========================================================================
+    // Desktop Emulator (Native)
+    // ========================================================================
+    // Requires: SDL2 (system), WAMR (pre-built via CMake)
+    // Build WAMR first: cmake -B build/emulator && cmake --build build/emulator
+
+    const native_target = b.standardTargetOptions(.{});
+    const native_optimize = b.standardOptimizeOption(.{});
+
+    const emulator = b.addExecutable(.{
+        .name = "fri3d_emulator",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/ports/emulator/main.zig"),
+            .target = native_target,
+            .optimize = native_optimize,
+        }),
+    });
+
+    // SDL2 (use pkg-config or fallback to Homebrew path)
+    emulator.linkSystemLibrary("SDL2");
+    emulator.addLibraryPath(.{ .cwd_relative = "/opt/homebrew/lib" });
+    emulator.addIncludePath(.{ .cwd_relative = "/opt/homebrew/include" });
+    emulator.linkLibC();
+
+    // WAMR include paths
+    emulator.addIncludePath(b.path("libs/wasm-micro-runtime/core/iwasm/include"));
+
+    // Link against pre-built WAMR library (built via CMake)
+    // Build first: cmake -B build/emulator && cmake --build build/emulator
+    emulator.addLibraryPath(.{ .cwd_relative = "build/emulator/wamr" });
+    emulator.linkSystemLibrary("iwasm");
+
+    // Emulator build step
+    const emulator_step = b.step("emulator", "Build desktop emulator (requires WAMR built via CMake)");
+    const install_emulator = b.addInstallArtifact(emulator, .{});
+    emulator_step.dependOn(&install_emulator.step);
+
+    // Run emulator step
+    const run_emulator = b.addRunArtifact(emulator);
+    run_emulator.step.dependOn(&install_emulator.step);
+    if (b.args) |args| {
+        run_emulator.addArgs(args);
+    }
+    const run_step = b.step("run", "Run the emulator (pass WASM file as argument)");
+    run_step.dependOn(&run_emulator.step);
+
+    // ========================================================================
     // Build Steps
     // ========================================================================
 
