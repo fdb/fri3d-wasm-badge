@@ -4,7 +4,7 @@
 // Desktop emulator that runs WASM apps using WAMR runtime and SDL2 display.
 //
 // Usage:
-//   fri3d_emulator                              # Show launcher (TODO)
+//   fri3d_emulator                              # Show launcher
 //   fri3d_emulator app.wasm                     # Run specific WASM app
 //   fri3d_emulator --test app.wasm              # Render one frame and exit
 //   fri3d_emulator --headless --scene 0 --screenshot out.png app.wasm
@@ -39,6 +39,35 @@ const FRAMEBUFFER_SIZE: usize = SCREEN_WIDTH * SCREEN_HEIGHT;
 const TARGET_FPS: u32 = 60;
 const FRAME_TIME_MS: u32 = 1000 / TARGET_FPS;
 
+// Input timing constants
+const LONG_PRESS_MS: u32 = 500; // Threshold for long_press
+const REPEAT_INTERVAL_MS: u32 = 100; // Interval between repeat events
+
+// Per-key state for timing detection
+const KeyState = struct {
+    pressed: bool = false,
+    press_time: u32 = 0,
+    long_press_sent: bool = false,
+    last_repeat_time: u32 = 0,
+};
+
+// App registry - maps app IDs to WASM file paths
+// ID 0 is always the launcher
+const AppEntry = struct {
+    id: u32,
+    path: []const u8,
+};
+
+const APP_REGISTRY = [_]AppEntry{
+    .{ .id = 0, .path = "zig-out/bin/launcher.wasm" },
+    .{ .id = 1, .path = "zig-out/bin/test_ui.wasm" },
+    .{ .id = 2, .path = "zig-out/bin/circles.wasm" },
+    .{ .id = 3, .path = "zig-out/bin/mandelbrot.wasm" },
+};
+
+// Global state for app launch requests (set by native function, read by main loop)
+var g_requested_app_id: ?u32 = null;
+
 // Input key values (must match platform.zig InputKey enum)
 const InputKey = enum(u32) {
     up = 0,
@@ -56,6 +85,35 @@ const InputType = enum(u32) {
     short_press = 2,
     long_press = 3,
     repeat = 4,
+};
+
+// ============================================================================
+// Native Functions for WASM Apps
+// ============================================================================
+// These functions are exported to WASM apps via the "env" module
+
+fn native_request_launch_app(_: wamr.wasm_exec_env_t, app_id: u32) void {
+    g_requested_app_id = app_id;
+}
+
+fn native_request_exit_to_launcher(_: wamr.wasm_exec_env_t) void {
+    g_requested_app_id = 0; // Launcher is always ID 0
+}
+
+// Native function symbol table
+const native_symbols = [_]wamr.NativeSymbol{
+    .{
+        .symbol = "platform_request_launch_app",
+        .func_ptr = @constCast(@ptrCast(&native_request_launch_app)),
+        .signature = "(i)",
+        .attachment = null,
+    },
+    .{
+        .symbol = "platform_request_exit_to_launcher",
+        .func_ptr = @constCast(@ptrCast(&native_request_exit_to_launcher)),
+        .signature = "()",
+        .attachment = null,
+    },
 };
 
 // ============================================================================
@@ -206,6 +264,14 @@ const Display = struct {
     texture: ?*c.SDL_Texture = null,
     running: bool = true,
 
+    // Per-key timing state
+    key_states: [6]KeyState = [_]KeyState{.{}} ** 6,
+
+    // Key state tracking for BACK+LEFT combo detection
+    back_pressed: bool = false,
+    left_pressed: bool = false,
+    combo_start_time: u32 = 0, // SDL ticks when both keys first held
+
     const Self = @This();
 
     fn init() !Self {
@@ -298,18 +364,100 @@ const Display = struct {
                 c.SDL_KEYDOWN => {
                     if (event.key.repeat == 0) {
                         if (mapKey(event.key.keysym.sym)) |key| {
+                            const key_idx = @intFromEnum(key);
+                            const now = c.SDL_GetTicks();
+
+                            // Initialize per-key timing state
+                            self.key_states[key_idx] = .{
+                                .pressed = true,
+                                .press_time = now,
+                                .long_press_sent = false,
+                                .last_repeat_time = 0,
+                            };
+
+                            // Track for BACK+LEFT combo detection
+                            if (key == .back) self.back_pressed = true;
+                            if (key == .left) self.left_pressed = true;
+                            if (self.back_pressed and self.left_pressed and self.combo_start_time == 0) {
+                                self.combo_start_time = now;
+                            }
+
+                            // Send immediate press event
                             app.callOnInput(key, .press);
                         }
                     }
                 },
                 c.SDL_KEYUP => {
                     if (mapKey(event.key.keysym.sym)) |key| {
-                        app.callOnInput(key, .release);
+                        const key_idx = @intFromEnum(key);
+                        const key_state = &self.key_states[key_idx];
+
+                        if (key_state.pressed) {
+                            // If long_press was NOT sent, this is a short_press
+                            if (!key_state.long_press_sent) {
+                                app.callOnInput(key, .short_press);
+                            }
+
+                            // Always send release
+                            app.callOnInput(key, .release);
+
+                            // Reset per-key state
+                            key_state.pressed = false;
+                        }
+
+                        // Track for BACK+LEFT combo detection
+                        if (key == .back) self.back_pressed = false;
+                        if (key == .left) self.left_pressed = false;
+                        if (!self.back_pressed or !self.left_pressed) {
+                            self.combo_start_time = 0;
+                        }
                     }
                 },
                 else => {},
             }
         }
+    }
+
+    /// Check key timing and generate long_press/repeat events
+    fn checkKeyTiming(self: *Self, app: *WasmApp) void {
+        const now = c.SDL_GetTicks();
+
+        for (0..6) |i| {
+            const key_state = &self.key_states[i];
+            if (!key_state.pressed) continue;
+
+            const held_time = now - key_state.press_time;
+            const key: InputKey = @enumFromInt(i);
+
+            // Check for long_press (fires once after threshold)
+            if (!key_state.long_press_sent and held_time >= LONG_PRESS_MS) {
+                app.callOnInput(key, .long_press);
+                key_state.long_press_sent = true;
+                key_state.last_repeat_time = now;
+            }
+
+            // Check for repeat (fires periodically after long_press)
+            if (key_state.long_press_sent) {
+                const time_since_repeat = now - key_state.last_repeat_time;
+                if (time_since_repeat >= REPEAT_INTERVAL_MS) {
+                    app.callOnInput(key, .repeat);
+                    key_state.last_repeat_time = now;
+                }
+            }
+        }
+    }
+
+    /// Check if BACK+LEFT has been held for LONG_PRESS_MS
+    fn checkExitCombo(self: *Self) bool {
+        if (self.back_pressed and self.left_pressed and self.combo_start_time > 0) {
+            const held_time = c.SDL_GetTicks() - self.combo_start_time;
+            if (held_time >= LONG_PRESS_MS) {
+                // Reset to prevent repeated triggers
+                self.combo_start_time = 0;
+                return true;
+            }
+        }
+        return false;
     }
 
     fn mapKey(sdl_key: c.SDL_Keycode) ?InputKey {
@@ -337,11 +485,26 @@ fn initWasmRuntime() bool {
     init_args.mem_alloc_option.pool.heap_buf = &g_heap_buf;
     init_args.mem_alloc_option.pool.heap_size = g_heap_buf.len;
 
+    // Register native functions
+    init_args.n_native_symbols = native_symbols.len;
+    init_args.native_symbols = @constCast(&native_symbols);
+    init_args.native_module_name = "env";
+
     return wamr.wasm_runtime_full_init(&init_args);
 }
 
 fn deinitWasmRuntime() void {
     wamr.wasm_runtime_destroy();
+}
+
+/// Look up app path by ID in the registry
+fn getAppPathById(id: u32) ?[]const u8 {
+    for (APP_REGISTRY) |entry| {
+        if (entry.id == id) {
+            return entry.path;
+        }
+    }
+    return null;
 }
 
 // ============================================================================
@@ -434,11 +597,12 @@ pub fn main() !void {
 
     // Default to launcher app if no WASM file specified
     if (wasm_path == null) {
-        // Try common locations for the launcher
+        // Try launcher first, then fall back to test_ui for compatibility
         const launcher_paths = [_][]const u8{
+            "zig-out/bin/launcher.wasm",
+            "www/launcher.wasm",
             "zig-out/bin/test_ui.wasm",
             "www/test_ui.wasm",
-            "build/apps/launcher/launcher.wasm",
         };
         for (launcher_paths) |path| {
             if (std.fs.cwd().access(path, .{})) |_| {
@@ -461,32 +625,30 @@ pub fn main() !void {
     }
     defer deinitWasmRuntime();
 
-    // Load WASM file
-    const wasm_data = try std.fs.cwd().readFileAlloc(allocator, wasm_path.?, 10 * 1024 * 1024);
-    defer allocator.free(wasm_data);
+    // Track current app path (may change during runtime)
+    var current_path: []const u8 = wasm_path.?;
 
-    // Initialize WASM app
-    var error_buf: [256]u8 = undefined;
-    var app = WasmApp.init(wasm_data, &error_buf) catch |err| {
-        std.debug.print("Failed to initialize WASM app: {}\n", .{err});
-        return;
-    };
-    defer app.deinit();
-
-    // Set scene if requested
-    if (scene_index) |scene| {
-        app.callSetScene(scene);
-    }
-
-    // Headless mode: render once and optionally save screenshot
+    // For headless mode, just run once without display
     if (headless_mode or screenshot_path != null) {
+        const wasm_data = try std.fs.cwd().readFileAlloc(allocator, current_path, 10 * 1024 * 1024);
+        defer allocator.free(wasm_data);
+
+        var error_buf: [256]u8 = undefined;
+        var app = WasmApp.init(wasm_data, &error_buf) catch |err| {
+            std.debug.print("Failed to initialize WASM app: {}\n", .{err});
+            return;
+        };
+        defer app.deinit();
+
+        if (scene_index) |scene| {
+            app.callSetScene(scene);
+        }
+
         app.callRender();
 
         if (screenshot_path) |path| {
             if (app.getFramebuffer()) |fb| {
-                if (saveScreenshot(fb, path)) {
-                    // Success - silent
-                } else {
+                if (!saveScreenshot(fb, path)) {
                     std.debug.print("Failed to save screenshot to {s}\n", .{path});
                     std.process.exit(1);
                 }
@@ -498,34 +660,101 @@ pub fn main() !void {
         return;
     }
 
-    // Initialize display for interactive mode
+    // Initialize display for interactive mode (once, persists across app switches)
     var display = try Display.init();
     defer display.deinit();
 
-    // Main loop
-    while (display.running) {
-        const frame_start = c.SDL_GetTicks();
+    // Main app loop - supports app switching
+    app_loop: while (display.running) {
+        // Load WASM file
+        const wasm_data = std.fs.cwd().readFileAlloc(allocator, current_path, 10 * 1024 * 1024) catch |err| {
+            std.debug.print("Failed to load {s}: {}\n", .{ current_path, err });
+            // If we failed to load a requested app, try to go back to launcher
+            if (!std.mem.eql(u8, current_path, "zig-out/bin/launcher.wasm")) {
+                current_path = "zig-out/bin/launcher.wasm";
+                continue :app_loop;
+            }
+            return;
+        };
+        defer allocator.free(wasm_data);
 
-        // Handle input
-        display.handleEvents(&app);
+        // Initialize WASM app
+        var error_buf: [256]u8 = undefined;
+        var app = WasmApp.init(wasm_data, &error_buf) catch |err| {
+            std.debug.print("Failed to initialize WASM app: {}\n", .{err});
+            // If we failed to init a requested app, try to go back to launcher
+            if (!std.mem.eql(u8, current_path, "zig-out/bin/launcher.wasm")) {
+                current_path = "zig-out/bin/launcher.wasm";
+                continue :app_loop;
+            }
+            return;
+        };
+        defer app.deinit();
 
-        // Render
-        app.callRender();
+        // Clear any pending launch request
+        g_requested_app_id = null;
 
-        // Get framebuffer and display
-        if (app.getFramebuffer()) |fb| {
-            display.present(fb);
+        // Reset key state on app switch
+        display.back_pressed = false;
+        display.left_pressed = false;
+        display.combo_start_time = 0;
+        display.key_states = [_]KeyState{.{}} ** 6;
+
+        // Set scene if requested (only for initial app)
+        if (scene_index) |scene| {
+            app.callSetScene(scene);
+            scene_index = null; // Only apply once
         }
 
-        // Test mode: exit after one frame
-        if (test_mode) {
-            break;
-        }
+        // Frame loop for current app
+        while (display.running) {
+            const frame_start = c.SDL_GetTicks();
 
-        // Frame timing
-        const frame_time = c.SDL_GetTicks() - frame_start;
-        if (frame_time < FRAME_TIME_MS) {
-            c.SDL_Delay(FRAME_TIME_MS - frame_time);
+            // Handle input events
+            display.handleEvents(&app);
+
+            // Check key timing for long_press and repeat events
+            display.checkKeyTiming(&app);
+
+            // Check for BACK+LEFT long-press combo to exit to launcher
+            if (display.checkExitCombo()) {
+                // Don't exit if we're already on the launcher
+                if (!std.mem.eql(u8, current_path, "zig-out/bin/launcher.wasm")) {
+                    current_path = "zig-out/bin/launcher.wasm";
+                    break; // Exit frame loop to load new app
+                }
+            }
+
+            // Check for app launch request
+            if (g_requested_app_id) |app_id| {
+                if (getAppPathById(app_id)) |new_path| {
+                    current_path = new_path;
+                    g_requested_app_id = null;
+                    break; // Exit frame loop to load new app
+                } else {
+                    std.debug.print("Unknown app ID: {}\n", .{app_id});
+                    g_requested_app_id = null;
+                }
+            }
+
+            // Render
+            app.callRender();
+
+            // Get framebuffer and display
+            if (app.getFramebuffer()) |fb| {
+                display.present(fb);
+            }
+
+            // Test mode: exit after one frame
+            if (test_mode) {
+                return;
+            }
+
+            // Frame timing
+            const frame_time = c.SDL_GetTicks() - frame_start;
+            if (frame_time < FRAME_TIME_MS) {
+                c.SDL_Delay(FRAME_TIME_MS - frame_time);
+            }
         }
     }
 

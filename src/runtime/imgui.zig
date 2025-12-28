@@ -295,7 +295,9 @@ pub fn input(key: InputKey, input_type: InputType) void {
     g_ctx.has_input = true;
 
     // Handle navigation on short press or repeat
-    const is_nav = input_type == .short_press or input_type == .repeat or input_type == .press;
+    // Navigate on short_press (deliberate tap) or repeat (held key for scrolling)
+    // Don't use press - that's for immediate visual feedback or games
+    const is_nav = input_type == .short_press or input_type == .repeat;
     if (is_nav) {
         switch (key) {
             .up => {

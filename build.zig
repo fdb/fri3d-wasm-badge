@@ -86,6 +86,25 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(mandelbrot);
 
     // ========================================================================
+    // Launcher App (WASM)
+    // ========================================================================
+    const launcher = b.addExecutable(.{
+        .name = "launcher",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/apps/launcher/main.zig"),
+            .target = zig_wasm_target,
+            .optimize = .ReleaseSmall,
+            .imports = &.{
+                .{ .name = "platform", .module = platform_module },
+                .{ .name = "imgui", .module = imgui_module },
+            },
+        }),
+    });
+    launcher.rdynamic = true;
+    launcher.entry = .disabled;
+    b.installArtifact(launcher);
+
+    // ========================================================================
     // Desktop Emulator (Native)
     // ========================================================================
     // Builds WAMR from source and links with SDL2
@@ -144,6 +163,7 @@ pub fn build(b: *std.Build) void {
     b.getInstallStep().dependOn(&b.addInstallArtifact(circles, .{}).step);
     b.getInstallStep().dependOn(&b.addInstallArtifact(test_ui, .{}).step);
     b.getInstallStep().dependOn(&b.addInstallArtifact(mandelbrot, .{}).step);
+    b.getInstallStep().dependOn(&b.addInstallArtifact(launcher, .{}).step);
 
     // Web step: build WASM apps and copy to www/
     const web_step = b.step("web", "Build web version (WASM apps + platform files)");
@@ -153,12 +173,14 @@ pub fn build(b: *std.Build) void {
     const copy_circles = b.addInstallFile(circles.getEmittedBin(), "../www/circles.wasm");
     const copy_test_ui = b.addInstallFile(test_ui.getEmittedBin(), "../www/test_ui.wasm");
     const copy_mandelbrot = b.addInstallFile(mandelbrot.getEmittedBin(), "../www/mandelbrot.wasm");
+    const copy_launcher = b.addInstallFile(launcher.getEmittedBin(), "../www/launcher.wasm");
 
     web_step.dependOn(&copy_html.step);
     web_step.dependOn(&copy_js.step);
     web_step.dependOn(&copy_circles.step);
     web_step.dependOn(&copy_test_ui.step);
     web_step.dependOn(&copy_mandelbrot.step);
+    web_step.dependOn(&copy_launcher.step);
 }
 
 // ============================================================================

@@ -196,8 +196,13 @@ export fn render() void {
     }
 
     // Handle global back button
-    if (imgui.backPressed() and current_screen != .main_menu) {
-        current_screen = .main_menu;
+    if (imgui.backPressed()) {
+        if (current_screen != .main_menu) {
+            current_screen = .main_menu;
+        } else {
+            // At main menu, exit to launcher
+            platform.app.exitToLauncher();
+        }
     }
 
     imgui.end();

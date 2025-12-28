@@ -45,12 +45,39 @@ pub const InputKey = enum(u32) {
     back = 5,
 };
 
+/// Input event types sent by the platform to apps via on_input()
+///
+/// Event timing semantics:
+/// - `press`: Key went down. Sent immediately on keydown. Use for visual feedback
+///   or games needing continuous movement while key is held.
+/// - `release`: Key went up. Sent immediately on keyup.
+/// - `short_press`: Key released before LONG_PRESS threshold. Sent on release.
+///   Mutually exclusive with long_press for a given press. Use for menu navigation.
+/// - `long_press`: Key held >= LONG_PRESS threshold (500ms). Sent once while held.
+///   After this, repeat events begin. short_press is NOT sent on release.
+///   Use for alternate actions (e.g., uppercase letters on keyboard).
+/// - `repeat`: Key continues to be held after long_press. Fires periodically (100ms).
+///   Use for scrolling through long lists.
+///
+/// Typical usage patterns:
+/// - Menu navigation: React to `short_press` for single steps, `repeat` for scrolling
+/// - Keyboard app: Show feedback on `press`, lowercase on `short_press`, uppercase on `long_press`
+/// - Game (Arkanoid): Use `press`/`release` for continuous paddle movement
+/// - Exit gesture: `long_press` on BACK to exit app
 pub const InputType = enum(u32) {
     press = 0,
     release = 1,
     short_press = 2,
     long_press = 3,
     repeat = 4,
+};
+
+/// Platform timing constants (used by platform implementations)
+pub const input_timing = struct {
+    /// Time threshold for long_press detection (milliseconds)
+    pub const LONG_PRESS_MS: u32 = 500;
+    /// Interval between repeat events (milliseconds)
+    pub const REPEAT_INTERVAL_MS: u32 = 100;
 };
 
 // ============================================================================
@@ -101,6 +128,27 @@ pub const random = struct {
 // pub extern "env" fn ws_connect(url: [*:0]const u8, callback_id: u32) u32;
 // pub extern "env" fn ws_send(handle: u32, data: [*]const u8, len: u32) void;
 // pub extern "env" fn ws_close(handle: u32) void;
+
+// ============================================================================
+// App Lifecycle API
+// ============================================================================
+// Request the platform to launch another app. The current app will be unloaded.
+// The app_id is an index into the platform's app registry.
+
+extern "env" fn platform_request_launch_app(app_id: u32) void;
+extern "env" fn platform_request_exit_to_launcher() void;
+
+pub const app = struct {
+    /// Request to launch an app by ID. Current app will be unloaded.
+    pub fn launchApp(app_id: u32) void {
+        platform_request_launch_app(app_id);
+    }
+
+    /// Request to exit back to the launcher.
+    pub fn exitToLauncher() void {
+        platform_request_exit_to_launcher();
+    }
+};
 
 // ============================================================================
 // Future: System API

@@ -35,9 +35,18 @@ export fn on_input(key: u32, input_type: u32) void {
     const key_enum: platform.InputKey = @enumFromInt(key);
     const type_enum: platform.InputType = @enumFromInt(input_type);
 
-    if (type_enum == .press and key_enum == .ok) {
-        // Generate new random seed for new circles
-        g_seed = platform.random.get();
+    if (type_enum == .press) {
+        switch (key_enum) {
+            .ok => {
+                // Generate new random seed for new circles
+                g_seed = platform.random.get();
+            },
+            .back => {
+                // Exit to launcher
+                platform.app.exitToLauncher();
+            },
+            else => {},
+        }
     }
 }
 

@@ -236,3 +236,60 @@ Optional exports (for visual testing):
 - `u32 get_scene_count()` - Number of test scenes
 - `void set_scene(u32 scene)` - Switch to scene
 - `u32 get_scene()` - Get current scene
+
+## App Development Guidelines
+
+### Launcher System
+
+The emulator starts with the launcher app by default (`zig-out/bin/launcher.wasm`). Apps can:
+- Launch other apps via `platform.app.launchApp(app_id)`
+- Return to launcher via `platform.app.exitToLauncher()`
+
+App IDs are defined in the emulator's app registry (see `src/ports/emulator/main.zig`):
+- 0: Launcher (always)
+- 1: Test UI
+- 2: Circles
+- 3: Mandelbrot
+
+### Exit Behavior Patterns
+
+Different apps use different patterns for exiting:
+
+1. **Simple apps** (e.g., Circles): Press Back to exit immediately
+   ```zig
+   if (key_enum == .back) {
+       platform.app.exitToLauncher();
+   }
+   ```
+
+2. **Menu-based apps** (e.g., Test UI): Press Back at top-level menu to exit
+   ```zig
+   if (imgui.backPressed()) {
+       if (current_screen == .main_menu) {
+           platform.app.exitToLauncher();
+       } else {
+           current_screen = .main_menu;
+       }
+   }
+   ```
+
+3. **Apps using Back for navigation** (e.g., Mandelbrot): Long-press Back to exit
+   ```zig
+   if (type_enum == .long_press and key_enum == .back) {
+       platform.app.exitToLauncher();
+   }
+   ```
+
+### Global Exit Combo
+
+The platform always handles **LEFT + BACK held for 500ms** to return to the launcher. This works regardless of what the app is doing, providing a guaranteed escape hatch.
+
+### Adding New Apps
+
+1. Create `src/apps/yourapp/main.zig`
+2. Implement required exports (`render`, `on_input`, etc.)
+3. Add to `build.zig` with platform module import
+4. Add to emulator's `APP_REGISTRY` with a unique ID
+5. Add to launcher's app list
+
+See `docs/developing_apps.md` for more details.

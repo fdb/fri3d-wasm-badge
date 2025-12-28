@@ -62,6 +62,12 @@ export fn on_input(key: u32, input_type: u32) void {
     const key_enum: platform.InputKey = @enumFromInt(key);
     const type_enum: platform.InputType = @enumFromInt(input_type);
 
+    // Long-press back exits to launcher
+    if (type_enum == .long_press and key_enum == .back) {
+        platform.app.exitToLauncher();
+        return;
+    }
+
     if (type_enum != .press) return;
 
     // Step is 10% of current view size
