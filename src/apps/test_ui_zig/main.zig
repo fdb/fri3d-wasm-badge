@@ -1,14 +1,9 @@
 // ============================================================================
 // Test UI Demo - Pure Zig IMGUI Demo
 // ============================================================================
-// Works on both WASM (web) and native (desktop) platforms.
 
-const std = @import("std");
-const builtin = @import("builtin");
 const platform = @import("platform");
 const imgui = @import("imgui");
-
-const is_wasm = builtin.cpu.arch == .wasm32;
 
 // App state
 var current_screen: Screen = .main_menu;
@@ -194,16 +189,10 @@ fn renderAbout() void {
 }
 
 // ============================================================================
-// App Interface - called by platform (both WASM and native)
+// WASM Exports - called by platform runtime
 // ============================================================================
 
-/// Initialize the app (called once at startup)
-pub fn init() void {
-    // No initialization needed
-}
-
-/// Called each frame for rendering
-pub fn render() void {
+export fn render() void {
     imgui.begin();
 
     switch (current_screen) {
@@ -222,36 +211,22 @@ pub fn render() void {
     imgui.end();
 }
 
-/// Called for input events
-pub fn on_input(key: platform.InputKey, input_type: platform.InputType) void {
-    imgui.input(key, input_type);
+export fn on_input(key: u32, input_type: u32) void {
+    const k: platform.InputKey = @enumFromInt(key);
+    const t: platform.InputType = @enumFromInt(input_type);
+    imgui.input(k, t);
 }
 
-// ============================================================================
-// WASM Exports - only compiled for WASM target
-// ============================================================================
+// Scene API (for visual testing)
+export fn get_scene() u32 {
+    return 0;
+}
 
-pub usingnamespace if (is_wasm) struct {
-    export fn render() void {
-        @import("root").render();
-    }
+export fn set_scene(_: u32) void {}
 
-    export fn on_input(key: u32, input_type: u32) void {
-        @import("root").on_input(@enumFromInt(key), @enumFromInt(input_type));
-    }
-
-    export fn get_scene() u32 {
-        return 0;
-    }
-
-    export fn set_scene(scene: u32) void {
-        _ = scene;
-    }
-
-    export fn get_scene_count() u32 {
-        return 1;
-    }
-} else struct {};
+export fn get_scene_count() u32 {
+    return 1;
+}
 
 // ============================================================================
 // Helper Functions
