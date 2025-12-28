@@ -1,0 +1,5 @@
+name: Launcher
+description: Main app selection menu
+
+scenes:
+  - name: App List

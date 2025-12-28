@@ -1,0 +1,5 @@
+name: Mandelbrot
+description: Fractal explorer
+
+scenes:
+  - name: Default View

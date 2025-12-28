@@ -142,7 +142,7 @@ fn renderSettings() void {
 // ============================================================================
 
 fn renderAbout() void {
-    imgui.spacer(12);
+    imgui.spacer(4);
 
     imgui.label("Fri3d Badge", .primary, .center);
     imgui.spacer(2);
@@ -150,7 +150,7 @@ fn renderAbout() void {
     imgui.spacer(2);
     imgui.label("Pure Zig!", .secondary, .center);
 
-    imgui.spacer(8);
+    imgui.spacer(4);
 
     if (imgui.button("OK")) {
         current_screen = .main_menu;
@@ -193,13 +193,20 @@ export fn on_input(key: u32, input_type: u32) void {
 
 // Scene API (for visual testing)
 export fn get_scene() u32 {
-    return 0;
+    return @intFromEnum(current_screen);
 }
 
-export fn set_scene(_: u32) void {}
+export fn set_scene(scene: u32) void {
+    if (scene < 5) {
+        current_screen = @enumFromInt(scene);
+        // Reset scroll positions when changing scenes
+        menu_scroll = 0;
+        settings_scroll = 0;
+    }
+}
 
 export fn get_scene_count() u32 {
-    return 1;
+    return 5; // main_menu, buttons_demo, progress_demo, settings, about
 }
 
 // ============================================================================

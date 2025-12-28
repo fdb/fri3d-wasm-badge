@@ -1,10 +1,9 @@
 name: Test UI
-description: Comprehensive test suite for IMGUI components
+description: IMGUI demo app with multiple screens
 
 scenes:
-  - name: Counter Demo
-  - name: Settings Menu
-  - name: Layout Demo
+  - name: Main Menu
+  - name: Buttons Demo
   - name: Progress Demo
-  - name: Checkbox Demo
-  - name: Footer Demo
+  - name: Settings
+  - name: About
