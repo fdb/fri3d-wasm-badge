@@ -4,12 +4,14 @@
 
 ### Prerequisites
 
-1. **Git Submodules** (for C++ emulator):
+1. **Git Submodules** (for WAMR runtime):
    ```bash
    git submodule update --init --recursive
    ```
 
-2. **Zig** (for Zig apps): Install from https://ziglang.org/download/
+2. **Zig** (for apps and emulator): Install from https://ziglang.org/download/
+
+3. **SDL2** (for emulator): Install via package manager (brew, apt, etc.)
 
 ### Build Zig Apps (WASM)
 
@@ -26,13 +28,17 @@ zig build web
 ls zig-out/bin/*.wasm
 ```
 
-### Build Desktop Emulator (C++)
+### Build Desktop Emulator (Zig)
 
-The C++ emulator loads and runs WASM apps using WAMR runtime.
+The Zig emulator loads and runs WASM apps using WAMR runtime and SDL2.
 
 ```bash
+# First build WAMR (one time, via CMake)
 cmake -B build/emulator
 cmake --build build/emulator
+
+# Build the Zig emulator
+zig build emulator
 ```
 
 ### Build Legacy C Apps (WASM)
@@ -47,11 +53,14 @@ cmake --build build/apps/circles
 ### Run Emulator
 
 ```bash
-# Show launcher
-./build/emulator/src/emulator/fri3d_emulator
+# Show launcher (defaults to test_ui_zig.wasm)
+./zig-out/bin/fri3d_emulator
 
 # Run specific app
-./build/emulator/src/emulator/fri3d_emulator zig-out/bin/circles_zig.wasm
+./zig-out/bin/fri3d_emulator zig-out/bin/circles_zig.wasm
+
+# Or use zig build run
+zig build run -- zig-out/bin/circles_zig.wasm
 ```
 
 ### Run Web Version
@@ -84,7 +93,7 @@ rm -rf build zig-out zig-cache
 ┌─────────────────────────────────────────────────────────────┐
 │                    Platform Runtime                          │
 │  ┌─────────────┐  ┌─────────────────┐  ┌────────────────┐  │
-│  │     Web     │  │ Desktop (C++)   │  │   ESP32        │  │
+│  │     Web     │  │ Desktop (Zig)   │  │   ESP32        │  │
 │  │ platform.js │  │ WAMR + SDL2     │  │ WAMR + SPI     │  │
 │  └─────────────┘  └─────────────────┘  └────────────────┘  │
 │  Reads framebuffer from WASM memory, displays it           │
@@ -112,9 +121,9 @@ src/
 │   ├── circles/     # C app (legacy)
 │   └── mandelbrot/  # C app (legacy)
 ├── ports/
-│   └── web/         # Web platform (JS + HTML)
-├── runtime/         # Shared C++ runtime
-├── emulator/        # Desktop SDL emulator (C++)
+│   ├── web/         # Web platform (JS + HTML)
+│   └── emulator/    # Desktop emulator (Zig + SDL2)
+├── runtime/         # Shared C++ runtime (for WAMR build)
 └── firmware/        # ESP32-S3 PlatformIO project
 ```
 
@@ -132,13 +141,13 @@ uv run tests/visual/run_visual_tests.py --update-golden
 
 ## Code Style Guidelines
 
-### Zig (Apps & SDK - src/sdk/zig/, src/apps/*_zig/)
+### Zig (Apps, SDK, Emulator)
 
 - **Naming**: `camelCase` for functions/variables, `PascalCase` for types
 - **Exports**: Use `export fn` for WASM exports
 - **Required exports**: `render()`, optionally `on_input(key: u32, type: u32)`
 
-### C++ (Runtime & Emulator - src/runtime/, src/emulator/)
+### C++ (Runtime - src/runtime/)
 
 - **Standard**: C++14
 - **Indentation**: 4 spaces
@@ -153,12 +162,12 @@ uv run tests/visual/run_visual_tests.py --update-golden
 
 ## Platform-Specific Notes
 
-### Desktop Emulator (C++)
+### Desktop Emulator (Zig)
 
-- Uses SDL2 for window/input
-- u8g2 for graphics buffer (SSD1306 128x64)
+- Uses SDL2 for window/input (128x64 scaled 4x = 512x256)
 - WAMR for WASM execution
 - Reads framebuffer via `canvas_get_framebuffer()` export
+- Keyboard: Arrow keys, Enter/Z (OK), Backspace/X/Esc (Back)
 
 ### Web Platform (JavaScript)
 
