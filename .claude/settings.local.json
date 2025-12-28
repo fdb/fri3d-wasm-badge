@@ -9,7 +9,11 @@
       "Bash(mkdir:*)",
       "Bash(find:*)",
       "Bash(./zig-out/bin/fri3d_emulator:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(chmod:*)",
+      "Bash(./build_apps.sh:*)",
+      "Bash(./build_emulator.sh:*)",
+      "Bash(uv run:*)"
     ]
   }
 }

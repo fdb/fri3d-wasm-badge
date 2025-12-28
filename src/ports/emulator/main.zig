@@ -4,10 +4,10 @@
 // Desktop emulator that runs WASM apps using WAMR runtime and SDL2 display.
 //
 // Usage:
-//   fri3d_emulator                    # Show launcher (TODO)
-//   fri3d_emulator app.wasm           # Run specific WASM app
-//   fri3d_emulator --test app.wasm    # Render one frame and exit
-//   fri3d_emulator --screenshot out.png app.wasm  # Save screenshot
+//   fri3d_emulator                              # Show launcher (TODO)
+//   fri3d_emulator app.wasm                     # Run specific WASM app
+//   fri3d_emulator --test app.wasm              # Render one frame and exit
+//   fri3d_emulator --headless --scene 0 --screenshot out.png app.wasm
 
 const std = @import("std");
 
@@ -19,6 +19,11 @@ const c = @cImport({
 // WAMR bindings
 const wamr = @cImport({
     @cInclude("wasm_export.h");
+});
+
+// lodepng for PNG output
+const lodepng = @cImport({
+    @cInclude("lodepng.h");
 });
 
 // ============================================================================
@@ -66,6 +71,7 @@ const WasmApp = struct {
     func_render: wamr.wasm_function_inst_t = null,
     func_on_input: wamr.wasm_function_inst_t = null,
     func_get_framebuffer: wamr.wasm_function_inst_t = null,
+    func_set_scene: wamr.wasm_function_inst_t = null,
 
     // Framebuffer pointer (in WASM memory)
     framebuffer_ptr: u32 = 0,
@@ -111,6 +117,7 @@ const WasmApp = struct {
         self.func_render = wamr.wasm_runtime_lookup_function(self.module_inst, "render");
         self.func_on_input = wamr.wasm_runtime_lookup_function(self.module_inst, "on_input");
         self.func_get_framebuffer = wamr.wasm_runtime_lookup_function(self.module_inst, "canvas_get_framebuffer");
+        self.func_set_scene = wamr.wasm_runtime_lookup_function(self.module_inst, "set_scene");
 
         if (self.func_render == null) {
             std.debug.print("Warning: WASM module has no render() export\n", .{});
@@ -159,6 +166,19 @@ const WasmApp = struct {
             const exception = wamr.wasm_runtime_get_exception(self.module_inst);
             if (exception != null) {
                 std.debug.print("WASM exception in on_input: {s}\n", .{exception});
+                wamr.wasm_runtime_clear_exception(self.module_inst);
+            }
+        }
+    }
+
+    fn callSetScene(self: *Self, scene: u32) void {
+        if (self.func_set_scene == null or self.exec_env == null) return;
+
+        var args: [1]u32 = .{scene};
+        if (!wamr.wasm_runtime_call_wasm(self.exec_env, self.func_set_scene, 1, &args)) {
+            const exception = wamr.wasm_runtime_get_exception(self.module_inst);
+            if (exception != null) {
+                std.debug.print("WASM exception in set_scene: {s}\n", .{exception});
                 wamr.wasm_runtime_clear_exception(self.module_inst);
             }
         }
@@ -325,6 +345,42 @@ fn deinitWasmRuntime() void {
 }
 
 // ============================================================================
+// Screenshot Saving (PNG via lodepng)
+// ============================================================================
+
+fn saveScreenshot(framebuffer: []const u8, path: []const u8) bool {
+    // Convert 1bpp framebuffer to 24-bit RGB for PNG
+    var rgb_buffer: [SCREEN_WIDTH * SCREEN_HEIGHT * 3]u8 = undefined;
+
+    for (0..@intCast(SCREEN_HEIGHT)) |y| {
+        for (0..@intCast(SCREEN_WIDTH)) |x| {
+            const src_idx = y * @as(usize, @intCast(SCREEN_WIDTH)) + x;
+            const dst_idx = (y * @as(usize, @intCast(SCREEN_WIDTH)) + x) * 3;
+            const pixel: u8 = if (framebuffer[src_idx] != 0) 0xFF else 0x00;
+            rgb_buffer[dst_idx] = pixel; // R
+            rgb_buffer[dst_idx + 1] = pixel; // G
+            rgb_buffer[dst_idx + 2] = pixel; // B
+        }
+    }
+
+    // Null-terminate the path for C function
+    var path_buf: [256]u8 = undefined;
+    if (path.len >= path_buf.len) return false;
+    @memcpy(path_buf[0..path.len], path);
+    path_buf[path.len] = 0;
+
+    // Save as PNG
+    const result = lodepng.lodepng_encode24_file(
+        &path_buf,
+        &rgb_buffer,
+        @intCast(SCREEN_WIDTH),
+        @intCast(SCREEN_HEIGHT),
+    );
+
+    return result == 0;
+}
+
+// ============================================================================
 // Main
 // ============================================================================
 
@@ -339,17 +395,35 @@ pub fn main() !void {
 
     var wasm_path: ?[]const u8 = null;
     var test_mode = false;
+    var headless_mode = false;
+    var screenshot_path: ?[]const u8 = null;
+    var scene_index: ?u32 = null;
 
     var i: usize = 1;
     while (i < args.len) : (i += 1) {
         const arg = args[i];
         if (std.mem.eql(u8, arg, "--test")) {
             test_mode = true;
+        } else if (std.mem.eql(u8, arg, "--headless")) {
+            headless_mode = true;
+        } else if (std.mem.eql(u8, arg, "--screenshot")) {
+            i += 1;
+            if (i < args.len) {
+                screenshot_path = args[i];
+            }
+        } else if (std.mem.eql(u8, arg, "--scene")) {
+            i += 1;
+            if (i < args.len) {
+                scene_index = std.fmt.parseInt(u32, args[i], 10) catch null;
+            }
         } else if (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) {
             std.debug.print("Usage: fri3d_emulator [options] [wasm_file]\n\n", .{});
             std.debug.print("Options:\n", .{});
-            std.debug.print("  --test    Render one frame and exit\n", .{});
-            std.debug.print("  --help    Show this help\n", .{});
+            std.debug.print("  --test              Render one frame and exit\n", .{});
+            std.debug.print("  --headless          Run without display window\n", .{});
+            std.debug.print("  --scene N           Set scene index before rendering\n", .{});
+            std.debug.print("  --screenshot FILE   Save screenshot and exit\n", .{});
+            std.debug.print("  --help              Show this help\n", .{});
             return;
         } else {
             wasm_path = arg;
@@ -397,7 +471,32 @@ pub fn main() !void {
     };
     defer app.deinit();
 
-    // Initialize display
+    // Set scene if requested
+    if (scene_index) |scene| {
+        app.callSetScene(scene);
+    }
+
+    // Headless mode: render once and optionally save screenshot
+    if (headless_mode or screenshot_path != null) {
+        app.callRender();
+
+        if (screenshot_path) |path| {
+            if (app.getFramebuffer()) |fb| {
+                if (saveScreenshot(fb, path)) {
+                    // Success - silent
+                } else {
+                    std.debug.print("Failed to save screenshot to {s}\n", .{path});
+                    std.process.exit(1);
+                }
+            } else {
+                std.debug.print("Failed to get framebuffer\n", .{});
+                std.process.exit(1);
+            }
+        }
+        return;
+    }
+
+    // Initialize display for interactive mode
     var display = try Display.init();
     defer display.deinit();
 

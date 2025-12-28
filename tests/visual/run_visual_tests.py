@@ -40,7 +40,7 @@ from PIL import Image
 
 SCRIPT_DIR = Path(__file__).parent.absolute()
 PROJECT_ROOT = SCRIPT_DIR.parent.parent
-HOST_EMULATOR = PROJECT_ROOT / "build" / "emulator" / "src" / "emulator" / "fri3d_emulator"
+HOST_EMULATOR = PROJECT_ROOT / "zig-out" / "bin" / "fri3d_emulator"
 APPS_DIR = SCRIPT_DIR / "apps"
 OUTPUT_DIR = SCRIPT_DIR / "output"
 REPORTS_DIR = SCRIPT_DIR / "reports"
@@ -115,21 +115,23 @@ def discover_apps() -> list[App]:
 
 def find_wasm_binary(app_id: str) -> Optional[Path]:
     """Find the compiled WASM binary for an app."""
-    build_dir = PROJECT_ROOT / "build" / "apps" / app_id
+    # New Zig build output location
+    zig_out = PROJECT_ROOT / "zig-out" / "bin"
 
-    if not build_dir.exists():
-        return None
+    # Try exact name first
+    candidate = zig_out / f"{app_id}.wasm"
+    if candidate.exists():
+        return candidate
 
-    # Check for .wasm file first, then without extension
-    for pattern in [f"{app_id}.wasm", app_id]:
-        candidate = build_dir / pattern
-        if candidate.exists():
-            return candidate
+    # Try with _zig suffix (new naming convention)
+    candidate = zig_out / f"{app_id}_zig.wasm"
+    if candidate.exists():
+        return candidate
 
-    # Search for any .wasm file
-    wasm_files = list(build_dir.glob("*.wasm"))
-    if wasm_files:
-        return wasm_files[0]
+    # Fallback: search for any matching wasm file
+    for wasm_file in zig_out.glob("*.wasm"):
+        if app_id in wasm_file.stem:
+            return wasm_file
 
     return None
 
@@ -422,7 +424,7 @@ def check_prerequisites(apps: list[App]) -> bool:
     if not HOST_EMULATOR.exists():
         print(f"Error: Emulator not found at {HOST_EMULATOR}")
         print("Build with: ./build_all.sh or:")
-        print("  cmake -B build/emulator && cmake --build build/emulator")
+        print("  zig build emulator -Doptimize=ReleaseFast")
         return False
 
     missing = []
@@ -433,9 +435,7 @@ def check_prerequisites(apps: list[App]) -> bool:
     if missing:
         print(f"Error: WASM binaries not found for: {', '.join(missing)}")
         print("Build apps with: ./build_all.sh or:")
-        for app_id in missing:
-            print(f"  cmake -B build/apps/{app_id} -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-wasm.cmake -S src/apps/{app_id}")
-            print(f"  cmake --build build/apps/{app_id}")
+        print("  zig build")
         return False
 
     return True

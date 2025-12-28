@@ -324,30 +324,31 @@ extern fn sys_vibrate(duration_ms: u32) void;
 - [x] Port circles app to Zig
 - [x] Basic web port with JS rendering
 
-### Phase 2: Zig-Native Rendering (CURRENT)
+### Phase 2: Zig-Native Rendering ✅ DONE
 - [x] Migrate imgui.c → imgui.zig
-- [ ] **Create canvas.zig with full drawing implementation**
-  - [ ] Framebuffer management (get ptr from platform)
-  - [ ] setPixel with color modes (black/white/xor)
-  - [ ] drawLine (Bresenham)
-  - [ ] drawFrame, drawBox
-  - [ ] drawRFrame, drawRBox (rounded)
-  - [ ] drawCircle, drawDisc (midpoint algorithm)
-  - [ ] Font data (5x7 bitmap font)
-  - [ ] drawStr, stringWidth
-- [ ] **Update platform.zig to minimal framebuffer interface**
-- [ ] **Simplify web platform.js to just framebuffer display**
-- [ ] Update existing Zig apps to use new canvas module
+- [x] **Create canvas.zig with full drawing implementation**
+  - [x] Framebuffer management (owned by canvas, exported to platform)
+  - [x] setPixel with color modes (black/white/xor)
+  - [x] drawLine (Bresenham)
+  - [x] drawFrame, drawBox
+  - [x] drawRFrame, drawRBox (rounded)
+  - [x] drawCircle, drawDisc (midpoint algorithm)
+  - [x] Font data (5x7 bitmap font)
+  - [x] drawStr, stringWidth
+- [x] **Update platform.zig to minimal framebuffer interface**
+- [x] **Web platform.js reads framebuffer from WASM memory**
+- [x] Update existing Zig apps to use new canvas module
 
-### Phase 3: Desktop Port
-- [ ] Create `src/ports/desktop/main.zig`
-- [ ] Implement framebuffer display using SDL (just blit pixels)
-- [ ] Implement input from SDL events
-- [ ] Wire up WAMR for app loading
-- [ ] No u8g2 dependency needed!
+### Phase 3: Desktop Port ✅ DONE
+- [x] Create `src/ports/emulator/main.zig`
+- [x] Implement framebuffer display using SDL (just blit pixels)
+- [x] Implement input from SDL events
+- [x] Wire up WAMR for app loading (built from source via Zig)
+- [x] No u8g2 dependency needed!
+- [x] Add screenshot functionality (--headless, --scene, --screenshot)
 
-### Phase 4: Polish & Testing
-- [ ] Visual regression testing with Zig apps
+### Phase 4: Polish & Testing (CURRENT)
+- [x] Visual regression testing with Zig apps (7 tests passing)
 - [ ] ESP32 port skeleton
 - [ ] Storage interface design
 - [ ] Network interface design

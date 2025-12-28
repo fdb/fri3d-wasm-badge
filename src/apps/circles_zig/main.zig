@@ -15,9 +15,13 @@ var g_seed: u32 = 42;
 export fn render() void {
     // Use same seed each frame for consistent circles
     platform.random.seed(g_seed);
-    platform.canvas.setColor(.black);
 
-    // Draw 10 random circles
+    // Clear screen to white background
+    platform.canvas.setColor(.white);
+    platform.canvas.drawBox(0, 0, platform.SCREEN_WIDTH, platform.SCREEN_HEIGHT);
+
+    // Draw black circles
+    platform.canvas.setColor(.black);
     var i: u32 = 0;
     while (i < 10) : (i += 1) {
         const x: i32 = @intCast(platform.random.range(128));
