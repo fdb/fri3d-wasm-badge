@@ -10,7 +10,7 @@ extern "C" {
  * Random number generator state.
  * Uses xorshift32 algorithm for fast, portable random numbers.
  */
-typedef struct {
+typedef struct random {
     uint32_t state;
 } random_t;
 

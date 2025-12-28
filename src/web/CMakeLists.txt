@@ -17,8 +17,11 @@ add_executable(fri3d_web
     ${LODEPNG_DIR}/lodepng.cpp
 )
 
-# Force lodepng to compile as C
-set_source_files_properties(${LODEPNG_DIR}/lodepng.cpp PROPERTIES LANGUAGE C)
+# Force lodepng to compile as C (disable C++ wrapper)
+set_source_files_properties(${LODEPNG_DIR}/lodepng.cpp PROPERTIES
+    LANGUAGE C
+    COMPILE_DEFINITIONS "LODEPNG_NO_COMPILE_CPP"
+)
 
 target_include_directories(fri3d_web PRIVATE
     ${EMULATOR_DIR}

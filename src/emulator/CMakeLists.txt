@@ -11,11 +11,8 @@ add_executable(fri3d_emulator
     main.c
     display_sdl.c
     input_sdl.c
-    ${LODEPNG_DIR}/lodepng.cpp
+    lodepng_c.c
 )
-
-# Force lodepng to compile as C
-set_source_files_properties(${LODEPNG_DIR}/lodepng.cpp PROPERTIES LANGUAGE C)
 
 target_include_directories(fri3d_emulator PRIVATE
     ${SDL2_INCLUDE_DIRS}

@@ -31,7 +31,7 @@ typedef enum {
  * Canvas state structure.
  * Provides drawing operations backed by u8g2.
  */
-typedef struct {
+typedef struct canvas {
     u8g2_t* u8g2;
     canvas_color_t current_color;
 } canvas_t;
