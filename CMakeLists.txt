@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
-project(fri3d-wasm-badge)
+project(fri3d-wasm-badge C)
 
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 
 # Build options
 option(BUILD_EMULATOR "Build the desktop SDL emulator" ON)

@@ -1,77 +1,80 @@
 #pragma once
 
 #include <u8g2.h>
-#include <cstdint>
+#include <stdint.h>
+#include <stdbool.h>
 
-namespace fri3d {
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// Screen dimensions (matching SSD1306 128x64)
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
 
 // Color values matching the SDK
-enum class Color : uint8_t {
-    White = 0,
-    Black = 1,
-    XOR = 2
-};
+typedef enum {
+    COLOR_WHITE = 0,
+    COLOR_BLACK = 1,
+    COLOR_XOR = 2
+} canvas_color_t;
 
 // Font values matching the SDK
-enum class Font : uint8_t {
-    Primary = 0,
-    Secondary = 1,
-    Keyboard = 2,
-    BigNumbers = 3
-};
+typedef enum {
+    FONT_PRIMARY = 0,
+    FONT_SECONDARY = 1,
+    FONT_KEYBOARD = 2,
+    FONT_BIG_NUMBERS = 3
+} canvas_font_t;
 
 /**
- * Canvas provides drawing operations backed by u8g2.
- * This is used by the runtime to implement native functions for WASM apps.
+ * Canvas state structure.
+ * Provides drawing operations backed by u8g2.
  */
-class Canvas {
-public:
-    /**
-     * Initialize the canvas with a u8g2 instance.
-     * The u8g2 instance is owned by the Display.
-     */
-    void init(u8g2_t* u8g2);
+typedef struct {
+    u8g2_t* u8g2;
+    canvas_color_t current_color;
+} canvas_t;
 
-    /**
-     * Get the u8g2 instance (for direct access if needed).
-     */
-    u8g2_t* getU8g2() { return m_u8g2; }
+/**
+ * Initialize the canvas with a u8g2 instance.
+ * The u8g2 instance is owned by the Display.
+ */
+void canvas_init(canvas_t* canvas, u8g2_t* u8g2);
 
-    // Screen dimensions
-    uint32_t width() const;
-    uint32_t height() const;
+/**
+ * Get the u8g2 instance (for direct access if needed).
+ */
+u8g2_t* canvas_get_u8g2(canvas_t* canvas);
 
-    // Configuration
-    void clear();
-    void setColor(Color color);
-    void setFont(Font font);
-    Color getColor() const { return m_currentColor; }
+// Screen dimensions
+uint32_t canvas_width(const canvas_t* canvas);
+uint32_t canvas_height(const canvas_t* canvas);
 
-    // Basic drawing
-    void drawDot(int32_t x, int32_t y);
-    void drawLine(int32_t x1, int32_t y1, int32_t x2, int32_t y2);
+// Configuration
+void canvas_clear(canvas_t* canvas);
+void canvas_set_color(canvas_t* canvas, canvas_color_t color);
+void canvas_set_font(canvas_t* canvas, canvas_font_t font);
+canvas_color_t canvas_get_color(const canvas_t* canvas);
 
-    // Rectangles
-    void drawFrame(int32_t x, int32_t y, uint32_t w, uint32_t h);
-    void drawBox(int32_t x, int32_t y, uint32_t w, uint32_t h);
-    void drawRFrame(int32_t x, int32_t y, uint32_t w, uint32_t h, uint32_t r);
-    void drawRBox(int32_t x, int32_t y, uint32_t w, uint32_t h, uint32_t r);
+// Basic drawing
+void canvas_draw_dot(canvas_t* canvas, int32_t x, int32_t y);
+void canvas_draw_line(canvas_t* canvas, int32_t x1, int32_t y1, int32_t x2, int32_t y2);
 
-    // Circles (with XOR-safe implementations)
-    void drawCircle(int32_t x, int32_t y, uint32_t r);
-    void drawDisc(int32_t x, int32_t y, uint32_t r);
+// Rectangles
+void canvas_draw_frame(canvas_t* canvas, int32_t x, int32_t y, uint32_t w, uint32_t h);
+void canvas_draw_box(canvas_t* canvas, int32_t x, int32_t y, uint32_t w, uint32_t h);
+void canvas_draw_rframe(canvas_t* canvas, int32_t x, int32_t y, uint32_t w, uint32_t h, uint32_t r);
+void canvas_draw_rbox(canvas_t* canvas, int32_t x, int32_t y, uint32_t w, uint32_t h, uint32_t r);
 
-    // Text
-    void drawStr(int32_t x, int32_t y, const char* str);
-    uint32_t stringWidth(const char* str);
+// Circles (with XOR-safe implementations)
+void canvas_draw_circle(canvas_t* canvas, int32_t x, int32_t y, uint32_t r);
+void canvas_draw_disc(canvas_t* canvas, int32_t x, int32_t y, uint32_t r);
 
-private:
-    u8g2_t* m_u8g2 = nullptr;
-    Color m_currentColor = Color::Black;
+// Text
+void canvas_draw_str(canvas_t* canvas, int32_t x, int32_t y, const char* str);
+uint32_t canvas_string_width(canvas_t* canvas, const char* str);
 
-    // XOR-safe circle drawing helpers
-    void drawXorCircle(int32_t x0, int32_t y0, uint32_t r);
-    void drawXorDisc(int32_t x0, int32_t y0, uint32_t r);
-};
-
-} // namespace fri3d
+#ifdef __cplusplus
+}
+#endif

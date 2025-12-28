@@ -9,13 +9,16 @@ set(EMULATOR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../emulator)
 set(LODEPNG_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../libs/lodepng)
 
 add_executable(fri3d_web
-    main.cpp
+    main.c
     # Emulator display/input
-    ${EMULATOR_DIR}/display_sdl.cpp
-    ${EMULATOR_DIR}/input_sdl.cpp
+    ${EMULATOR_DIR}/display_sdl.c
+    ${EMULATOR_DIR}/input_sdl.c
     # lodepng
     ${LODEPNG_DIR}/lodepng.cpp
 )
+
+# Force lodepng to compile as C
+set_source_files_properties(${LODEPNG_DIR}/lodepng.cpp PROPERTIES LANGUAGE C)
 
 target_include_directories(fri3d_web PRIVATE
     ${EMULATOR_DIR}
@@ -77,5 +80,5 @@ target_link_options(fri3d_web PRIVATE
     --shell-file ${CMAKE_CURRENT_SOURCE_DIR}/shell.html
 )
 
-# C++14 required
-target_compile_features(fri3d_web PUBLIC cxx_std_14)
+# C11 required
+target_compile_features(fri3d_web PUBLIC c_std_11)

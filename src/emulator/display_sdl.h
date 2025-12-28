@@ -2,67 +2,86 @@
 
 #include "display.h"
 #include <SDL.h>
-#include <string>
 
-namespace fri3d {
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define DISPLAY_SDL_SCALE_FACTOR 4
 
 /**
  * SDL-based display implementation for desktop emulator.
  */
-class DisplaySDL : public Display {
-public:
-    DisplaySDL();
-    ~DisplaySDL() override;
+typedef struct {
+    // Base display interface (must be first for vtable-style access)
+    display_t base;
 
-    /**
-     * Initialize SDL window and u8g2 buffer.
-     * @param headless If true, skip window creation (for testing)
-     * @return true on success
-     */
-    bool init(bool headless = false);
+    // SDL resources
+    SDL_Window* window;
+    SDL_Renderer* renderer;
+    SDL_Texture* texture;
+    u8g2_t u8g2;
 
-    // Display interface
-    bool init() override { return init(false); }
-    u8g2_t* getU8g2() override { return &m_u8g2; }
-    void flush() override;
-    bool shouldQuit() override { return m_shouldQuit; }
+    bool should_quit;
+    bool headless;
+} display_sdl_t;
 
-    /**
-     * Set quit flag (called from input handler).
-     */
-    void setQuit(bool quit) { m_shouldQuit = quit; }
+/**
+ * Initialize a display_sdl instance.
+ */
+void display_sdl_init(display_sdl_t* display);
 
-    /**
-     * Get the SDL window (for event handling).
-     */
-    SDL_Window* getWindow() { return m_window; }
+/**
+ * Clean up a display_sdl instance.
+ */
+void display_sdl_cleanup(display_sdl_t* display);
 
-    /**
-     * Check if running in headless mode.
-     */
-    bool isHeadless() const { return m_headless; }
+/**
+ * Start the SDL display.
+ * @param display Display instance
+ * @param headless If true, skip window creation (for testing)
+ * @return true on success
+ */
+bool display_sdl_start(display_sdl_t* display, bool headless);
 
-    /**
-     * Save screenshot to PNG file.
-     * @param path Output file path
-     * @return true on success
-     */
-    bool saveScreenshot(const std::string& path);
+/**
+ * Get the u8g2 instance for drawing operations.
+ */
+u8g2_t* display_sdl_get_u8g2(display_sdl_t* display);
 
-private:
-    SDL_Window* m_window = nullptr;
-    SDL_Renderer* m_renderer = nullptr;
-    SDL_Texture* m_texture = nullptr;
-    u8g2_t m_u8g2;
+/**
+ * Push the u8g2 buffer to the SDL window.
+ */
+void display_sdl_flush(display_sdl_t* display);
 
-    bool m_shouldQuit = false;
-    bool m_headless = false;
+/**
+ * Check if the display/application should quit.
+ */
+bool display_sdl_should_quit(display_sdl_t* display);
 
-    static constexpr int SCALE_FACTOR = 4;
+/**
+ * Set quit flag (called from input handler).
+ */
+void display_sdl_set_quit(display_sdl_t* display, bool quit);
 
-    // u8g2 dummy callbacks (buffer-only mode)
-    static uint8_t u8x8GpioAndDelayCallback(u8x8_t* u8x8, uint8_t msg, uint8_t arg_int, void* arg_ptr);
-    static uint8_t u8x8ByteCallback(u8x8_t* u8x8, uint8_t msg, uint8_t arg_int, void* arg_ptr);
-};
+/**
+ * Get the SDL window (for event handling).
+ */
+SDL_Window* display_sdl_get_window(display_sdl_t* display);
 
-} // namespace fri3d
+/**
+ * Check if running in headless mode.
+ */
+bool display_sdl_is_headless(const display_sdl_t* display);
+
+/**
+ * Save screenshot to PNG file.
+ * @param display Display instance
+ * @param path Output file path
+ * @return true on success
+ */
+bool display_sdl_save_screenshot(display_sdl_t* display, const char* path);
+
+#ifdef __cplusplus
+}
+#endif

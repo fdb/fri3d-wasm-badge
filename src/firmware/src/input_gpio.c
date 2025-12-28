@@ -57,7 +57,7 @@ void input_init(void) {
 
     // Configure all button pins as input with pull-up
     // Buttons are expected to be active-low (pressed = GND)
-    gpio_config_t io_conf = {};
+    gpio_config_t io_conf = {0};
     io_conf.intr_type = GPIO_INTR_DISABLE;
     io_conf.mode = GPIO_MODE_INPUT;
     io_conf.pull_up_en = GPIO_PULLUP_ENABLE;

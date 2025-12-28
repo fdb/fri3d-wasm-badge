@@ -1,39 +1,40 @@
 #pragma once
 
-#include <cstdint>
-#include <random>
+#include <stdint.h>
 
-namespace fri3d {
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
- * Random number generator for WASM apps.
- * Uses Mersenne Twister for consistent behavior across platforms.
+ * Random number generator state.
+ * Uses xorshift32 algorithm for fast, portable random numbers.
  */
-class Random {
-public:
-    /**
-     * Initialize with a random seed.
-     */
-    Random();
+typedef struct {
+    uint32_t state;
+} random_t;
 
-    /**
-     * Set the seed for deterministic output.
-     */
-    void seed(uint32_t seed);
+/**
+ * Initialize with a random seed based on system time.
+ */
+void random_init(random_t* rng);
 
-    /**
-     * Get a random 32-bit number.
-     */
-    uint32_t get();
+/**
+ * Set the seed for deterministic output.
+ */
+void random_seed(random_t* rng, uint32_t seed);
 
-    /**
-     * Get a random number in range [0, max).
-     * Returns 0 if max is 0.
-     */
-    uint32_t range(uint32_t max);
+/**
+ * Get a random 32-bit number.
+ */
+uint32_t random_get(random_t* rng);
 
-private:
-    std::mt19937 m_rng;
-};
+/**
+ * Get a random number in range [0, max).
+ * Returns 0 if max is 0.
+ */
+uint32_t random_range(random_t* rng, uint32_t max);
 
-} // namespace fri3d
+#ifdef __cplusplus
+}
+#endif

@@ -81,15 +81,37 @@ src/
 
 ## Code Style Guidelines
 
-### C++ (Runtime & Emulator - src/runtime/, src/emulator/)
+### ⚠️ C-Only Codebase
 
-- **Standard**: C++14
+**IMPORTANT**: This project is strictly C-only (no C++). This is enforced for the following reasons:
+
+1. **Smaller binary size** - No C++ runtime overhead, no STL
+2. **Faster compilation** - C compiles significantly faster than C++
+3. **Simpler toolchain** - Easier cross-compilation for embedded targets
+4. **Library consistency** - All dependencies (u8g2, WAMR, FreeRTOS, lodepng) are pure C
+5. **WASM compatibility** - C is the primary target for WASM toolchains
+6. **No hidden allocations** - Deterministic memory management without STL
+7. **Simpler FFI** - No C++ name mangling issues
+
+**Allowed:**
+- C11 standard (with GNU extensions where needed for platform APIs)
+- Python scripts for tooling/testing
+
+**Not allowed:**
+- C++ source files (.cpp, .cc, .cxx)
+- C++ headers (.hpp)
+- C++ features: classes, templates, STL, namespaces, exceptions, RTTI
+- C++ standard library headers (<iostream>, <string>, <vector>, etc.)
+
+### C (All source files)
+
+- **Standard**: C11
 - **Indentation**: 4 spaces
-- **Naming**:
-  - Variables/functions: `camelCase` for class members, `snake_case` for C-style
-  - Classes: `PascalCase`
-  - Private members: `m_` prefix
-- **Namespace**: `fri3d`
+- **Naming**: `snake_case` for functions and variables
+- **Prefixes**: Use module prefixes (e.g., `canvas_`, `input_`, `wasm_runner_`)
+- **Structs**: Use `typedef struct { ... } type_name_t;` pattern
+- **Enums**: Use `typedef enum { ... } type_name_t;` pattern
+- **Headers**: Use `#pragma once` and include guards with `extern "C"` for compatibility
 
 ### C (WASM Apps - src/apps/)
 

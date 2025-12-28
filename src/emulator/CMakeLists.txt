@@ -4,14 +4,18 @@
 find_package(SDL2 REQUIRED)
 
 # lodepng for PNG screenshot output
+# Note: lodepng.cpp is actually C code and can be compiled as C
 set(LODEPNG_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../libs/lodepng)
 
 add_executable(fri3d_emulator
-    main.cpp
-    display_sdl.cpp
-    input_sdl.cpp
+    main.c
+    display_sdl.c
+    input_sdl.c
     ${LODEPNG_DIR}/lodepng.cpp
 )
+
+# Force lodepng to compile as C
+set_source_files_properties(${LODEPNG_DIR}/lodepng.cpp PROPERTIES LANGUAGE C)
 
 target_include_directories(fri3d_emulator PRIVATE
     ${SDL2_INCLUDE_DIRS}

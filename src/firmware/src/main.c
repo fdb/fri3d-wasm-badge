@@ -19,7 +19,7 @@
 
 static const char* TAG = "fri3d";
 
-extern "C" void app_main(void) {
+void app_main(void) {
     ESP_LOGI(TAG, "Fri3d Badge starting...");
 
     // Initialize display

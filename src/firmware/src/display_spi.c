@@ -32,6 +32,7 @@ static spi_device_handle_t g_spi;
 
 // u8g2 callback for byte communication via SPI
 static uint8_t u8x8_byte_esp32_hw_spi(u8x8_t* u8x8, uint8_t msg, uint8_t arg_int, void* arg_ptr) {
+    (void)u8x8;
     switch (msg) {
         case U8X8_MSG_BYTE_SEND: {
             spi_transaction_t trans;
@@ -61,6 +62,8 @@ static uint8_t u8x8_byte_esp32_hw_spi(u8x8_t* u8x8, uint8_t msg, uint8_t arg_int
 
 // u8g2 callback for GPIO and delay
 static uint8_t u8x8_gpio_and_delay_esp32(u8x8_t* u8x8, uint8_t msg, uint8_t arg_int, void* arg_ptr) {
+    (void)u8x8;
+    (void)arg_ptr;
     switch (msg) {
         case U8X8_MSG_GPIO_AND_DELAY_INIT:
             // GPIO already initialized
@@ -93,7 +96,7 @@ bool display_init(void) {
     ESP_LOGI(TAG, "Initializing SPI display...");
 
     // Configure GPIO pins
-    gpio_config_t io_conf = {};
+    gpio_config_t io_conf = {0};
     io_conf.intr_type = GPIO_INTR_DISABLE;
     io_conf.mode = GPIO_MODE_OUTPUT;
     io_conf.pin_bit_mask = (1ULL << PIN_DC) | (1ULL << PIN_RST);
@@ -102,7 +105,7 @@ bool display_init(void) {
     gpio_config(&io_conf);
 
     // Initialize SPI bus
-    spi_bus_config_t bus_cfg = {};
+    spi_bus_config_t bus_cfg = {0};
     bus_cfg.mosi_io_num = PIN_MOSI;
     bus_cfg.miso_io_num = PIN_MISO;
     bus_cfg.sclk_io_num = PIN_SCK;
@@ -117,7 +120,7 @@ bool display_init(void) {
     }
 
     // Add SPI device
-    spi_device_interface_config_t dev_cfg = {};
+    spi_device_interface_config_t dev_cfg = {0};
     dev_cfg.clock_speed_hz = SPI_FREQ_HZ;
     dev_cfg.mode = 0;
     dev_cfg.spics_io_num = PIN_CS;

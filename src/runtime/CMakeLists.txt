@@ -6,9 +6,9 @@
 if(EMSCRIPTEN)
     # Minimal runtime for web - just canvas, input, random
     add_library(fri3d_runtime STATIC
-        canvas.cpp
-        input.cpp
-        random.cpp
+        canvas.c
+        input.c
+        random.c
     )
 
     target_include_directories(fri3d_runtime PUBLIC
@@ -22,11 +22,11 @@ if(EMSCRIPTEN)
 else()
     # Full runtime with WAMR for native builds
     add_library(fri3d_runtime STATIC
-        canvas.cpp
-        input.cpp
-        random.cpp
-        wasm_runner.cpp
-        app_manager.cpp
+        canvas.c
+        input.c
+        random.c
+        wasm_runner.c
+        app_manager.c
     )
 
     target_include_directories(fri3d_runtime PUBLIC
@@ -47,5 +47,5 @@ else()
     )
 endif()
 
-# C++14 required
-target_compile_features(fri3d_runtime PUBLIC cxx_std_14)
+# C11 required
+target_compile_features(fri3d_runtime PUBLIC c_std_11)

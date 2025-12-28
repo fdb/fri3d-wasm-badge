@@ -1,56 +1,71 @@
 #pragma once
 
 #include <u8g2.h>
-#include <cstdint>
+#include <stdint.h>
+#include <stdbool.h>
 
-namespace fri3d {
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-// Screen dimensions (matching SSD1306 128x64)
-constexpr int SCREEN_WIDTH = 128;
-constexpr int SCREEN_HEIGHT = 64;
+// Note: SCREEN_WIDTH and SCREEN_HEIGHT are defined in canvas.h
+// They are included here for convenience when only display.h is needed
+#ifndef SCREEN_WIDTH
+#define SCREEN_WIDTH 128
+#endif
+#ifndef SCREEN_HEIGHT
+#define SCREEN_HEIGHT 64
+#endif
 
 /**
  * Abstract display interface.
  * Implementations provide platform-specific display initialization and rendering.
  * All implementations use u8g2 for the drawing buffer.
+ *
+ * Usage: Implementations should embed this struct and provide function pointers.
  */
-class Display {
-public:
-    virtual ~Display() = default;
+typedef struct display display_t;
 
+struct display {
     /**
      * Initialize the display hardware/window.
      * @return true on success
      */
-    virtual bool init() = 0;
+    bool (*init)(display_t* self);
 
     /**
      * Get the u8g2 instance for drawing operations.
      * Canvas uses this to perform drawing.
      */
-    virtual u8g2_t* getU8g2() = 0;
+    u8g2_t* (*get_u8g2)(display_t* self);
 
     /**
      * Push the u8g2 buffer to the physical display.
      * Called after rendering each frame.
      */
-    virtual void flush() = 0;
+    void (*flush)(display_t* self);
 
     /**
      * Check if the display/application should quit.
      * (e.g., window closed on desktop)
      */
-    virtual bool shouldQuit() = 0;
-
-    /**
-     * Get screen width.
-     */
-    int width() const { return SCREEN_WIDTH; }
-
-    /**
-     * Get screen height.
-     */
-    int height() const { return SCREEN_HEIGHT; }
+    bool (*should_quit)(display_t* self);
 };
 
-} // namespace fri3d
+/**
+ * Helper function to get screen width.
+ */
+static inline int display_width(void) {
+    return SCREEN_WIDTH;
+}
+
+/**
+ * Helper function to get screen height.
+ */
+static inline int display_height(void) {
+    return SCREEN_HEIGHT;
+}
+
+#ifdef __cplusplus
+}
+#endif

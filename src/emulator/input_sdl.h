@@ -3,43 +3,69 @@
 #include "input.h"
 #include "display_sdl.h"
 #include <SDL.h>
-#include <queue>
 
-namespace fri3d {
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// Event queue size for input events
+#define INPUT_SDL_QUEUE_SIZE 32
 
 /**
  * SDL-based input handler for desktop emulator.
  * Maps keyboard keys to InputKey values.
  */
-class InputSDL : public InputHandler {
-public:
-    /**
-     * Create input handler.
-     * @param display Reference to display (for quit handling and time)
-     */
-    explicit InputSDL(DisplaySDL& display);
+typedef struct {
+    // Base handler interface (for compatibility)
+    input_handler_t base;
 
-    // InputHandler interface
-    void poll() override;
-    bool hasEvent() const override;
-    InputEvent getEvent() override;
-    uint32_t getTimeMs() const override;
+    display_sdl_t* display;
 
-    /**
-     * Check if screenshot was requested (S key).
-     */
-    bool wasScreenshotRequested();
+    // Ring buffer for events
+    input_event_t event_queue[INPUT_SDL_QUEUE_SIZE];
+    size_t queue_head;
+    size_t queue_tail;
 
-private:
-    DisplaySDL& m_display;
-    std::queue<InputEvent> m_eventQueue;
-    bool m_screenshotRequested = false;
+    bool screenshot_requested;
+} input_sdl_t;
 
-    /**
-     * Convert SDL keycode to InputKey.
-     * @return InputKey value, or -1 if not mapped
-     */
-    static int sdlKeyToInputKey(SDL_Keycode key);
-};
+/**
+ * Initialize an input_sdl instance.
+ * @param input Input handler instance
+ * @param display Display for quit handling
+ */
+void input_sdl_init(input_sdl_t* input, display_sdl_t* display);
 
-} // namespace fri3d
+/**
+ * Poll for SDL input events.
+ */
+void input_sdl_poll(input_sdl_t* input);
+
+/**
+ * Check if an event is available.
+ */
+bool input_sdl_has_event(const input_sdl_t* input);
+
+/**
+ * Get the next event.
+ */
+input_event_t input_sdl_get_event(input_sdl_t* input);
+
+/**
+ * Get current time in milliseconds.
+ */
+uint32_t input_sdl_get_time_ms(const input_sdl_t* input);
+
+/**
+ * Check if screenshot was requested (S key).
+ */
+bool input_sdl_was_screenshot_requested(input_sdl_t* input);
+
+/**
+ * Get the input handler interface for use with input_manager.
+ */
+input_handler_t* input_sdl_get_handler(input_sdl_t* input);
+
+#ifdef __cplusplus
+}
+#endif

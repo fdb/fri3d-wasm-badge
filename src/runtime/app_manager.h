@@ -3,125 +3,147 @@
 #include "canvas.h"
 #include "input.h"
 #include "wasm_runner.h"
-#include <string>
-#include <vector>
+#include <stddef.h>
+#include <stdbool.h>
 
-namespace fri3d {
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// Maximum number of apps in the launcher
+#define APP_MANAGER_MAX_APPS 16
+
+// Maximum length for app name and path
+#define APP_NAME_MAX_LEN 32
+#define APP_PATH_MAX_LEN 128
+
+// Error buffer size
+#define APP_MANAGER_ERROR_BUFFER_SIZE 256
 
 /**
  * Application entry for the launcher.
  */
-struct AppEntry {
-    std::string name;      // Display name
-    std::string path;      // Path to .wasm file
-};
+typedef struct {
+    char name[APP_NAME_MAX_LEN];      // Display name
+    char path[APP_PATH_MAX_LEN];      // Path to .wasm file
+} app_entry_t;
 
 /**
  * App manager with built-in launcher.
  * Handles app discovery, launching, and switching.
  */
-class AppManager {
-public:
-    AppManager();
-    ~AppManager();
+typedef struct {
+    canvas_t* canvas;
+    random_t* random;
+    wasm_runner_t wasm_runner;
 
-    /**
-     * Initialize the app manager.
-     * @param canvas Canvas for drawing
-     * @param random Random number generator
-     * @return true on success
-     */
-    bool init(Canvas* canvas, Random* random);
+    app_entry_t apps[APP_MANAGER_MAX_APPS];
+    size_t app_count;
+    size_t selected_index;
+    size_t scroll_offset;
+    bool in_launcher;
 
-    /**
-     * Add an app to the list.
-     */
-    void addApp(const std::string& name, const std::string& path);
+    char last_error[APP_MANAGER_ERROR_BUFFER_SIZE];
+} app_manager_t;
 
-    /**
-     * Clear all apps from the list.
-     */
-    void clearApps();
+// Launcher UI constants
+#define APP_VISIBLE_ITEMS 4
+#define APP_ITEM_HEIGHT 14
+#define APP_START_Y 12
+#define APP_TEXT_X 16
+#define APP_CIRCLE_X 6
+#define APP_CIRCLE_RADIUS 3
 
-    /**
-     * Get the number of apps.
-     */
-    size_t appCount() const { return m_apps.size(); }
+/**
+ * Initialize an app manager instance.
+ */
+void app_manager_init(app_manager_t* manager);
 
-    /**
-     * Show the launcher UI.
-     * Returns to launcher from any running app.
-     */
-    void showLauncher();
+/**
+ * Clean up an app manager instance.
+ */
+void app_manager_cleanup(app_manager_t* manager);
 
-    /**
-     * Launch an app by index.
-     * @param index App index in the list
-     * @return true if launched successfully
-     */
-    bool launchApp(size_t index);
+/**
+ * Start the app manager.
+ * @param manager App manager
+ * @param canvas Canvas for drawing
+ * @param random Random number generator
+ * @return true on success
+ */
+bool app_manager_start(app_manager_t* manager, canvas_t* canvas, random_t* random);
 
-    /**
-     * Launch an app by path.
-     * @param path Path to .wasm file
-     * @return true if launched successfully
-     */
-    bool launchAppByPath(const std::string& path);
+/**
+ * Add an app to the list.
+ * @return true if added successfully
+ */
+bool app_manager_add_app(app_manager_t* manager, const char* name, const char* path);
 
-    /**
-     * Check if currently in launcher mode.
-     */
-    bool isInLauncher() const { return m_inLauncher; }
+/**
+ * Clear all apps from the list.
+ */
+void app_manager_clear_apps(app_manager_t* manager);
 
-    /**
-     * Check if an app is currently running.
-     */
-    bool isAppRunning() const { return !m_inLauncher && m_wasmRunner.isModuleLoaded(); }
+/**
+ * Get the number of apps.
+ */
+size_t app_manager_app_count(const app_manager_t* manager);
 
-    /**
-     * Render the current view (launcher or app).
-     */
-    void render();
+/**
+ * Show the launcher UI.
+ * Returns to launcher from any running app.
+ */
+void app_manager_show_launcher(app_manager_t* manager);
 
-    /**
-     * Handle input event.
-     * @param key Input key
-     * @param type Input type (use raw Press/Release for apps)
-     */
-    void handleInput(InputKey key, InputType type);
+/**
+ * Launch an app by index.
+ * @param manager App manager
+ * @param index App index in the list
+ * @return true if launched successfully
+ */
+bool app_manager_launch_app(app_manager_t* manager, size_t index);
 
-    /**
-     * Get the last error message.
-     */
-    const std::string& getLastError() const { return m_lastError; }
+/**
+ * Launch an app by path.
+ * @param manager App manager
+ * @param path Path to .wasm file
+ * @return true if launched successfully
+ */
+bool app_manager_launch_app_by_path(app_manager_t* manager, const char* path);
 
-    /**
-     * Get the WASM runner (for test mode access).
-     */
-    WasmRunner& getWasmRunner() { return m_wasmRunner; }
+/**
+ * Check if currently in launcher mode.
+ */
+bool app_manager_is_in_launcher(const app_manager_t* manager);
 
-private:
-    Canvas* m_canvas = nullptr;
-    Random* m_random = nullptr;
-    WasmRunner m_wasmRunner;
+/**
+ * Check if an app is currently running.
+ */
+bool app_manager_is_app_running(const app_manager_t* manager);
 
-    std::vector<AppEntry> m_apps;
-    size_t m_selectedIndex = 0;
-    size_t m_scrollOffset = 0;
-    bool m_inLauncher = true;
+/**
+ * Render the current view (launcher or app).
+ */
+void app_manager_render(app_manager_t* manager);
 
-    std::string m_lastError;
+/**
+ * Handle input event.
+ * @param manager App manager
+ * @param key Input key
+ * @param type Input type (use raw Press/Release for apps)
+ */
+void app_manager_handle_input(app_manager_t* manager, input_key_t key, input_type_t type);
 
-    // Launcher UI constants
-    static constexpr int VISIBLE_ITEMS = 4;
-    static constexpr int ITEM_HEIGHT = 14;
-    static constexpr int START_Y = 12;
-    static constexpr int TEXT_X = 16;
-    static constexpr int CIRCLE_X = 6;
-    static constexpr int CIRCLE_RADIUS = 3;
+/**
+ * Get the last error message.
+ */
+const char* app_manager_get_last_error(const app_manager_t* manager);
 
-    void renderLauncher();
-    void launcherInput(InputKey key, InputType type);
-};
+/**
+ * Get the WASM runner (for test mode access).
+ */
+wasm_runner_t* app_manager_get_wasm_runner(app_manager_t* manager);
 
-} // namespace fri3d
+#ifdef __cplusplus
+}
+#endif
