@@ -81,10 +81,8 @@ fn renderButtonsDemo() void {
 
     imgui.spacer(8);
 
-    // Footer
-    if (imgui.footerLeft("Back")) {
-        current_screen = .main_menu;
-    }
+    // Footer hint (back handled by global backPressed check)
+    imgui.footerLeft("Back");
 }
 
 // ============================================================================
@@ -120,10 +118,8 @@ fn renderProgressDemo() void {
     }
     imgui.endStack();
 
-    // Footer
-    if (imgui.footerLeft("Back")) {
-        current_screen = .main_menu;
-    }
+    // Footer hint (back handled by global backPressed check)
+    imgui.footerLeft("Back");
 }
 
 // ============================================================================
@@ -156,10 +152,8 @@ fn renderSettings() void {
 
     imgui.menuEnd();
 
-    // Footer
-    if (imgui.footerLeft("Back")) {
-        current_screen = .main_menu;
-    }
+    // Footer hint (back handled by global backPressed check)
+    imgui.footerLeft("Back");
 }
 
 // ============================================================================
@@ -182,10 +176,8 @@ fn renderAbout() void {
         current_screen = .main_menu;
     }
 
-    // Footer
-    if (imgui.footerLeft("Back")) {
-        current_screen = .main_menu;
-    }
+    // Footer hint (back handled by global backPressed check)
+    imgui.footerLeft("Back");
 }
 
 // ============================================================================

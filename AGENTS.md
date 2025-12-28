@@ -31,24 +31,15 @@ ls zig-out/bin/*.wasm
 ### Build Desktop Emulator (Zig)
 
 The Zig emulator loads and runs WASM apps using WAMR runtime and SDL2.
+WAMR is built from source by Zig's build system (no CMake needed).
 
 ```bash
-# First build WAMR (one time, via CMake)
-cmake -B build/emulator
-cmake --build build/emulator
-
-# Build the Zig emulator
-zig build emulator
+# Build the Zig emulator (includes WAMR compilation)
+# Use ReleaseFast for best performance (Debug mode has alignment issues with WAMR)
+zig build emulator -Doptimize=ReleaseFast
 ```
 
-### Build Legacy C Apps (WASM)
-
-For apps written in C (not Zig):
-
-```bash
-cmake -B build/apps/circles -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-wasm.cmake -S src/apps/circles
-cmake --build build/apps/circles
-```
+Note: Debug builds may crash due to WAMR's fast interpreter doing unaligned memory access (valid in C but caught by Zig's debug checks). Use `-Doptimize=ReleaseFast` for a working build.
 
 ### Run Emulator
 
@@ -107,24 +98,24 @@ rm -rf build zig-out zig-cache
 
 ```
 src/
-├── sdk/zig/         # Zig SDK (canvas, platform, imgui)
+├── runtime/         # Zig runtime (canvas, platform, imgui)
 │   ├── canvas.zig   # All drawing code (compiled into WASM apps)
 │   ├── platform.zig # Platform interface
 │   └── imgui.zig    # UI widget library
-├── sdk/             # C SDK headers (legacy)
+├── sdk/             # C SDK headers (for C apps wanting to compile to WASM)
 │   ├── canvas.h
 │   ├── input.h
 │   └── random.h
 ├── apps/            # WASM applications
 │   ├── circles_zig/ # Zig app
-│   ├── test_ui_zig/ # Zig app with IMGUI
-│   ├── circles/     # C app (legacy)
-│   └── mandelbrot/  # C app (legacy)
+│   └── test_ui_zig/ # Zig app with IMGUI
 ├── ports/
 │   ├── web/         # Web platform (JS + HTML)
-│   └── emulator/    # Desktop emulator (Zig + SDL2)
-├── runtime/         # Shared C++ runtime (for WAMR build)
+│   └── emulator/    # Desktop emulator (Zig + SDL2 + WAMR)
 └── firmware/        # ESP32-S3 PlatformIO project
+
+libs/
+└── wasm-micro-runtime/  # WAMR submodule (built by Zig)
 ```
 
 ## Testing
@@ -139,26 +130,68 @@ uv run tests/visual/run_visual_tests.py
 uv run tests/visual/run_visual_tests.py --update-golden
 ```
 
+## Zig 0.15 Build API Notes
+
+This project uses Zig 0.15.x. Key API changes from earlier versions:
+
+### Static Libraries (addLibrary replaces addStaticLibrary)
+
+In Zig 0.15, `addStaticLibrary()` was removed. Use `addLibrary()` with `.linkage`:
+
+```zig
+// OLD (Zig 0.14 and earlier):
+const lib = b.addStaticLibrary(.{
+    .name = "mylib",
+    .target = target,
+    .optimize = optimize,
+});
+
+// NEW (Zig 0.15+):
+const lib = b.addLibrary(.{
+    .linkage = .static,  // or .dynamic
+    .name = "mylib",
+    .root_module = b.createModule(.{
+        .target = target,
+        .optimize = optimize,
+    }),
+});
+
+// For C-only libraries (no Zig root file):
+const lib = b.addLibrary(.{
+    .linkage = .static,
+    .name = "mylib",
+    .root_module = b.createModule(.{
+        .root_source_file = null,
+        .target = target,
+        .optimize = optimize,
+    }),
+});
+```
+
+### Executables with root_module
+
+```zig
+const exe = b.addExecutable(.{
+    .name = "myapp",
+    .root_module = b.createModule(.{
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+    }),
+});
+```
+
+Sources:
+- [Zig 0.15.1 Release Notes](https://ziglang.org/download/0.15.1/release-notes.html)
+- [Ziggit: How to convert addStaticLibrary to addLibrary](https://ziggit.dev/t/how-to-convert-addstaticlibrary-to-addlibrary/12753)
+
 ## Code Style Guidelines
 
-### Zig (Apps, SDK, Emulator)
+### Zig (Apps, Runtime, Emulator)
 
 - **Naming**: `camelCase` for functions/variables, `PascalCase` for types
 - **Exports**: Use `export fn` for WASM exports
 - **Required exports**: `render()`, optionally `on_input(key: u32, type: u32)`
-
-### C++ (Runtime - src/runtime/)
-
-- **Standard**: C++14
-- **Indentation**: 4 spaces
-- **Naming**: `camelCase` for members, `snake_case` for C-style, `PascalCase` for classes
-- **Namespace**: `fri3d`
-
-### C (Legacy WASM Apps - src/apps/)
-
-- **Indentation**: 4 spaces
-- **Naming**: `snake_case`
-- **Use**: `WASM_IMPORT()` macro for host function imports
 
 ## Platform-Specific Notes
 

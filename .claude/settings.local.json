@@ -8,7 +8,8 @@
       "Bash(zig build:*)",
       "Bash(mkdir:*)",
       "Bash(find:*)",
-      "Bash(./zig-out/bin/fri3d_emulator:*)"
+      "Bash(./zig-out/bin/fri3d_emulator:*)",
+      "Bash(cat:*)"
     ]
   }
 }
