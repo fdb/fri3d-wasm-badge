@@ -31,12 +31,8 @@ const apps = [_]AppInfo{
 export fn render() void {
     imgui.begin();
 
-    // Title
-    imgui.label("Fri3d Badge", .primary, .center);
-    imgui.spacer(4);
-
-    // App menu
-    imgui.menuBegin(&menu_scroll, 4, apps.len);
+    // App menu (full screen)
+    imgui.menuBegin(&menu_scroll, 5, apps.len);
 
     for (apps, 0..) |app, i| {
         if (imgui.menuItem(app.name, @intCast(i))) {

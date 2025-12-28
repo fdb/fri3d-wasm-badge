@@ -27,10 +27,7 @@ const Screen = enum {
 // ============================================================================
 
 fn renderMainMenu() void {
-    imgui.label("Test UI Demo", .primary, .center);
-    imgui.spacer(4);
-
-    imgui.menuBegin(&menu_scroll, 4, 5);
+    imgui.menuBegin(&menu_scroll, 5, 5);
 
     if (imgui.menuItem("Buttons Demo", 0)) {
         current_screen = .buttons_demo;
@@ -45,7 +42,7 @@ fn renderMainMenu() void {
         current_screen = .about;
     }
     if (imgui.menuItem("Exit", 4)) {
-        // Would exit app
+        platform.app.exitToLauncher();
     }
 
     imgui.menuEnd();
@@ -56,7 +53,6 @@ fn renderMainMenu() void {
 // ============================================================================
 
 fn renderButtonsDemo() void {
-    imgui.label("Buttons Demo", .primary, .center);
     imgui.spacer(8);
 
     // Counter display
@@ -78,11 +74,6 @@ fn renderButtonsDemo() void {
         counter += 1;
     }
     imgui.endStack();
-
-    imgui.spacer(8);
-
-    // Footer hint (back handled by global backPressed check)
-    imgui.footerLeft("Back");
 }
 
 // ============================================================================
@@ -90,7 +81,6 @@ fn renderButtonsDemo() void {
 // ============================================================================
 
 fn renderProgressDemo() void {
-    imgui.label("Progress Demo", .primary, .center);
     imgui.spacer(8);
 
     // Progress bar
@@ -117,9 +107,6 @@ fn renderProgressDemo() void {
         progress_value = 1.0;
     }
     imgui.endStack();
-
-    // Footer hint (back handled by global backPressed check)
-    imgui.footerLeft("Back");
 }
 
 // ============================================================================
@@ -127,10 +114,7 @@ fn renderProgressDemo() void {
 // ============================================================================
 
 fn renderSettings() void {
-    imgui.label("Settings", .primary, .center);
-    imgui.spacer(4);
-
-    imgui.menuBegin(&settings_scroll, 3, 4);
+    imgui.menuBegin(&settings_scroll, 5, 4);
 
     const wifi_val: [:0]const u8 = if (wifi_enabled) "On" else "Off";
     if (imgui.menuItemValue("WiFi", wifi_val, 0)) {
@@ -151,9 +135,6 @@ fn renderSettings() void {
     }
 
     imgui.menuEnd();
-
-    // Footer hint (back handled by global backPressed check)
-    imgui.footerLeft("Back");
 }
 
 // ============================================================================
@@ -161,10 +142,9 @@ fn renderSettings() void {
 // ============================================================================
 
 fn renderAbout() void {
-    imgui.label("About", .primary, .center);
-    imgui.spacer(8);
+    imgui.spacer(12);
 
-    imgui.label("Fri3d Badge", .secondary, .center);
+    imgui.label("Fri3d Badge", .primary, .center);
     imgui.spacer(2);
     imgui.label("IMGUI Demo", .secondary, .center);
     imgui.spacer(2);
@@ -175,9 +155,6 @@ fn renderAbout() void {
     if (imgui.button("OK")) {
         current_screen = .main_menu;
     }
-
-    // Footer hint (back handled by global backPressed check)
-    imgui.footerLeft("Back");
 }
 
 // ============================================================================

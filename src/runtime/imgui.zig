@@ -788,7 +788,8 @@ pub fn menuEnd() void {
     // Draw scrollbar if needed (Flipper Zero style: dotted track + solid thumb)
     if (g_ctx.menu.total > g_ctx.menu.visible) {
         const scroll = if (g_ctx.menu.scroll) |s| s.* else 0;
-        const scrollbar_height = g_ctx.menu.visible * MENU_ITEM_HEIGHT;
+        // Scrollbar extends from menu start to bottom of screen
+        const scrollbar_height = SCREEN_HEIGHT - g_ctx.menu.y_start;
         const scrollbar_x = SCREEN_WIDTH - 2; // Single pixel column near edge
 
         // Calculate thumb position and size
@@ -802,7 +803,7 @@ pub fn menuEnd() void {
 
         // Draw dotted track line
         var y = g_ctx.menu.y_start;
-        while (y < g_ctx.menu.y_start + scrollbar_height) : (y += 2) {
+        while (y < SCREEN_HEIGHT) : (y += 2) {
             canvas.drawDot(scrollbar_x, y);
         }
 
