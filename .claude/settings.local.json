@@ -4,7 +4,11 @@
       "Bash(./build_web.sh:*)",
       "Bash(./build_all.sh:*)",
       "Bash(ls:*)",
-      "Bash(cmake --build:*)"
+      "Bash(cmake --build:*)",
+      "Bash(zig build:*)",
+      "Bash(mkdir:*)",
+      "Bash(find:*)",
+      "Bash(./zig-out/bin/fri3d_emulator:*)"
     ]
   }
 }
