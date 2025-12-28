@@ -33,10 +33,10 @@ pub fn build(b: *std.Build) void {
     // ========================================================================
     // Circles App (WASM)
     // ========================================================================
-    const circles_zig = b.addExecutable(.{
-        .name = "circles_zig",
+    const circles = b.addExecutable(.{
+        .name = "circles",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/apps/circles_zig/main.zig"),
+            .root_source_file = b.path("src/apps/circles/main.zig"),
             .target = zig_wasm_target,
             .optimize = .ReleaseSmall,
             .imports = &.{
@@ -44,17 +44,17 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    circles_zig.rdynamic = true;
-    circles_zig.entry = .disabled;
-    b.installArtifact(circles_zig);
+    circles.rdynamic = true;
+    circles.entry = .disabled;
+    b.installArtifact(circles);
 
     // ========================================================================
     // Test UI App (WASM)
     // ========================================================================
-    const test_ui_zig = b.addExecutable(.{
-        .name = "test_ui_zig",
+    const test_ui = b.addExecutable(.{
+        .name = "test_ui",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/apps/test_ui_zig/main.zig"),
+            .root_source_file = b.path("src/apps/test_ui/main.zig"),
             .target = zig_wasm_target,
             .optimize = .ReleaseSmall,
             .imports = &.{
@@ -63,9 +63,27 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    test_ui_zig.rdynamic = true;
-    test_ui_zig.entry = .disabled;
-    b.installArtifact(test_ui_zig);
+    test_ui.rdynamic = true;
+    test_ui.entry = .disabled;
+    b.installArtifact(test_ui);
+
+    // ========================================================================
+    // Mandelbrot App (WASM)
+    // ========================================================================
+    const mandelbrot = b.addExecutable(.{
+        .name = "mandelbrot",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/apps/mandelbrot/main.zig"),
+            .target = zig_wasm_target,
+            .optimize = .ReleaseSmall,
+            .imports = &.{
+                .{ .name = "platform", .module = platform_module },
+            },
+        }),
+    });
+    mandelbrot.rdynamic = true;
+    mandelbrot.entry = .disabled;
+    b.installArtifact(mandelbrot);
 
     // ========================================================================
     // Desktop Emulator (Native)
@@ -123,21 +141,24 @@ pub fn build(b: *std.Build) void {
     // ========================================================================
 
     // Default: build all WASM apps
-    b.getInstallStep().dependOn(&b.addInstallArtifact(circles_zig, .{}).step);
-    b.getInstallStep().dependOn(&b.addInstallArtifact(test_ui_zig, .{}).step);
+    b.getInstallStep().dependOn(&b.addInstallArtifact(circles, .{}).step);
+    b.getInstallStep().dependOn(&b.addInstallArtifact(test_ui, .{}).step);
+    b.getInstallStep().dependOn(&b.addInstallArtifact(mandelbrot, .{}).step);
 
     // Web step: build WASM apps and copy to www/
     const web_step = b.step("web", "Build web version (WASM apps + platform files)");
 
     const copy_html = b.addInstallFile(b.path("src/ports/web/index.html"), "../www/index.html");
     const copy_js = b.addInstallFile(b.path("src/ports/web/platform.js"), "../www/platform.js");
-    const copy_circles = b.addInstallFile(circles_zig.getEmittedBin(), "../www/circles_zig.wasm");
-    const copy_test_ui = b.addInstallFile(test_ui_zig.getEmittedBin(), "../www/test_ui_zig.wasm");
+    const copy_circles = b.addInstallFile(circles.getEmittedBin(), "../www/circles.wasm");
+    const copy_test_ui = b.addInstallFile(test_ui.getEmittedBin(), "../www/test_ui.wasm");
+    const copy_mandelbrot = b.addInstallFile(mandelbrot.getEmittedBin(), "../www/mandelbrot.wasm");
 
     web_step.dependOn(&copy_html.step);
     web_step.dependOn(&copy_js.step);
     web_step.dependOn(&copy_circles.step);
     web_step.dependOn(&copy_test_ui.step);
+    web_step.dependOn(&copy_mandelbrot.step);
 }
 
 // ============================================================================

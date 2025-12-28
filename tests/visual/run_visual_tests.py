@@ -123,11 +123,6 @@ def find_wasm_binary(app_id: str) -> Optional[Path]:
     if candidate.exists():
         return candidate
 
-    # Try with _zig suffix (new naming convention)
-    candidate = zig_out / f"{app_id}_zig.wasm"
-    if candidate.exists():
-        return candidate
-
     # Fallback: search for any matching wasm file
     for wasm_file in zig_out.glob("*.wasm"):
         if app_id in wasm_file.stem:

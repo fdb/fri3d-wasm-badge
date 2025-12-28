@@ -44,14 +44,14 @@ Note: Debug builds may crash due to WAMR's fast interpreter doing unaligned memo
 ### Run Emulator
 
 ```bash
-# Show launcher (defaults to test_ui_zig.wasm)
+# Show launcher (defaults to test_ui.wasm)
 ./zig-out/bin/fri3d_emulator
 
 # Run specific app
-./zig-out/bin/fri3d_emulator zig-out/bin/circles_zig.wasm
+./zig-out/bin/fri3d_emulator zig-out/bin/circles.wasm
 
 # Or use zig build run
-zig build run -- zig-out/bin/circles_zig.wasm
+zig build run -- zig-out/bin/circles.wasm
 ```
 
 ### Run Web Version
@@ -73,7 +73,7 @@ rm -rf build zig-out zig-cache
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     WASM App (.wasm)                        │
-│  Written in: Zig (src/apps/*_zig/) or C (src/apps/*)       │
+│  Written in: Zig (src/apps/*/)                             │
 │  Exports: render(), on_input(), get_scene(), etc.          │
 │  Includes: All drawing code (canvas.zig compiled in)       │
 └─────────────────────────────────────────────────────────────┘
@@ -106,9 +106,10 @@ src/
 │   ├── canvas.h
 │   ├── input.h
 │   └── random.h
-├── apps/            # WASM applications
-│   ├── circles_zig/ # Zig app
-│   └── test_ui_zig/ # Zig app with IMGUI
+├── apps/            # WASM applications (output: circles.wasm, test_ui.wasm, etc.)
+│   ├── circles/     # Circles demo
+│   ├── test_ui/     # UI test with IMGUI
+│   └── mandelbrot/  # Mandelbrot fractal explorer
 ├── ports/
 │   ├── web/         # Web platform (JS + HTML)
 │   └── emulator/    # Desktop emulator (Zig + SDL2 + WAMR)

@@ -14,7 +14,8 @@
       "Bash(./build_apps.sh:*)",
       "Bash(./build_emulator.sh:*)",
       "Bash(uv run:*)",
-      "Bash(git submodule:*)"
+      "Bash(git submodule:*)",
+      "Bash(git mv:*)"
     ]
   }
 }

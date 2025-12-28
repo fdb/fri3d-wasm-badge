@@ -436,8 +436,8 @@ pub fn main() !void {
     if (wasm_path == null) {
         // Try common locations for the launcher
         const launcher_paths = [_][]const u8{
-            "zig-out/bin/test_ui_zig.wasm",
-            "www/test_ui_zig.wasm",
+            "zig-out/bin/test_ui.wasm",
+            "www/test_ui.wasm",
             "build/apps/launcher/launcher.wasm",
         };
         for (launcher_paths) |path| {
