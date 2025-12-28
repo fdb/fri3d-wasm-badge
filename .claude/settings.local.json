@@ -13,7 +13,8 @@
       "Bash(chmod:*)",
       "Bash(./build_apps.sh:*)",
       "Bash(./build_emulator.sh:*)",
-      "Bash(uv run:*)"
+      "Bash(uv run:*)",
+      "Bash(git submodule:*)"
     ]
   }
 }

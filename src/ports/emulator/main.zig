@@ -21,9 +21,9 @@ const wamr = @cImport({
     @cInclude("wasm_export.h");
 });
 
-// lodepng for PNG output
-const lodepng = @cImport({
-    @cInclude("lodepng.h");
+// stb_image_write for PNG output
+const stb = @cImport({
+    @cInclude("stb_image_write.h");
 });
 
 // ============================================================================
@@ -345,7 +345,7 @@ fn deinitWasmRuntime() void {
 }
 
 // ============================================================================
-// Screenshot Saving (PNG via lodepng)
+// Screenshot Saving (PNG via stb_image_write)
 // ============================================================================
 
 fn saveScreenshot(framebuffer: []const u8, path: []const u8) bool {
@@ -369,15 +369,17 @@ fn saveScreenshot(framebuffer: []const u8, path: []const u8) bool {
     @memcpy(path_buf[0..path.len], path);
     path_buf[path.len] = 0;
 
-    // Save as PNG
-    const result = lodepng.lodepng_encode24_file(
+    // Save as PNG (stbi_write_png returns non-zero on success)
+    const result = stb.stbi_write_png(
         &path_buf,
+        SCREEN_WIDTH,
+        SCREEN_HEIGHT,
+        3, // RGB components
         &rgb_buffer,
-        @intCast(SCREEN_WIDTH),
-        @intCast(SCREEN_HEIGHT),
+        SCREEN_WIDTH * 3, // stride
     );
 
-    return result == 0;
+    return result != 0;
 }
 
 // ============================================================================

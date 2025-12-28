@@ -97,12 +97,12 @@ pub fn build(b: *std.Build) void {
     emulator.linkLibrary(wamr);
     emulator.addIncludePath(b.path("libs/wasm-micro-runtime/core/iwasm/include"));
 
-    // Link lodepng for PNG screenshot output (compiled as C)
+    // Link stb_image_write for PNG screenshot output
     emulator.addCSourceFile(.{
-        .file = b.path("libs/lodepng/lodepng.c"),
+        .file = b.path("libs/stb/stb_image_write.c"),
         .flags = &.{"-std=c99"},
     });
-    emulator.addIncludePath(b.path("libs/lodepng"));
+    emulator.addIncludePath(b.path("libs/stb"));
 
     // Emulator build step
     const emulator_step = b.step("emulator", "Build desktop emulator (requires WAMR built via CMake)");
