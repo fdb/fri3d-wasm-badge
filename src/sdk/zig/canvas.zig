@@ -455,10 +455,11 @@ fn getGlyph(char_code: u8) ?*const [5]u8 {
 }
 
 fn getFontMetrics() struct { char_width: u32, spacing: u32, baseline: u32 } {
+    // char_width = glyph width (5) + spacing (1) = 6 for all fonts
     return switch (current_font) {
         .primary => .{ .char_width = 6, .spacing = 1, .baseline = 8 },
-        .secondary => .{ .char_width = 5, .spacing = 1, .baseline = 6 },
-        .keyboard => .{ .char_width = 5, .spacing = 1, .baseline = 7 },
+        .secondary => .{ .char_width = 6, .spacing = 1, .baseline = 6 },
+        .keyboard => .{ .char_width = 6, .spacing = 1, .baseline = 7 },
         .big_numbers => .{ .char_width = 6, .spacing = 1, .baseline = 8 },
     };
 }
