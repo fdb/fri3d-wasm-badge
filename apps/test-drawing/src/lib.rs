@@ -1,9 +1,11 @@
 //! Test Drawing - Comprehensive drawing primitives test
+//!
+//! This must match the original C implementation exactly for visual regression testing.
 
 #![no_std]
 #![no_main]
 
-use fri3d_sdk::{canvas, InputKey, InputType};
+use fri3d_sdk::{canvas, random, InputKey, InputType};
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
@@ -11,6 +13,7 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 }
 
 const NUM_SCENES: u32 = 12;
+const RANDOM_SEED: u32 = 12345;
 
 static mut SCENE: u32 = 0;
 
@@ -38,112 +41,180 @@ pub extern "C" fn render() {
 }
 
 fn scene_horizontal_lines() {
-    // Draw horizontal lines across the screen
-    for y in (0..64).step_by(5) {
+    // Draw horizontal lines at regular intervals
+    let mut y = 0i32;
+    while y < 64 {
         canvas::draw_line(0, y, 127, y);
+        y += 8;
+    }
+    // Draw some shorter lines
+    y = 4;
+    while y < 64 {
+        canvas::draw_line(20, y, 107, y);
+        y += 16;
     }
 }
 
 fn scene_vertical_lines() {
-    // Draw vertical lines across the screen
-    for x in (0..128).step_by(8) {
+    // Draw vertical lines at regular intervals
+    let mut x = 0i32;
+    while x < 128 {
         canvas::draw_line(x, 0, x, 63);
+        x += 8;
+    }
+    // Draw some shorter lines
+    x = 4;
+    while x < 128 {
+        canvas::draw_line(x, 10, x, 53);
+        x += 16;
     }
 }
 
 fn scene_diagonal_lines() {
-    // Draw diagonal lines
+    // Draw diagonal lines from corners
     canvas::draw_line(0, 0, 127, 63);
     canvas::draw_line(127, 0, 0, 63);
-    canvas::draw_line(0, 32, 64, 0);
-    canvas::draw_line(0, 32, 64, 63);
-    canvas::draw_line(127, 32, 64, 0);
-    canvas::draw_line(127, 32, 64, 63);
+    // Draw parallel diagonal lines
+    let mut i = 0i32;
+    while i < 128 {
+        canvas::draw_line(i, 0, i + 63, 63);
+        canvas::draw_line(127 - i, 0, 127 - i - 63, 63);
+        i += 16;
+    }
 }
 
 fn scene_random_pixels() {
-    // Draw a pattern of pixels (deterministic for testing)
-    for y in 0..64 {
-        for x in 0..128 {
-            // Create a pseudo-random pattern using simple hash
-            let hash = (x * 7 + y * 13) % 17;
-            if hash < 3 {
-                canvas::draw_pixel(x, y);
-            }
-        }
+    random::seed(RANDOM_SEED);
+    // Draw 500 random pixels
+    for _ in 0..500 {
+        let x = random::range(128) as i32;
+        let y = random::range(64) as i32;
+        canvas::draw_pixel(x, y);
     }
 }
 
 fn scene_circles() {
-    // Draw outline circles - concentric in center, corners
-    canvas::draw_circle(64, 32, 28);
+    random::seed(RANDOM_SEED);
+    // Draw circles of various sizes
+    canvas::draw_circle(64, 32, 30); // Large center circle
     canvas::draw_circle(64, 32, 20);
-    canvas::draw_circle(64, 32, 12);
-
-    // Corner circles
-    canvas::draw_circle(12, 12, 10);
-    canvas::draw_circle(115, 12, 10);
-    canvas::draw_circle(12, 51, 10);
-    canvas::draw_circle(115, 51, 10);
+    canvas::draw_circle(64, 32, 10);
+    // Draw circles in corners
+    canvas::draw_circle(15, 15, 12);
+    canvas::draw_circle(112, 15, 12);
+    canvas::draw_circle(15, 48, 12);
+    canvas::draw_circle(112, 48, 12);
 }
 
 fn scene_filled_circles() {
-    // Draw filled circles
-    canvas::fill_circle(32, 32, 25);
+    random::seed(RANDOM_SEED);
+    // Draw filled circles (discs)
+    canvas::fill_circle(32, 32, 20);
     canvas::fill_circle(96, 32, 20);
-    canvas::fill_circle(64, 32, 10);
+    // Smaller discs
+    canvas::fill_circle(64, 16, 8);
+    canvas::fill_circle(64, 48, 8);
+    // Use XOR for overlapping effect
+    canvas::set_color(canvas::Color::Xor);
+    canvas::fill_circle(64, 32, 18);
 }
 
 fn scene_rectangles() {
-    // Draw nested rectangles
+    // Draw concentric rectangles
     canvas::draw_rect(4, 4, 120, 56);
-    canvas::draw_rect(12, 10, 104, 44);
-    canvas::draw_rect(20, 16, 88, 32);
-    canvas::draw_rect(28, 22, 72, 20);
-    canvas::draw_rect(36, 28, 56, 8);
+    canvas::draw_rect(14, 10, 100, 44);
+    canvas::draw_rect(24, 16, 80, 32);
+    canvas::draw_rect(34, 22, 60, 20);
+    // Small rectangles in corners
+    canvas::draw_rect(0, 0, 20, 15);
+    canvas::draw_rect(108, 0, 20, 15);
+    canvas::draw_rect(0, 49, 20, 15);
+    canvas::draw_rect(108, 49, 20, 15);
 }
 
 fn scene_filled_rectangles() {
     // Draw filled rectangles
-    canvas::fill_rect(10, 10, 40, 20);
-    canvas::fill_rect(60, 10, 30, 25);
-    canvas::fill_rect(100, 5, 20, 54);
-    canvas::fill_rect(10, 40, 80, 15);
+    canvas::fill_rect(10, 10, 30, 20);
+    canvas::fill_rect(88, 10, 30, 20);
+    canvas::fill_rect(10, 34, 30, 20);
+    canvas::fill_rect(88, 34, 30, 20);
+    // Center box with XOR
+    canvas::set_color(canvas::Color::Xor);
+    canvas::fill_rect(30, 20, 68, 24);
 }
 
 fn scene_rounded_rectangles() {
-    // Draw rounded rectangles
-    canvas::draw_round_rect(10, 10, 50, 20, 5);
-    canvas::draw_round_rect(70, 10, 50, 20, 8);
-    canvas::fill_round_rect(10, 38, 50, 20, 5);
-    canvas::fill_round_rect(70, 38, 50, 20, 10);
+    // Draw rounded rectangles with various corner radii
+    canvas::draw_round_rect(5, 5, 50, 25, 3);
+    canvas::draw_round_rect(73, 5, 50, 25, 8);
+    // Filled rounded rectangles
+    canvas::fill_round_rect(5, 34, 50, 25, 5);
+    canvas::fill_round_rect(73, 34, 50, 25, 10);
 }
 
 fn scene_text_rendering() {
-    // Draw text at various positions
-    canvas::draw_str(0, 0, "Primary Font");
-    canvas::draw_str(0, 16, "Secondary Font Test");
-    canvas::draw_str(0, 32, "Keyboard: ABCDEF");
-    canvas::draw_str(0, 48, "123");
+    // Primary font
+    canvas::set_font(canvas::Font::Primary);
+    canvas::draw_str(5, 12, "Primary Font");
+    // Secondary font
+    canvas::set_font(canvas::Font::Secondary);
+    canvas::draw_str(5, 24, "Secondary Font Test");
+    // Keyboard font
+    canvas::set_font(canvas::Font::Keyboard);
+    canvas::draw_str(5, 36, "Keyboard: ABCDEF");
+    // Big numbers
+    canvas::set_font(canvas::Font::BigNumbers);
+    canvas::draw_str(5, 58, "123");
 }
 
 fn scene_mixed_primitives() {
-    // Mix of different primitives
-    canvas::draw_rect(5, 5, 50, 30);
-    canvas::draw_circle(80, 20, 15);
-    canvas::draw_line(5, 45, 122, 45);
-    canvas::fill_rect(100, 35, 25, 25);
-    canvas::draw_str(10, 50, "Mixed");
+    random::seed(RANDOM_SEED);
+
+    // Background grid
+    let mut x = 0i32;
+    while x < 128 {
+        canvas::draw_line(x, 0, x, 63);
+        x += 16;
+    }
+    let mut y = 0i32;
+    while y < 64 {
+        canvas::draw_line(0, y, 127, y);
+        y += 16;
+    }
+
+    // Circles
+    canvas::draw_circle(32, 32, 15);
+    canvas::fill_circle(96, 32, 10);
+
+    // Rectangles
+    canvas::draw_rect(50, 10, 28, 20);
+    canvas::fill_rect(52, 38, 24, 16);
+
+    // Random pixels
+    for _ in 0..50 {
+        let rx = random::range(128) as i32;
+        let ry = random::range(64) as i32;
+        canvas::draw_pixel(rx, ry);
+    }
+
+    // Text
+    canvas::set_font(canvas::Font::Secondary);
+    canvas::draw_str(2, 8, "Mix");
 }
 
 fn scene_checkerboard() {
-    // Draw a checkerboard pattern
-    for y in 0..8 {
-        for x in 0..16 {
-            if (x + y) % 2 == 0 {
-                canvas::fill_rect(x * 8, y * 8, 8, 8);
+    // Draw 8x8 pixel checkerboard pattern
+    let mut y = 0i32;
+    while y < 64 {
+        let mut x = 0i32;
+        while x < 128 {
+            // Alternate filled boxes
+            if ((x / 8) + (y / 8)) % 2 == 0 {
+                canvas::fill_rect(x, y, 8, 8);
             }
+            x += 8;
         }
+        y += 8;
     }
 }
 

@@ -1,4 +1,6 @@
 //! Circles - Random circles demo
+//!
+//! This must match the original C implementation exactly for visual regression testing.
 
 #![no_std]
 #![no_main]
@@ -10,44 +12,35 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
     loop {}
 }
 
-/// Flag to trigger regeneration of circles
-static mut REGENERATE: bool = true;
+/// Current random seed
+static mut SEED: u32 = 42;
 
-/// Stored circle data (x, y, radius, filled)
-static mut CIRCLES: [(i32, i32, u32, bool); 10] = [(0, 0, 0, false); 10];
+// Scene control for visual testing
+#[no_mangle]
+pub extern "C" fn get_scene() -> u32 {
+    0
+}
 
-fn generate_circles() {
-    unsafe {
-        for i in 0..10 {
-            CIRCLES[i] = (
-                random::range(128) as i32,
-                random::range(64) as i32,
-                random::range(15) + 3,
-                random::range(2) == 0,
-            );
-        }
-        REGENERATE = false;
-    }
+#[no_mangle]
+pub extern "C" fn set_scene(_scene: u32) {}
+
+#[no_mangle]
+pub extern "C" fn get_scene_count() -> u32 {
+    1
 }
 
 #[no_mangle]
 pub extern "C" fn render() {
-    unsafe {
-        if REGENERATE {
-            generate_circles();
-        }
-    }
-
+    // Use same seed each frame for consistent circles
+    random::seed(unsafe { SEED });
     canvas::set_color(canvas::Color::Black);
 
-    unsafe {
-        for (x, y, r, filled) in CIRCLES.iter() {
-            if *filled {
-                canvas::fill_circle(*x, *y, *r);
-            } else {
-                canvas::draw_circle(*x, *y, *r);
-            }
-        }
+    // Draw 10 random circles
+    for _ in 0..10 {
+        let x = random::range(128) as i32;
+        let y = random::range(64) as i32;
+        let r = random::range(15) + 3;
+        canvas::draw_circle(x, y, r);
     }
 }
 
@@ -58,10 +51,10 @@ pub extern "C" fn on_input(key: u32, event_type: u32) {
         return;
     }
 
-    // Regenerate on OK/Enter press
+    // Generate new random seed for new circles on OK press
     if key == InputKey::Ok as u32 {
         unsafe {
-            REGENERATE = true;
+            SEED = random::get();
         }
     }
 }
