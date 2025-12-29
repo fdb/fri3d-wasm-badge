@@ -1,77 +1,153 @@
 # Fri3d WASM Badge
 
-A WebAssembly-based badge platform for the Fri3d camp badge, featuring a 128x64 OLED display. Includes a desktop emulator (SDL), web emulator (Emscripten), and ESP32-S3 firmware.
+A WebAssembly-based badge platform for the Fri3d camp badge, featuring a 128x64 OLED display. Written entirely in Rust with a **Ports & Apps** architecture:
+
+- **Apps** are WASM modules that export `render()`, `on_input()`, etc.
+- **Ports** are platform-specific implementations that own the main loop
 
 ## Getting Started
 
-### Cloning the Repository
+### Prerequisites
 
-This project uses git submodules for dependencies. When cloning:
+- **Rust** (stable toolchain)
+- **wasm32-unknown-unknown** target: `rustup target add wasm32-unknown-unknown`
 
-```bash
-git clone --recursive https://github.com/fdb/fri3d-wasm-badge.git
-cd fri3d-wasm-badge
-```
+### Building
 
-Or clone first, then initialize submodules:
+#### Desktop Emulator + Apps
 
 ```bash
-git clone https://github.com/fdb/fri3d-wasm-badge.git
-cd fri3d-wasm-badge
-git submodule update --init --recursive
-```
-
-## Prerequisites
-
-### macOS
-
-```
-brew install cmake zig sdl2
-```
-
-## Building
-
-### Quick Build (All Components)
-
-```bash
-./build_all.sh
+./build_desktop.sh
 ```
 
 This builds the desktop emulator and all WASM apps.
 
-### Desktop Emulator Only
+#### WASM Apps Only
 
 ```bash
-cmake -B build/emulator
-cmake --build build/emulator
+./build_apps.sh
 ```
 
-### WASM Apps Only
+#### Web Build
 
-Requires [Zig](https://ziglang.org/) for the WASM toolchain:
+Requires [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/):
 
 ```bash
-cmake -B build/apps/circles -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-wasm.cmake -S src/apps/circles
-cmake --build build/apps/circles
+cargo install wasm-pack
+./build_web.sh
 ```
 
-### Running the Emulator
+### Running
+
+#### Desktop Emulator
 
 ```bash
-# Show built-in launcher
-./build/emulator/src/emulator/fri3d_emulator
+# Run with default app (circles)
+./target/release/fri3d-emulator
 
 # Run a specific app
-./build/emulator/src/emulator/fri3d_emulator build/apps/circles/circles.wasm
+./target/release/fri3d-emulator build/apps/mandelbrot.wasm
+```
+
+#### Web Emulator
+
+```bash
+cd ports/web/www
+python3 -m http.server 8080
+# Open http://localhost:8080/
 ```
 
 ### Controls
 
 - Arrow keys: Navigate
-- Z / Enter: OK / Select
-- X / Backspace: Back
+- Enter: OK / Select
+- Backspace / Escape: Back
 - S: Screenshot
-- Left + X (hold 500ms): Return to launcher
+- Left + Back (hold 500ms): Return to launcher
+
+## Project Structure
+
+```
+fri3d-wasm-badge/
+├── Cargo.toml                  # Workspace root
+├── crates/
+│   ├── fri3d-runtime/          # Core runtime (no_std compatible)
+│   │   └── src/
+│   │       ├── canvas.rs       # 128x64 monochrome framebuffer
+│   │       ├── input.rs        # Key state, short/long press
+│   │       ├── random.rs       # Mersenne Twister PRNG
+│   │       └── font.rs         # Bitmap fonts
+│   ├── fri3d-wasm/             # WASM execution (wasmi)
+│   ├── fri3d-sdk/              # SDK for WASM apps
+│   └── fri3d-png/              # PNG encoder for screenshots
+├── ports/
+│   ├── desktop/                # Desktop emulator (minifb)
+│   ├── web/                    # Web runtime (wasm-bindgen)
+│   └── esp32/                  # ESP32 port (future)
+├── apps/
+│   ├── circles/                # Random circles demo
+│   ├── mandelbrot/             # Mandelbrot explorer
+│   ├── test-drawing/           # Drawing primitives test
+│   ├── test-ui/                # UI widget test
+│   └── launcher/               # Built-in app launcher
+└── tests/visual/               # Visual regression tests
+```
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         APPS (WASM)                          │
+│  circles.wasm   mandelbrot.wasm   launcher.wasm   ...       │
+│                                                              │
+│  Exports: render(), on_input()                              │
+│  Imports: canvas_*, random_*                                │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+              WASM Imports/Exports
+                      │
+┌─────────────────────▼───────────────────────────────────────┐
+│                      RUNTIME (Rust)                          │
+│  fri3d-runtime: Canvas, Input, Random, Fonts                │
+│  fri3d-wasm: wasmi integration, host functions              │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                 Port Trait
+                      │
+┌─────────────────────▼───────────────────────────────────────┐
+│                    PORTS (Platform)                          │
+│  Desktop (minifb)    Web (wasm-bindgen)    ESP32 (future)   │
+│  - Owns main loop    - JS glue             - GPIO buttons   │
+│  - Keyboard input    - Canvas2D            - SPI display    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Writing Apps
+
+Apps are written in Rust with `no_std` and compiled to WASM:
+
+```rust
+#![no_std]
+#![no_main]
+
+use fri3d_sdk::{canvas, random};
+
+#[panic_handler]
+fn panic(_: &core::panic::PanicInfo) -> ! { loop {} }
+
+#[no_mangle]
+pub extern "C" fn render() {
+    canvas::set_color(canvas::Color::Black);
+    let x = random::range(128) as i32;
+    let y = random::range(64) as i32;
+    canvas::draw_circle(x, y, 10);
+}
+
+#[no_mangle]
+pub extern "C" fn on_input(key: u32, event_type: u32) {
+    // Handle input
+}
+```
 
 ## Running Tests
 
@@ -83,48 +159,24 @@ uv run tests/visual/run_visual_tests.py
 uv run tests/visual/run_visual_tests.py --update-golden
 ```
 
-## Project Structure
+## Platform Support
 
-```
-src/
-├── sdk/          # WASM SDK headers (API for apps)
-├── apps/         # WASM applications
-│   ├── circles/
-│   ├── mandelbrot/
-│   └── test_drawing/
-├── runtime/      # Shared runtime code (canvas, WASM runner, input handling)
-├── emulator/     # Desktop SDL emulator
-├── firmware/     # ESP32-S3 PlatformIO project
-└── web/          # Web/Emscripten build
-
-libs/             # Git submodules (WAMR, u8g2, lodepng)
-cmake/            # CMake toolchain files
-tests/            # Visual regression tests
-```
-
-### Platform Targets
-
-| Platform          | Directory       | Build System | Status   |
-| ----------------- | --------------- | ------------ | -------- |
-| Desktop Emulator  | `src/emulator/` | CMake + SDL2 | Working  |
-| Web Emulator      | `src/web/`      | Emscripten   | Skeleton |
-| ESP32-S3 Firmware | `src/firmware/` | PlatformIO   | Skeleton |
-| WASM Apps         | `src/apps/`     | CMake + Zig  | Working  |
+| Platform          | Directory        | Status      |
+| ----------------- | ---------------- | ----------- |
+| Desktop Emulator  | `ports/desktop/` | Working     |
+| Web Emulator      | `ports/web/`     | Working     |
+| ESP32-S3 Firmware | `ports/esp32/`   | Scaffold    |
+| WASM Apps         | `apps/`          | Working     |
 
 ## Dependencies
 
-- **CMake** 3.16+
-- **SDL2** (for desktop emulator)
-- **Zig** (for WASM compilation)
-- **PlatformIO** (for ESP32 firmware, optional)
-- **Emscripten** (for web build, optional)
+All pure Rust, no git submodules required:
 
-Git submodules:
-
-- WASM Micro Runtime (WAMR)
-- u8g2 graphics library
-- lodepng (PNG encoding)
+- **wasmi** - WASM interpreter (no_std compatible)
+- **minifb** - Desktop windowing
+- **wasm-bindgen** - Web bindings
+- **miniz_oxide** - PNG compression
 
 ## License
 
-See individual submodule licenses in `libs/` directory.
+MIT

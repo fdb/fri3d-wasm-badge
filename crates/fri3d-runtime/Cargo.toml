@@ -1,0 +1,13 @@
+[package]
+name = "fri3d-runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Core runtime for Fri3d Badge - canvas, input, random (no_std compatible)"
+
+[features]
+default = ["std"]
+std = []
+
+[dependencies]
+# No external dependencies - pure Rust, no_std compatible

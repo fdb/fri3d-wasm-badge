@@ -3,21 +3,30 @@ set -e
 
 cd "$(dirname "$0")"
 
-# Build all WASM apps
-TOOLCHAIN="$(pwd)/cmake/toolchain-wasm.cmake"
-APPS_BUILD_DIR="build/apps"
+APPS="circles mandelbrot test-drawing test-ui"
 
 echo "=== Building WASM apps ==="
 
-for app_dir in src/apps/*/; do
-    if [ -d "$app_dir" ]; then
-        app_name=$(basename "$app_dir")
-        echo ""
-        echo "=== Building app: $app_name ==="
-        cmake -B "$APPS_BUILD_DIR/$app_name" -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" -S "$app_dir"
-        cmake --build "$APPS_BUILD_DIR/$app_name"
+for app in $APPS; do
+    echo "  Building $app..."
+    cargo build --release \
+        --target wasm32-unknown-unknown \
+        -p $app 2>&1 | grep -v "^$" || true
+done
+
+# Create output directory and copy WASM files
+mkdir -p build/apps
+for app in $APPS; do
+    # Convert app name (test-drawing -> test_drawing for Cargo output)
+    cargo_name=$(echo $app | tr '-' '_')
+    if [ -f "target/wasm32-unknown-unknown/release/${cargo_name}.wasm" ]; then
+        cp "target/wasm32-unknown-unknown/release/${cargo_name}.wasm" "build/apps/${app}.wasm"
     fi
 done
 
 echo ""
-echo "=== WASM app build complete! ==="
+echo "=== WASM apps build complete! ==="
+echo ""
+if [ -d "build/apps" ]; then
+    ls -la build/apps/
+fi

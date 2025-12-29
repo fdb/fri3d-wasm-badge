@@ -1,0 +1,13 @@
+[package]
+name = "circles"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Random circles demo app for Fri3d Badge"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+fri3d-sdk = { workspace = true }
+

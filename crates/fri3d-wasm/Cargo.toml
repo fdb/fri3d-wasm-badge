@@ -1,0 +1,10 @@
+[package]
+name = "fri3d-wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "WASM execution layer for Fri3d Badge using wasmi"
+
+[dependencies]
+fri3d-runtime = { workspace = true }
+wasmi = { workspace = true }

@@ -1,0 +1,13 @@
+[package]
+name = "test-drawing"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Drawing primitives test app for Fri3d Badge"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+fri3d-sdk = { workspace = true }
+

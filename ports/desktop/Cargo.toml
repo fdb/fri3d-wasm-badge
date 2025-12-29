@@ -1,0 +1,17 @@
+[package]
+name = "fri3d-desktop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Desktop emulator for Fri3d Badge"
+
+[[bin]]
+name = "fri3d-emulator"
+path = "src/main.rs"
+
+[dependencies]
+fri3d-runtime = { workspace = true }
+fri3d-wasm = { workspace = true }
+fri3d-png = { workspace = true }
+minifb = { workspace = true }
+wasmi = { workspace = true }

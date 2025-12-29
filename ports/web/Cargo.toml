@@ -1,0 +1,15 @@
+[package]
+name = "fri3d-web"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Web runtime for Fri3d Badge"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+fri3d-runtime = { workspace = true, default-features = false }
+wasm-bindgen = { workspace = true }
+web-sys = { workspace = true, features = ["console"] }
+js-sys = { workspace = true }

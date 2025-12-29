@@ -1,0 +1,13 @@
+[package]
+name = "mandelbrot"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Mandelbrot set explorer for Fri3d Badge"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+fri3d-sdk = { workspace = true }
+

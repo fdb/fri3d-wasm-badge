@@ -1,0 +1,57 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/fri3d-runtime",
+    "crates/fri3d-wasm",
+    "crates/fri3d-sdk",
+    "crates/fri3d-png",
+    "ports/desktop",
+    "ports/web",
+    # "ports/esp32",  # Uncomment when ESP32 toolchain is available
+    "apps/launcher",
+    "apps/circles",
+    "apps/mandelbrot",
+    "apps/test-drawing",
+    "apps/test-ui",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/fdb/fri3d-wasm-badge"
+
+[workspace.dependencies]
+fri3d-runtime = { path = "crates/fri3d-runtime" }
+fri3d-wasm = { path = "crates/fri3d-wasm" }
+fri3d-sdk = { path = "crates/fri3d-sdk" }
+fri3d-png = { path = "crates/fri3d-png" }
+
+# External dependencies
+wasmi = "0.40"
+minifb = "0.27"
+wasm-bindgen = "0.2"
+web-sys = "0.3"
+js-sys = "0.3"
+miniz_oxide = "0.8"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[profile.release.package.launcher]
+opt-level = "z"
+
+[profile.release.package.circles]
+opt-level = "z"
+
+[profile.release.package.mandelbrot]
+opt-level = "z"
+
+[profile.release.package.test-drawing]
+opt-level = "z"
+
+[profile.release.package.test-ui]
+opt-level = "z"

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fri3d Badge Emulator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Fri3d Badge Emulator</h1>
+
+        <div class="display-container">
+            <canvas id="display" width="128" height="64"></canvas>
+        </div>
+
+        <div class="controls">
+            <p>Controls: Arrow Keys, Enter (OK), Backspace (Back)</p>
+        </div>
+
+        <div class="app-selector">
+            <label for="app-select">Select App:</label>
+            <select id="app-select">
+                <option value="circles">Circles</option>
+                <option value="mandelbrot">Mandelbrot</option>
+                <option value="test-drawing">Test Drawing</option>
+                <option value="test-ui">Test UI</option>
+            </select>
+            <button id="load-btn">Load</button>
+        </div>
+    </div>
+
+    <script type="module" src="main.js"></script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+[package]
+name = "fri3d-sdk"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "SDK for writing Fri3d Badge WASM apps"
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+# No dependencies - just extern declarations
+
+[features]
+default = []

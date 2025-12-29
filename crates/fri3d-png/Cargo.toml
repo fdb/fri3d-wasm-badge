@@ -1,0 +1,13 @@
+[package]
+name = "fri3d-png"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Minimal PNG encoder for Fri3d Badge screenshots"
+
+[features]
+default = ["std"]
+std = []
+
+[dependencies]
+miniz_oxide = { workspace = true, default-features = false, features = ["with-alloc"] }

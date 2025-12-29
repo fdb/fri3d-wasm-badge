@@ -1,4 +1,21 @@
-build/
-build-apps/
+# Build outputs
+/build/
+/target/
+
+# IDE
 .DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test outputs
 tests/visual/output/
+
+# Web build artifacts
+ports/web/www/pkg/
+ports/web/www/apps/
+ports/web/pkg/
+
+# Screenshots
+screenshot_*.png
