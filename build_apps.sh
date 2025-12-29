@@ -3,7 +3,7 @@ set -e
 
 cd "$(dirname "$0")"
 
-APPS="circles mandelbrot test-drawing test-ui"
+APPS="circles launcher mandelbrot test-drawing test-ui"
 
 echo "=== Building WASM apps ==="
 
