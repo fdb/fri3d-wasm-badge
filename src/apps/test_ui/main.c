@@ -6,7 +6,6 @@
 #include <canvas.h>
 #include <input.h>
 #include <imgui.h>
-#include <stdio.h>
 
 // Scene definitions
 typedef enum {
@@ -62,7 +61,8 @@ static void render_counter(void) {
 
     // Display counter value
     char buf[32];
-    snprintf(buf, sizeof(buf), "Count: %d", g_counter);
+    char* p = frd_strcpy(buf, "Count: ");
+    frd_itoa(g_counter, p);
     ui_label(buf, UI_FONT_SECONDARY, UI_ALIGN_CENTER);
     ui_spacer(8);
 
@@ -95,7 +95,7 @@ static void render_menu(void) {
     ui_menu_begin(&g_menu_scroll, 4, 6);
 
     char bright_str[8];
-    snprintf(bright_str, sizeof(bright_str), "%d", g_brightness);
+    frd_itoa(g_brightness, bright_str);
     if (ui_menu_item_value("Brightness", bright_str, 0)) {
         // Could navigate to brightness screen
     }
@@ -219,10 +219,12 @@ static void render_checkbox(void) {
 
     // Show current state
     char buf[64];
-    snprintf(buf, sizeof(buf), "State: %d %d %d",
-             g_check1 ? 1 : 0,
-             g_check2 ? 1 : 0,
-             g_check3 ? 1 : 0);
+    char* p = frd_strcpy(buf, "State: ");
+    p = frd_itoa(g_check1 ? 1 : 0, p);
+    *p++ = ' ';
+    p = frd_itoa(g_check2 ? 1 : 0, p);
+    *p++ = ' ';
+    frd_itoa(g_check3 ? 1 : 0, p);
     ui_label(buf, UI_FONT_SECONDARY, UI_ALIGN_CENTER);
 
     ui_end();
@@ -243,7 +245,10 @@ static void render_footer(void) {
 
     // Show both counters on one line
     char buf[32];
-    snprintf(buf, sizeof(buf), "Left: %d   Right: %d", left_count, right_count);
+    char* p = frd_strcpy(buf, "Left: ");
+    p = frd_itoa(left_count, p);
+    p = frd_strcpy(p, "   Right: ");
+    frd_itoa(right_count, p);
     ui_label(buf, UI_FONT_SECONDARY, UI_ALIGN_CENTER);
 
     ui_spacer(4);
@@ -330,7 +335,3 @@ void on_input(InputKey key, InputType type) {
     }
 }
 
-// Required by WASI libc
-int main(void) {
-    return 0;
-}
