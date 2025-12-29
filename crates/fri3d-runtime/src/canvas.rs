@@ -459,14 +459,14 @@ impl Canvas {
         }
     }
 
-    /// Draw a string at the given position (y is top of text)
+    /// Draw a string at the given position (y is baseline, matching u8g2)
     pub fn draw_str(&mut self, x: i32, y: i32, text: &str) {
         let font = self.get_font();
         let mut cursor_x = x;
 
         for ch in text.chars() {
             if let Some(glyph) = font.get_glyph(ch) {
-                self.draw_glyph(cursor_x, y, glyph, font);
+                self.draw_glyph(cursor_x, y - font.baseline as i32, glyph, font);
                 cursor_x += font.width as i32;
             }
         }
@@ -489,6 +489,10 @@ impl Canvas {
     }
 
     /// Draw a single glyph (row-based format)
+    /// BDF fonts store pixels from MSB to LSB, so for N-pixel width:
+    /// - bit 7 = pixel 0 (leftmost)
+    /// - bit 6 = pixel 1
+    /// - etc.
     fn draw_glyph(&mut self, x: i32, y: i32, glyph: &[u8], font: &BitmapFont) {
         for row in 0..font.height as usize {
             if row >= glyph.len() {
@@ -496,9 +500,10 @@ impl Canvas {
             }
             let row_data = glyph[row];
             for col in 0..font.width as usize {
-                // Bits are stored from bit 6 down to bit 1 for 6-pixel width
-                // (bit 7 is unused, bits 6-1 are pixels left to right)
-                let bit_index = 6 - col;
+                // Bits are stored from MSB (bit 7) to LSB
+                // For width=5: bits 7,6,5,4,3 are pixels 0,1,2,3,4
+                // For width=6: bits 7,6,5,4,3,2 are pixels 0,1,2,3,4,5
+                let bit_index = 7 - col;
                 if (row_data >> bit_index) & 1 != 0 {
                     self.draw_pixel(x + col as i32, y + row as i32);
                 }
