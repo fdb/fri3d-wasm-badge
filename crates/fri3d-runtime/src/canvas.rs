@@ -459,14 +459,14 @@ impl Canvas {
         }
     }
 
-    /// Draw a string at the given position
+    /// Draw a string at the given position (y is top of text)
     pub fn draw_str(&mut self, x: i32, y: i32, text: &str) {
         let font = self.get_font();
         let mut cursor_x = x;
 
         for ch in text.chars() {
             if let Some(glyph) = font.get_glyph(ch) {
-                self.draw_glyph(cursor_x, y - font.baseline as i32, glyph, font);
+                self.draw_glyph(cursor_x, y, glyph, font);
                 cursor_x += font.width as i32;
             }
         }

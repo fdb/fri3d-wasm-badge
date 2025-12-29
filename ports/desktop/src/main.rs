@@ -16,8 +16,8 @@ fn key_to_input(key: Key) -> Option<InputKey> {
         Key::Down => Some(InputKey::Down),
         Key::Left => Some(InputKey::Left),
         Key::Right => Some(InputKey::Right),
-        Key::Enter => Some(InputKey::Ok),
-        Key::Backspace | Key::Escape => Some(InputKey::Back),
+        Key::Enter | Key::Z => Some(InputKey::Ok),
+        Key::Backspace | Key::Escape | Key::X => Some(InputKey::Back),
         _ => None,
     }
 }

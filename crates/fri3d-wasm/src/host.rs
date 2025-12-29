@@ -129,6 +129,34 @@ pub fn register_host_functions(
         },
     )?;
 
+    linker.func_wrap(
+        "env",
+        "canvas_draw_str",
+        |mut caller: Caller<'_, HostState>, x: i32, y: i32, ptr: u32, len: u32| {
+            // Get memory from the caller and copy string data
+            let text_owned: Option<String> = caller
+                .get_export("memory")
+                .and_then(|e| e.into_memory())
+                .and_then(|memory| {
+                    let data = memory.data(&caller);
+                    let start = ptr as usize;
+                    let end = start + len as usize;
+                    if end <= data.len() {
+                        core::str::from_utf8(&data[start..end])
+                            .ok()
+                            .map(|s| s.to_string())
+                    } else {
+                        None
+                    }
+                });
+
+            // Now draw the string (borrow released)
+            if let Some(text) = text_owned {
+                caller.data_mut().canvas.draw_str(x, y, &text);
+            }
+        },
+    )?;
+
     // Random functions
     linker.func_wrap(
         "env",

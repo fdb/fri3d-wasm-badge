@@ -34,6 +34,7 @@ extern "C" {
     fn canvas_draw_rbox(x: i32, y: i32, w: u32, h: u32, r: u32);
     fn canvas_draw_circle(cx: i32, cy: i32, r: u32);
     fn canvas_draw_disc(cx: i32, cy: i32, r: u32);
+    fn canvas_draw_str(x: i32, y: i32, ptr: u32, len: u32);
 }
 
 /// Clear the canvas to white
@@ -114,9 +115,10 @@ pub fn fill_circle(x: i32, y: i32, r: u32) {
     unsafe { canvas_draw_disc(x, y, r) }
 }
 
-/// Draw a string (placeholder - needs memory passing)
+/// Draw a string at the given position
 #[inline]
-pub fn draw_str(_x: i32, _y: i32, _text: &str) {
-    // TODO: Implement string passing to host
-    // For now, this is a no-op
+pub fn draw_str(x: i32, y: i32, text: &str) {
+    unsafe {
+        canvas_draw_str(x, y, text.as_ptr() as u32, text.len() as u32);
+    }
 }

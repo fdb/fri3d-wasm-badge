@@ -40,10 +40,17 @@ from PIL import Image
 
 SCRIPT_DIR = Path(__file__).parent.absolute()
 PROJECT_ROOT = SCRIPT_DIR.parent.parent
-HOST_EMULATOR = PROJECT_ROOT / "build" / "emulator" / "src" / "emulator" / "fri3d_emulator"
+# Rust desktop emulator (release build)
+HOST_EMULATOR = PROJECT_ROOT / "target" / "release" / "fri3d-emulator"
 APPS_DIR = SCRIPT_DIR / "apps"
 OUTPUT_DIR = SCRIPT_DIR / "output"
 REPORTS_DIR = SCRIPT_DIR / "reports"
+
+# App ID mapping: test directory name -> cargo package name
+APP_ID_MAP = {
+    "test_drawing": "test-drawing",
+    "test_ui": "test-ui",
+}
 
 
 # =============================================================================
@@ -115,21 +122,23 @@ def discover_apps() -> list[App]:
 
 def find_wasm_binary(app_id: str) -> Optional[Path]:
     """Find the compiled WASM binary for an app."""
-    build_dir = PROJECT_ROOT / "build" / "apps" / app_id
+    # Map test app IDs to cargo package names
+    cargo_name = APP_ID_MAP.get(app_id, app_id)
 
-    if not build_dir.exists():
-        return None
-
-    # Check for .wasm file first, then without extension
-    for pattern in [f"{app_id}.wasm", app_id]:
-        candidate = build_dir / pattern
+    # Primary location: build/apps/<name>.wasm (copied by build script)
+    build_dir = PROJECT_ROOT / "build" / "apps"
+    for name in [cargo_name, app_id]:
+        candidate = build_dir / f"{name}.wasm"
         if candidate.exists():
             return candidate
 
-    # Search for any .wasm file
-    wasm_files = list(build_dir.glob("*.wasm"))
-    if wasm_files:
-        return wasm_files[0]
+    # Fallback: Cargo target directory
+    cargo_target = PROJECT_ROOT / "target" / "wasm32-unknown-unknown" / "release"
+    # Cargo uses underscores in binary names
+    cargo_binary_name = cargo_name.replace("-", "_")
+    candidate = cargo_target / f"{cargo_binary_name}.wasm"
+    if candidate.exists():
+        return candidate
 
     return None
 
@@ -147,7 +156,7 @@ def capture_screenshot(app_id: str, scene_index: int, output_path: Path) -> bool
 
     cmd = [
         str(HOST_EMULATOR),
-        "--headless",
+        "--test",
         "--scene", str(scene_index),
         "--screenshot", str(output_path),
         str(wasm_path),
@@ -422,7 +431,7 @@ def check_prerequisites(apps: list[App]) -> bool:
     if not HOST_EMULATOR.exists():
         print(f"Error: Emulator not found at {HOST_EMULATOR}")
         print("Build with: ./build_all.sh or:")
-        print("  cmake -B build/emulator && cmake --build build/emulator")
+        print("  cargo build --release -p fri3d-desktop")
         return False
 
     missing = []
@@ -432,10 +441,7 @@ def check_prerequisites(apps: list[App]) -> bool:
 
     if missing:
         print(f"Error: WASM binaries not found for: {', '.join(missing)}")
-        print("Build apps with: ./build_all.sh or:")
-        for app_id in missing:
-            print(f"  cmake -B build/apps/{app_id} -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-wasm.cmake -S src/apps/{app_id}")
-            print(f"  cmake --build build/apps/{app_id}")
+        print("Build apps with: ./build_apps.sh or ./build_all.sh")
         return False
 
     return True
