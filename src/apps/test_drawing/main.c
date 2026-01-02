@@ -1,4 +1,5 @@
 #include <frd.h>
+#include <app.h>
 #include <canvas.h>
 #include <input.h>
 #include <random.h>
@@ -260,7 +261,14 @@ void render(void) {
 
 // Handle input - allows cycling through scenes manually
 void on_input(input_key_t key, input_type_t type) {
-    if (type != input_type_press) return;
+    if (key == input_key_back && type == input_type_short_press) {
+        exit_to_launcher();
+        return;
+    }
+
+    if (type != input_type_press) {
+        return;
+    }
 
     switch (key) {
         case input_key_right:

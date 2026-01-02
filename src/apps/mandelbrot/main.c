@@ -1,4 +1,5 @@
 #include <frd.h>
+#include <app.h>
 #include <canvas.h>
 #include <input.h>
 
@@ -44,7 +45,23 @@ void render(void) {
 }
 
 void on_input(input_key_t key, input_type_t type) {
-    if (type != input_type_press) return;
+    if (key == input_key_back) {
+        if (type == input_type_long_press) {
+            exit_to_launcher();
+            return;
+        }
+        if (type == input_type_short_press) {
+            g_x_zoom *= 1.1f;
+            g_y_zoom *= 1.1f;
+            g_zoom -= 0.15f;
+            if (g_zoom < 1.0f) g_zoom = 1.0f;
+        }
+        return;
+    }
+
+    if (type != input_type_press) {
+        return;
+    }
 
     float step = 0.1f / g_zoom;
 
@@ -66,11 +83,7 @@ void on_input(input_key_t key, input_type_t type) {
             g_y_zoom *= 0.9f;
             g_zoom += 0.15f;
             break;
-        case input_key_back:
-            g_x_zoom *= 1.1f;
-            g_y_zoom *= 1.1f;
-            g_zoom -= 0.15f;
-            if (g_zoom < 1.0f) g_zoom = 1.0f;
+        default:
             break;
     }
 }

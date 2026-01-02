@@ -1,4 +1,5 @@
 #include <frd.h>
+#include <app.h>
 #include <canvas.h>
 #include <input.h>
 #include <random.h>
@@ -27,6 +28,11 @@ void render(void) {
 
 // Called by host for input events
 void on_input(input_key_t key, input_type_t type) {
+    if (key == input_key_back && type == input_type_short_press) {
+        exit_to_launcher();
+        return;
+    }
+
     if (type == input_type_press && key == input_key_ok) {
         // Generate new random seed for new circles
         g_seed = random_get();
