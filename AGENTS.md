@@ -60,6 +60,12 @@ uv run tests/visual/run_visual_tests.py
 uv run tests/visual/run_visual_tests.py --update-golden
 ```
 
+### CI Note (New Apps)
+
+If you add a new app with visual tests, also update the CI build list in
+`.github/workflows/visual-tests.yml` so the app's WASM binary is built before
+`run_visual_tests.py` runs.
+
 ## Project Structure
 
 ```
