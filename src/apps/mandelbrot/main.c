@@ -32,7 +32,7 @@ static bool mandelbrot_pixel(int x, int y) {
 }
 
 void render(void) {
-    canvas_set_color(ColorBlack);
+    canvas_set_color(color_black);
 
     for (int y = 0; y < 64; y++) {
         for (int x = 0; x < 128; x++) {
@@ -43,30 +43,30 @@ void render(void) {
     }
 }
 
-void on_input(InputKey key, InputType type) {
-    if (type != InputTypePress) return;
+void on_input(input_key_t key, input_type_t type) {
+    if (type != input_type_press) return;
 
     float step = 0.1f / g_zoom;
 
     switch (key) {
-        case InputKeyUp:
+        case input_key_up:
             g_y_offset += step;
             break;
-        case InputKeyDown:
+        case input_key_down:
             g_y_offset -= step;
             break;
-        case InputKeyLeft:
+        case input_key_left:
             g_x_offset += step;
             break;
-        case InputKeyRight:
+        case input_key_right:
             g_x_offset -= step;
             break;
-        case InputKeyOk:
+        case input_key_ok:
             g_x_zoom *= 0.9f;
             g_y_zoom *= 0.9f;
             g_zoom += 0.15f;
             break;
-        case InputKeyBack:
+        case input_key_back:
             g_x_zoom *= 1.1f;
             g_y_zoom *= 1.1f;
             g_zoom -= 0.15f;

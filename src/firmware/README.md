@@ -31,7 +31,7 @@ ESP32-S3 firmware for the Fri3d Badge.
 | Ok     | 13   |
 | Back   | 14   |
 
-**Note:** Button GPIO assignments are placeholders. Update `input_gpio.cpp` when hardware design is finalized.
+**Note:** Button GPIO assignments are placeholders. Update `input_gpio.c` when hardware design is finalized.
 
 ## Building
 

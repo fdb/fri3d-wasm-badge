@@ -3,19 +3,17 @@
 
 find_package(SDL2 REQUIRED)
 
-# lodepng for PNG screenshot output
-set(LODEPNG_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../libs/lodepng)
+set(STB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../libs/stb)
 
 add_executable(fri3d_emulator
-    main.cpp
-    display_sdl.cpp
-    input_sdl.cpp
-    ${LODEPNG_DIR}/lodepng.cpp
+    main.c
+    display_sdl.c
+    input_sdl.c
 )
 
 target_include_directories(fri3d_emulator PRIVATE
     ${SDL2_INCLUDE_DIRS}
-    ${LODEPNG_DIR}
+    ${STB_DIR}
 )
 
 target_link_libraries(fri3d_emulator PRIVATE
@@ -23,9 +21,13 @@ target_link_libraries(fri3d_emulator PRIVATE
     fri3d_runtime
 )
 
-# Platform detection for WAMR
 if(APPLE)
     target_compile_definitions(fri3d_emulator PRIVATE BH_PLATFORM_DARWIN)
 elseif(UNIX)
     target_compile_definitions(fri3d_emulator PRIVATE BH_PLATFORM_LINUX)
 endif()
+
+set_target_properties(fri3d_emulator PROPERTIES
+    C_STANDARD 11
+    C_STANDARD_REQUIRED YES
+)

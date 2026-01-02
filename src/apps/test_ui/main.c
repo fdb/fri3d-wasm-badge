@@ -57,13 +57,13 @@ uint32_t get_scene_count(void) {
 static void render_counter(void) {
     ui_begin();
 
-    ui_label("Counter Demo", UI_FONT_PRIMARY, UI_ALIGN_CENTER);
+    ui_label("Counter Demo", ui_font_primary, ui_align_center);
     ui_spacer(8);
 
     // Display counter value
     char buf[32];
     snprintf(buf, sizeof(buf), "Count: %d", g_counter);
-    ui_label(buf, UI_FONT_SECONDARY, UI_ALIGN_CENTER);
+    ui_label(buf, ui_font_secondary, ui_align_center);
     ui_spacer(8);
 
     // Buttons in centered horizontal layout
@@ -89,7 +89,7 @@ static void render_counter(void) {
 static void render_menu(void) {
     ui_begin();
 
-    ui_label("Settings Menu", UI_FONT_PRIMARY, UI_ALIGN_CENTER);
+    ui_label("Settings Menu", ui_font_primary, ui_align_center);
     ui_spacer(4);
 
     ui_menu_begin(&g_menu_scroll, 4, 6);
@@ -135,13 +135,13 @@ static void render_menu(void) {
 static void render_layout(void) {
     ui_begin();
 
-    ui_label("Layout Demo", UI_FONT_PRIMARY, UI_ALIGN_CENTER);
+    ui_label("Layout Demo", ui_font_primary, ui_align_center);
     ui_spacer(2);
 
     // Show text alignment options
-    ui_label("Left", UI_FONT_SECONDARY, UI_ALIGN_LEFT);
-    ui_label("Center", UI_FONT_SECONDARY, UI_ALIGN_CENTER);
-    ui_label("Right", UI_FONT_SECONDARY, UI_ALIGN_RIGHT);
+    ui_label("Left", ui_font_secondary, ui_align_left);
+    ui_label("Center", ui_font_secondary, ui_align_center);
+    ui_label("Right", ui_font_secondary, ui_align_right);
 
     ui_separator();
 
@@ -162,25 +162,25 @@ static void render_layout(void) {
 static void render_progress(void) {
     ui_begin();
 
-    ui_label("Progress Demo", UI_FONT_PRIMARY, UI_ALIGN_CENTER);
+    ui_label("Progress Demo", ui_font_primary, ui_align_center);
     ui_spacer(4);
 
     // Animated progress
-    ui_label("Loading:", UI_FONT_SECONDARY, UI_ALIGN_LEFT);
+    ui_label("Loading:", ui_font_secondary, ui_align_left);
     ui_spacer(2);
     ui_progress(g_progress, 0);
     ui_spacer(4);
 
     // Fixed progress bars at different values
-    ui_label("25%:", UI_FONT_SECONDARY, UI_ALIGN_LEFT);
+    ui_label("25%:", ui_font_secondary, ui_align_left);
     ui_spacer(2);
     ui_progress(0.25f, 0);
 
-    ui_label("50%:", UI_FONT_SECONDARY, UI_ALIGN_LEFT);
+    ui_label("50%:", ui_font_secondary, ui_align_left);
     ui_spacer(2);
     ui_progress(0.50f, 0);
 
-    ui_label("75%:", UI_FONT_SECONDARY, UI_ALIGN_LEFT);
+    ui_label("75%:", ui_font_secondary, ui_align_left);
     ui_spacer(2);
     ui_progress(0.75f, 0);
 
@@ -200,7 +200,7 @@ static void render_progress(void) {
 static void render_checkbox(void) {
     ui_begin();
 
-    ui_label("Checkbox Demo", UI_FONT_PRIMARY, UI_ALIGN_CENTER);
+    ui_label("Checkbox Demo", ui_font_primary, ui_align_center);
     ui_spacer(8);
 
     if (ui_checkbox("Option 1", &g_check1)) {
@@ -223,7 +223,7 @@ static void render_checkbox(void) {
              g_check1 ? 1 : 0,
              g_check2 ? 1 : 0,
              g_check3 ? 1 : 0);
-    ui_label(buf, UI_FONT_SECONDARY, UI_ALIGN_CENTER);
+    ui_label(buf, ui_font_secondary, ui_align_center);
 
     ui_end();
 }
@@ -235,7 +235,7 @@ static void render_checkbox(void) {
 static void render_footer(void) {
     ui_begin();
 
-    ui_label("Footer Demo", UI_FONT_PRIMARY, UI_ALIGN_CENTER);
+    ui_label("Footer Demo", ui_font_primary, ui_align_center);
     ui_spacer(8);
 
     static int left_count = 0;
@@ -244,10 +244,10 @@ static void render_footer(void) {
     // Show both counters on one line
     char buf[32];
     snprintf(buf, sizeof(buf), "Left: %d   Right: %d", left_count, right_count);
-    ui_label(buf, UI_FONT_SECONDARY, UI_ALIGN_CENTER);
+    ui_label(buf, ui_font_secondary, ui_align_center);
 
     ui_spacer(4);
-    ui_label("Press </> to change", UI_FONT_SECONDARY, UI_ALIGN_CENTER);
+    ui_label("Press </> to change", ui_font_secondary, ui_align_center);
 
     // Footer buttons
     if (ui_footer_left("Dec")) {
@@ -296,10 +296,10 @@ void render(void) {
 // Input handling
 // ----------------------------------------------------------------------------
 
-void on_input(InputKey key, InputType type) {
-    // Convert InputKey/InputType to UiKey/UiInputType
-    UiKey ui_key = (UiKey)key;
-    UiInputType ui_type = (type == InputTypePress) ? UI_INPUT_SHORT : UI_INPUT_RELEASE;
+void on_input(input_key_t key, input_type_t type) {
+    // Convert input_key_t/input_type_t to ui_key_t/ui_input_type_t
+    ui_key_t ui_key = (ui_key_t)key;
+    ui_input_type_t ui_type = (type == input_type_press) ? ui_input_short : ui_input_release;
 
     // Feed to IMGUI system
     ui_input(ui_key, ui_type);
@@ -317,13 +317,13 @@ void on_input(InputKey key, InputType type) {
     }
 
     // Additional scene-specific input handling
-    if (type == InputTypePress) {
+    if (type == input_type_press) {
         // Brightness adjustment in menu scene
         if (g_current_scene == SCENE_MENU && ui_get_focus() == 0) {
-            if (key == InputKeyLeft && g_brightness > 0) {
+            if (key == input_key_left && g_brightness > 0) {
                 g_brightness--;
             }
-            if (key == InputKeyRight && g_brightness < 10) {
+            if (key == input_key_right && g_brightness < 10) {
                 g_brightness++;
             }
         }

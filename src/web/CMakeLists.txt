@@ -1,33 +1,26 @@
 # Fri3d Web Emulator
 # Emscripten build using browser's native WebAssembly (no WAMR)
 
-# SDL2 is provided by Emscripten (no space after -s for modern Emscripten)
 set(USE_FLAGS "-sUSE_SDL=2")
 
-# Paths
 set(EMULATOR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../emulator)
-set(LODEPNG_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../libs/lodepng)
+set(STB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../libs/stb)
 
 add_executable(fri3d_web
-    main.cpp
-    # Emulator display/input
-    ${EMULATOR_DIR}/display_sdl.cpp
-    ${EMULATOR_DIR}/input_sdl.cpp
-    # lodepng
-    ${LODEPNG_DIR}/lodepng.cpp
+    main.c
+    ${EMULATOR_DIR}/display_sdl.c
+    ${EMULATOR_DIR}/input_sdl.c
 )
 
 target_include_directories(fri3d_web PRIVATE
     ${EMULATOR_DIR}
-    ${LODEPNG_DIR}
+    ${STB_DIR}
 )
 
-# Link against fri3d_runtime (minimal version for Emscripten)
 target_link_libraries(fri3d_web PRIVATE
     fri3d_runtime
 )
 
-# Emscripten-specific settings
 set_target_properties(fri3d_web PROPERTIES
     SUFFIX ".html"
 )
@@ -36,7 +29,6 @@ target_compile_options(fri3d_web PRIVATE
     ${USE_FLAGS}
 )
 
-# Exported functions for JavaScript to call
 set(EXPORTED_FUNCTIONS
     "_main"
     "_js_canvas_clear"
@@ -69,7 +61,7 @@ target_link_options(fri3d_web PRIVATE
     ${USE_FLAGS}
     -sWASM=1
     -sALLOW_MEMORY_GROWTH=1
-    -sTOTAL_MEMORY=67108864  # 64MB
+    -sTOTAL_MEMORY=67108864
     -sEXIT_RUNTIME=0
     -sEXPORTED_FUNCTIONS=[${EXPORTED_FUNCTIONS_STR}]
     -sEXPORTED_RUNTIME_METHODS=["ccall","cwrap","allocateUTF8","UTF8ToString"]
@@ -77,5 +69,7 @@ target_link_options(fri3d_web PRIVATE
     --shell-file ${CMAKE_CURRENT_SOURCE_DIR}/shell.html
 )
 
-# C++14 required
-target_compile_features(fri3d_web PUBLIC cxx_std_14)
+set_target_properties(fri3d_web PROPERTIES
+    C_STANDARD 11
+    C_STANDARD_REQUIRED YES
+)

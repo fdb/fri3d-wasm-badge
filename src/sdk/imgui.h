@@ -10,158 +10,107 @@
 // ============================================================================
 
 // ----------------------------------------------------------------------------
-// Input Types (mirroring InputKey/InputType for UI layer)
+// Input Types (mirroring input_key_t/input_type_t for UI layer)
 // ----------------------------------------------------------------------------
 
 typedef enum {
-    UI_KEY_UP = 0,
-    UI_KEY_DOWN = 1,
-    UI_KEY_LEFT = 2,
-    UI_KEY_RIGHT = 3,
-    UI_KEY_OK = 4,
-    UI_KEY_BACK = 5,
-} UiKey;
+    ui_key_up = 0,
+    ui_key_down = 1,
+    ui_key_left = 2,
+    ui_key_right = 3,
+    ui_key_ok = 4,
+    ui_key_back = 5,
+} ui_key_t;
 
 typedef enum {
-    UI_INPUT_PRESS = 0,
-    UI_INPUT_RELEASE = 1,
-    UI_INPUT_SHORT = 2,    // Short press (< 500ms)
-    UI_INPUT_LONG = 3,     // Long press (>= 500ms)
-    UI_INPUT_REPEAT = 4,   // Repeat while held
-} UiInputType;
+    ui_input_press = 0,
+    ui_input_release = 1,
+    ui_input_short = 2,
+    ui_input_long = 3,
+    ui_input_repeat = 4,
+} ui_input_type_t;
 
 // ----------------------------------------------------------------------------
 // Font and Alignment (matching canvas.h enums)
 // ----------------------------------------------------------------------------
 
 typedef enum {
-    UI_FONT_PRIMARY = 0,    // 12px - headers, titles
-    UI_FONT_SECONDARY = 1,  // 10px - body text, values
-    UI_FONT_KEYBOARD = 2,   // Keyboard font
-    UI_FONT_BIG_NUMBERS = 3,// Large numbers
-} UiFont;
+    ui_font_primary = 0,
+    ui_font_secondary = 1,
+    ui_font_keyboard = 2,
+    ui_font_big_numbers = 3,
+} ui_font_t;
 
 typedef enum {
-    UI_ALIGN_LEFT = 0,
-    UI_ALIGN_RIGHT = 1,
-    UI_ALIGN_CENTER = 2,
-} UiAlign;
+    ui_align_left = 0,
+    ui_align_right = 1,
+    ui_align_center = 2,
+} ui_align_t;
 
 // ----------------------------------------------------------------------------
 // Layout Direction
 // ----------------------------------------------------------------------------
 
 typedef enum {
-    UI_LAYOUT_VERTICAL = 0,
-    UI_LAYOUT_HORIZONTAL = 1,
-} UiLayoutDirection;
+    ui_layout_vertical = 0,
+    ui_layout_horizontal = 1,
+} ui_layout_direction_t;
 
 // ----------------------------------------------------------------------------
 // Context Management
 // ----------------------------------------------------------------------------
 
-// Begin a new frame - clears canvas, resets widget state
 void ui_begin(void);
-
-// End the frame - commits canvas buffer to display
 void ui_end(void);
-
-// Feed an input event to the UI system (call from on_input)
-void ui_input(UiKey key, UiInputType type);
-
-// Check if Back button was pressed this frame
+void ui_input(ui_key_t key, ui_input_type_t type);
 bool ui_back_pressed(void);
 
 // ----------------------------------------------------------------------------
 // Layout System
 // ----------------------------------------------------------------------------
 
-// Begin a vertical stack with specified pixel spacing between items
 void ui_vstack(int16_t spacing);
-
-// Begin a horizontal stack with specified pixel spacing between items
 void ui_hstack(int16_t spacing);
-
-// Begin a centered horizontal stack (contents will be centered in parent width)
 void ui_hstack_centered(int16_t spacing);
-
-// End the current stack and return to parent layout
 void ui_end_stack(void);
-
-// Add empty space in the current stack direction
 void ui_spacer(int16_t pixels);
-
-// Set absolute position for next widget (bypasses layout)
 void ui_set_position(int16_t x, int16_t y);
 
 // ----------------------------------------------------------------------------
 // Basic Widgets
 // ----------------------------------------------------------------------------
 
-// Draw a text label (not focusable)
-void ui_label(const char* text, UiFont font, UiAlign align);
-
-// Draw a horizontal separator line
+void ui_label(const char* text, ui_font_t font, ui_align_t align);
 void ui_separator(void);
-
-// Draw a focusable button - returns true when activated
 bool ui_button(const char* text);
-
-// Draw a button at absolute position - returns true when activated
 bool ui_button_at(int16_t x, int16_t y, const char* text);
-
-// Draw a progress bar (value 0.0 to 1.0, width 0 = full layout width)
 void ui_progress(float value, int16_t width);
-
-// Draw an XBM-format icon
 void ui_icon(const uint8_t* data, uint8_t width, uint8_t height);
-
-// Draw a focusable checkbox - returns true when value changes
 bool ui_checkbox(const char* text, bool* checked);
 
 // ----------------------------------------------------------------------------
 // Menu System
 // ----------------------------------------------------------------------------
 
-// Begin a scrollable menu
-// scroll: pointer to scroll position (persists across frames)
-// visible: number of visible items
-// total: total number of items
 void ui_menu_begin(int16_t* scroll, int16_t visible, int16_t total);
-
-// Add a menu item - returns true when selected (OK pressed)
 bool ui_menu_item(const char* text, int16_t index);
-
-// Add a menu item with right-aligned value - returns true when selected
 bool ui_menu_item_value(const char* label, const char* value, int16_t index);
-
-// End menu and draw scrollbar
 void ui_menu_end(void);
 
 // ----------------------------------------------------------------------------
 // Footer Buttons (Fixed Position at Screen Bottom)
 // ----------------------------------------------------------------------------
 
-// Left footer button (Left arrow + text) - returns true on Left+Short
 bool ui_footer_left(const char* text);
-
-// Center footer button (OK + text) - returns true on OK+Short (if not focused elsewhere)
 bool ui_footer_center(const char* text);
-
-// Right footer button (Right arrow + text) - returns true on Right+Short
 bool ui_footer_right(const char* text);
 
 // ----------------------------------------------------------------------------
 // Focus Management
 // ----------------------------------------------------------------------------
 
-// Get current focus index (-1 if no focusable widgets)
 int16_t ui_get_focus(void);
-
-// Set focus to specific widget index
 void ui_set_focus(int16_t index);
-
-// Check if specific widget index is focused
 bool ui_is_focused(int16_t index);
 
 // ----------------------------------------------------------------------------
