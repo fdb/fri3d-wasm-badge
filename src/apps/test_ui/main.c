@@ -3,6 +3,7 @@
 // ============================================================================
 
 #include <frd.h>
+#include <app.h>
 #include <canvas.h>
 #include <input.h>
 #include <imgui.h>
@@ -297,15 +298,40 @@ void render(void) {
 // ----------------------------------------------------------------------------
 
 void on_input(input_key_t key, input_type_t type) {
-    // Convert input_key_t/input_type_t to ui_key_t/ui_input_type_t
     ui_key_t ui_key = (ui_key_t)key;
-    ui_input_type_t ui_type = (type == input_type_press) ? ui_input_short : ui_input_release;
+    ui_input_type_t ui_type = ui_input_press;
 
-    // Feed to IMGUI system
+    switch (type) {
+        case input_type_press:
+            ui_type = ui_input_press;
+            break;
+        case input_type_release:
+            ui_type = ui_input_release;
+            break;
+        case input_type_short_press:
+            ui_type = ui_input_short;
+            break;
+        case input_type_long_press:
+            ui_type = ui_input_long;
+            break;
+        case input_type_repeat:
+            ui_type = ui_input_repeat;
+            break;
+        default:
+            break;
+    }
+
     ui_input(ui_key, ui_type);
 
-    // Handle back to exit or change scene for demo
-    if (ui_back_pressed()) {
+    if (key == input_key_back && type == input_type_long_press) {
+        exit_to_launcher();
+        return;
+    }
+
+    // Handle back to exit or change scene for demo (only on short/repeat to avoid double steps)
+    if (key == input_key_back &&
+        (type == input_type_short_press || type == input_type_repeat) &&
+        ui_back_pressed()) {
         // In a real app, this would exit
         // For demo, cycle scenes backwards
         if (g_current_scene == 0) {

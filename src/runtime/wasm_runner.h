@@ -29,11 +29,18 @@ typedef struct {
     bool initialized;
 } wasm_runner_t;
 
+typedef void (*wasm_runner_exit_to_launcher_cb)(void* context);
+typedef void (*wasm_runner_start_app_cb)(uint32_t app_id, void* context);
+
 bool wasm_runner_init(wasm_runner_t* runner, size_t heap_size);
 void wasm_runner_deinit(wasm_runner_t* runner);
 
 void wasm_runner_set_canvas(wasm_runner_t* runner, canvas_t* canvas);
 void wasm_runner_set_random(wasm_runner_t* runner, random_t* random);
+void wasm_runner_set_app_callbacks(wasm_runner_t* runner,
+                                   wasm_runner_exit_to_launcher_cb exit_cb,
+                                   wasm_runner_start_app_cb start_cb,
+                                   void* context);
 
 bool wasm_runner_load_module(wasm_runner_t* runner, const char* path);
 bool wasm_runner_load_module_from_memory(wasm_runner_t* runner, const uint8_t* data, size_t size);

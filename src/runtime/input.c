@@ -24,8 +24,6 @@ void input_manager_update(input_manager_t* manager, input_handler_t* handler, ui
         return;
     }
 
-    manager->has_processed_event = false;
-
     input_handler_poll(handler);
 
     while (input_handler_has_event(handler)) {
@@ -39,13 +37,18 @@ void input_manager_update(input_manager_t* manager, input_handler_t* handler, ui
             manager->key_states[key_index].pressed = true;
             manager->key_states[key_index].press_time = time_ms;
             manager->key_states[key_index].long_press_fired = false;
+            manager->key_states[key_index].last_repeat_time = time_ms;
 
             input_manager_queue_event(manager, raw_event.key, input_type_press);
         } else if (raw_event.type == input_type_release) {
             if (manager->key_states[key_index].pressed) {
                 uint32_t hold_time = time_ms - manager->key_states[key_index].press_time;
-                if (!manager->key_states[key_index].long_press_fired && hold_time < INPUT_SHORT_PRESS_MAX_MS) {
-                    input_manager_queue_event(manager, raw_event.key, input_type_short_press);
+                if (!manager->key_states[key_index].long_press_fired) {
+                    if (hold_time >= INPUT_LONG_PRESS_MS) {
+                        input_manager_queue_event(manager, raw_event.key, input_type_long_press);
+                    } else {
+                        input_manager_queue_event(manager, raw_event.key, input_type_short_press);
+                    }
                 }
 
                 manager->key_states[key_index].pressed = false;
@@ -60,7 +63,16 @@ void input_manager_update(input_manager_t* manager, input_handler_t* handler, ui
             uint32_t hold_time = time_ms - manager->key_states[i].press_time;
             if (hold_time >= INPUT_LONG_PRESS_MS) {
                 manager->key_states[i].long_press_fired = true;
+                manager->key_states[i].last_repeat_time = time_ms;
                 input_manager_queue_event(manager, (input_key_t)i, input_type_long_press);
+            }
+        }
+
+        if (manager->key_states[i].pressed && manager->key_states[i].long_press_fired) {
+            uint32_t since_repeat = time_ms - manager->key_states[i].last_repeat_time;
+            if (since_repeat >= INPUT_REPEAT_INTERVAL_MS) {
+                manager->key_states[i].last_repeat_time = time_ms;
+                input_manager_queue_event(manager, (input_key_t)i, input_type_repeat);
             }
         }
     }
@@ -69,7 +81,7 @@ void input_manager_update(input_manager_t* manager, input_handler_t* handler, ui
 }
 
 bool input_manager_has_event(const input_manager_t* manager) {
-    return manager ? manager->has_processed_event : false;
+    return manager ? manager->queue_head != manager->queue_tail : false;
 }
 
 input_event_t input_manager_get_event(input_manager_t* manager) {
@@ -77,8 +89,11 @@ input_event_t input_manager_get_event(input_manager_t* manager) {
     if (!manager) {
         return event;
     }
-    manager->has_processed_event = false;
-    event = manager->processed_event;
+    if (manager->queue_head == manager->queue_tail) {
+        return event;
+    }
+    event = manager->event_queue[manager->queue_tail];
+    manager->queue_tail = (manager->queue_tail + 1) % INPUT_EVENT_QUEUE_SIZE;
     return event;
 }
 
@@ -104,7 +119,14 @@ static void input_manager_check_reset_combo(input_manager_t* manager, uint32_t t
 }
 
 static void input_manager_queue_event(input_manager_t* manager, input_key_t key, input_type_t type) {
-    manager->has_processed_event = true;
-    manager->processed_event.key = key;
-    manager->processed_event.type = type;
+    if (!manager) {
+        return;
+    }
+    size_t next_head = (manager->queue_head + 1) % INPUT_EVENT_QUEUE_SIZE;
+    if (next_head == manager->queue_tail) {
+        return;
+    }
+    manager->event_queue[manager->queue_head].key = key;
+    manager->event_queue[manager->queue_head].type = type;
+    manager->queue_head = next_head;
 }

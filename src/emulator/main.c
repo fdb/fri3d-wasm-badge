@@ -27,7 +27,7 @@ static void print_usage(const char* program) {
     fprintf(stderr, "  --screenshot <path> Save screenshot to path (PNG format)\n");
     fprintf(stderr, "  --headless          Run without display (requires --screenshot)\n");
     fprintf(stderr, "  --help              Show this help\n\n");
-    fprintf(stderr, "If no wasm_file is specified, shows the launcher with built-in apps.\n");
+    fprintf(stderr, "If no wasm_file is specified, runs the launcher.wasm app.\n");
 }
 
 static bool parse_args(int argc, char* argv[], options_t* options) {
@@ -104,6 +104,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    app_manager_set_launcher_path(&app_manager, "build/apps/launcher/launcher.wasm");
     app_manager_add_app(&app_manager, "Circles", "build/apps/circles/circles.wasm");
     app_manager_add_app(&app_manager, "Mandelbrot", "build/apps/mandelbrot/mandelbrot.wasm");
     app_manager_add_app(&app_manager, "Test Drawing", "build/apps/test_drawing/test_drawing.wasm");
@@ -116,6 +117,8 @@ int main(int argc, char* argv[]) {
             display_sdl_deinit(&display);
             return 1;
         }
+    } else {
+        app_manager_show_launcher(&app_manager);
     }
 
     if (options.test_mode || options.screenshot_path) {

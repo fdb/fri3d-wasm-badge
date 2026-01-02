@@ -17,12 +17,13 @@ typedef enum {
 #define INPUT_KEY_COUNT 6
 
 // Input event types
-// Short/long press are synthesized by the input manager
+// Short/long press and repeat are synthesized by the input manager
 typedef enum {
     input_type_press = 0,
     input_type_release = 1,
     input_type_short_press = 2,
     input_type_long_press = 3,
+    input_type_repeat = 4,
 } input_type_t;
 
 // Input event structure
@@ -32,9 +33,13 @@ typedef struct {
 } input_event_t;
 
 // Timing constants (in milliseconds)
-#define INPUT_SHORT_PRESS_MAX_MS 300
-#define INPUT_LONG_PRESS_MS 500
+#define INPUT_LONG_PRESS_MS 300
+#define INPUT_REPEAT_START_MS INPUT_LONG_PRESS_MS
+#define INPUT_REPEAT_INTERVAL_MS 150
 #define INPUT_RESET_COMBO_MS 500
+
+// Event queue size
+#define INPUT_EVENT_QUEUE_SIZE 16
 
 // Input handler interface
 // Implementations should fill in the function pointers and context.
@@ -55,10 +60,12 @@ typedef struct {
         bool pressed;
         uint32_t press_time;
         bool long_press_fired;
+        uint32_t last_repeat_time;
     } key_states[INPUT_KEY_COUNT];
 
-    bool has_processed_event;
-    input_event_t processed_event;
+    input_event_t event_queue[INPUT_EVENT_QUEUE_SIZE];
+    size_t queue_head;
+    size_t queue_tail;
 
     uint32_t combo_start_time;
     bool combo_active;
