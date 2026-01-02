@@ -2,3 +2,4 @@ build/
 build-apps/
 .DS_Store
 tests/visual/output/
+tests/trace/output/

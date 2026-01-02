@@ -1,6 +1,10 @@
 #include "input.h"
 #include <string.h>
 
+#ifdef FRD_TRACE
+#include "trace.h"
+#endif
+
 static void input_manager_check_reset_combo(input_manager_t* manager, uint32_t time_ms);
 static void input_manager_queue_event(input_manager_t* manager, input_key_t key, input_type_t type);
 
@@ -126,6 +130,10 @@ static void input_manager_queue_event(input_manager_t* manager, input_key_t key,
     if (next_head == manager->queue_tail) {
         return;
     }
+#ifdef FRD_TRACE
+    trace_arg_t args[] = { TRACE_ARG_INT((int32_t)key), TRACE_ARG_INT((int32_t)type) };
+    trace_call("input_event", args, 2);
+#endif
     manager->event_queue[manager->queue_head].key = key;
     manager->event_queue[manager->queue_head].type = type;
     manager->queue_head = next_head;

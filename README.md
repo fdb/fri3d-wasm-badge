@@ -83,6 +83,26 @@ uv run tests/visual/run_visual_tests.py
 uv run tests/visual/run_visual_tests.py --update-golden
 ```
 
+### Trace Integration Tests
+
+```bash
+# Build trace harness + WASM apps and run trace tests
+./build_trace_tests.sh
+```
+
+#### Updating Golden Traces
+
+Some specs use `expected_mode: "exact"` and compare against golden traces in
+`tests/trace/expected/<app>/<spec>.json`. To update them after intentional app changes:
+
+```bash
+# Run trace tests to generate new outputs
+./build_trace_tests.sh
+
+# Copy a specific trace to the expected location
+cp tests/trace/output/<app>/<spec>.json tests/trace/expected/<app>/<spec>.json
+```
+
 ## Project Structure
 
 ```

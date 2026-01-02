@@ -1,0 +1,12 @@
+{
+  "app": "mandelbrot",
+  "frames": 1,
+  "input": [
+    { "time_ms": 0, "key": "back", "type": "press" },
+    { "time_ms": 400, "key": "back", "type": "release" }
+  ],
+  "expected_mode": "contains",
+  "required": [
+    { "fn": "exit_to_launcher" }
+  ]
+}

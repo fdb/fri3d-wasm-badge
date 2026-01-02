@@ -1,0 +1,9 @@
+{
+  "app": "test_ui",
+  "frames": 1,
+  "scene": 0,
+  "expected_mode": "contains",
+  "min_calls": [
+    { "fn": "canvas_draw_str", "min": 3 }
+  ]
+}

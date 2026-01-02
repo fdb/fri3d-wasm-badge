@@ -1,0 +1,56 @@
+name: Trace Integration Tests
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  trace-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          cmake \
+          build-essential
+
+    - name: Setup Zig
+      uses: goto-bus-stop/setup-zig@v2
+      with:
+        version: 0.11.0
+
+    - name: Build trace harness
+      run: |
+        cmake -B build/trace -DBUILD_TRACE_TESTS=ON -DBUILD_EMULATOR=OFF
+        cmake --build build/trace
+
+    - name: Build WASM apps
+      run: |
+        for app in circles test_drawing mandelbrot test_ui; do
+          echo "Building $app..."
+          cmake -B build/apps/$app \
+            -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/toolchain-wasm.cmake \
+            -S src/apps/$app
+          cmake --build build/apps/$app
+        done
+
+    - name: Run trace tests
+      run: python3 tests/trace/run_trace_tests.py
+
+    - name: Upload trace outputs
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: trace-output
+        path: tests/trace/output/
+        retention-days: 7

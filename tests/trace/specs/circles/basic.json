@@ -1,0 +1,12 @@
+{
+  "app": "circles",
+  "frames": 1,
+  "seed": 42,
+  "expected_mode": "contains",
+  "required": [
+    { "fn": "canvas_set_color", "args": [1] }
+  ],
+  "min_calls": [
+    { "fn": "canvas_draw_circle", "min": 10 }
+  ]
+}
