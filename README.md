@@ -58,7 +58,7 @@ cmake --build build/apps/circles
 ### Running the Emulator
 
 ```bash
-# Show built-in launcher
+# Run launcher.wasm
 ./build/emulator/src/emulator/fri3d_emulator
 
 # Run a specific app

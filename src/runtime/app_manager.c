@@ -4,15 +4,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define APP_MANAGER_VISIBLE_ITEMS 4
-#define APP_MANAGER_ITEM_HEIGHT 14
-#define APP_MANAGER_START_Y 12
-#define APP_MANAGER_TEXT_X 16
-#define APP_MANAGER_CIRCLE_X 6
-#define APP_MANAGER_CIRCLE_RADIUS 3
-
-static void app_manager_render_launcher(app_manager_t* manager);
-static void app_manager_launcher_input(app_manager_t* manager, input_key_t key, input_type_t type);
+static void app_manager_render_launcher_error(app_manager_t* manager);
+static void app_manager_process_pending(app_manager_t* manager);
+static bool app_manager_launch_app_by_id(app_manager_t* manager, uint32_t app_id);
+static void app_manager_request_exit_to_launcher_cb(void* context);
+static void app_manager_request_start_app_cb(uint32_t app_id, void* context);
 
 static char* app_manager_strdup(const char* value) {
     if (!value) {
@@ -44,6 +40,9 @@ bool app_manager_init(app_manager_t* manager, canvas_t* canvas, random_t* random
     manager->canvas = canvas;
     manager->random = random;
     manager->in_launcher = true;
+    manager->launcher_path = NULL;
+    manager->pending_request = app_manager_request_none;
+    manager->pending_app_id = 0;
 
     if (!wasm_runner_init(&manager->wasm_runner, 10 * 1024 * 1024)) {
         app_manager_set_error(manager, wasm_runner_get_last_error(&manager->wasm_runner));
@@ -52,6 +51,10 @@ bool app_manager_init(app_manager_t* manager, canvas_t* canvas, random_t* random
 
     wasm_runner_set_canvas(&manager->wasm_runner, canvas);
     wasm_runner_set_random(&manager->wasm_runner, random);
+    wasm_runner_set_app_callbacks(&manager->wasm_runner,
+                                  app_manager_request_exit_to_launcher_cb,
+                                  app_manager_request_start_app_cb,
+                                  manager);
 
     return true;
 }
@@ -62,6 +65,8 @@ void app_manager_deinit(app_manager_t* manager) {
     }
 
     app_manager_clear_apps(manager);
+    free(manager->launcher_path);
+    manager->launcher_path = NULL;
     wasm_runner_deinit(&manager->wasm_runner);
 }
 
@@ -92,6 +97,7 @@ bool app_manager_add_app(app_manager_t* manager, const char* name, const char* p
 
     manager->apps[manager->app_count].name = name_copy;
     manager->apps[manager->app_count].path = path_copy;
+    manager->apps[manager->app_count].id = (uint32_t)(manager->app_count + 1);
     manager->app_count++;
 
     return true;
@@ -110,12 +116,21 @@ void app_manager_clear_apps(app_manager_t* manager) {
     manager->apps = NULL;
     manager->app_count = 0;
     manager->app_capacity = 0;
-    manager->selected_index = 0;
-    manager->scroll_offset = 0;
 }
 
-size_t app_manager_get_app_count(const app_manager_t* manager) {
-    return manager ? manager->app_count : 0;
+void app_manager_set_launcher_path(app_manager_t* manager, const char* path) {
+    if (!manager) {
+        return;
+    }
+
+    char* path_copy = app_manager_strdup(path);
+    if (path && !path_copy) {
+        app_manager_set_error(manager, "Failed to allocate launcher path");
+        return;
+    }
+
+    free(manager->launcher_path);
+    manager->launcher_path = path_copy;
 }
 
 void app_manager_show_launcher(app_manager_t* manager) {
@@ -124,19 +139,15 @@ void app_manager_show_launcher(app_manager_t* manager) {
     }
     wasm_runner_unload_module(&manager->wasm_runner);
     manager->in_launcher = true;
-}
 
-bool app_manager_launch_app(app_manager_t* manager, size_t index) {
-    if (!manager) {
-        return false;
+    if (!manager->launcher_path) {
+        app_manager_set_error(manager, "Launcher path not set");
+        return;
     }
 
-    if (index >= manager->app_count) {
-        app_manager_set_error(manager, "Invalid app index");
-        return false;
+    if (!wasm_runner_load_module(&manager->wasm_runner, manager->launcher_path)) {
+        app_manager_set_error(manager, wasm_runner_get_last_error(&manager->wasm_runner));
     }
-
-    return app_manager_launch_app_by_path(manager, manager->apps[index].path);
 }
 
 bool app_manager_launch_app_by_path(app_manager_t* manager, const char* path) {
@@ -153,27 +164,22 @@ bool app_manager_launch_app_by_path(app_manager_t* manager, const char* path) {
     return true;
 }
 
-bool app_manager_is_in_launcher(const app_manager_t* manager) {
-    return manager ? manager->in_launcher : true;
-}
-
-bool app_manager_is_app_running(const app_manager_t* manager) {
-    if (!manager) {
-        return false;
-    }
-    return !manager->in_launcher && wasm_runner_is_module_loaded(&manager->wasm_runner);
-}
-
 void app_manager_render(app_manager_t* manager) {
     if (!manager) {
         return;
     }
 
     if (manager->in_launcher) {
-        app_manager_render_launcher(manager);
+        if (wasm_runner_is_module_loaded(&manager->wasm_runner)) {
+            wasm_runner_call_render(&manager->wasm_runner);
+        } else {
+            app_manager_render_launcher_error(manager);
+        }
     } else {
         wasm_runner_call_render(&manager->wasm_runner);
     }
+
+    app_manager_process_pending(manager);
 }
 
 void app_manager_handle_input(app_manager_t* manager, input_key_t key, input_type_t type) {
@@ -181,13 +187,21 @@ void app_manager_handle_input(app_manager_t* manager, input_key_t key, input_typ
         return;
     }
 
+    if (!manager->in_launcher && key == input_key_back && type == input_type_short_press) {
+        app_manager_request_exit_to_launcher_cb(manager);
+        app_manager_process_pending(manager);
+        return;
+    }
+
     if (manager->in_launcher) {
-        app_manager_launcher_input(manager, key, type);
-    } else {
-        if (type == input_type_press || type == input_type_release) {
+        if (wasm_runner_is_module_loaded(&manager->wasm_runner)) {
             wasm_runner_call_on_input(&manager->wasm_runner, (uint32_t)key, (uint32_t)type);
         }
+    } else {
+        wasm_runner_call_on_input(&manager->wasm_runner, (uint32_t)key, (uint32_t)type);
     }
+
+    app_manager_process_pending(manager);
 }
 
 const char* app_manager_get_last_error(const app_manager_t* manager) {
@@ -198,7 +212,7 @@ wasm_runner_t* app_manager_get_wasm_runner(app_manager_t* manager) {
     return manager ? &manager->wasm_runner : NULL;
 }
 
-static void app_manager_render_launcher(app_manager_t* manager) {
+static void app_manager_render_launcher_error(app_manager_t* manager) {
     if (!manager || !manager->canvas) {
         return;
     }
@@ -206,75 +220,60 @@ static void app_manager_render_launcher(app_manager_t* manager) {
     canvas_clear(manager->canvas);
     canvas_set_color(manager->canvas, ColorBlack);
     canvas_set_font(manager->canvas, FontPrimary);
+    canvas_draw_str(manager->canvas, 2, 12, "Error loading launcher");
+}
 
-    canvas_draw_str(manager->canvas, 2, 10, "Fri3d Apps");
-    canvas_draw_line(manager->canvas, 0, 12, 127, 12);
+static bool app_manager_launch_app_by_id(app_manager_t* manager, uint32_t app_id) {
+    if (!manager) {
+        return false;
+    }
 
-    if (manager->app_count == 0) {
-        canvas_draw_str(manager->canvas, 2, 30, "No apps found");
+    if (app_id == 0) {
+        app_manager_show_launcher(manager);
+        return true;
+    }
+
+    for (size_t i = 0; i < manager->app_count; i++) {
+        if (manager->apps[i].id == app_id) {
+            return app_manager_launch_app_by_path(manager, manager->apps[i].path);
+        }
+    }
+
+    app_manager_set_error(manager, "Invalid app id");
+    return false;
+}
+
+static void app_manager_process_pending(app_manager_t* manager) {
+    if (!manager || manager->pending_request == app_manager_request_none) {
         return;
     }
 
-    size_t start_idx = manager->scroll_offset;
-    size_t end_idx = start_idx + APP_MANAGER_VISIBLE_ITEMS;
-    if (end_idx > manager->app_count) {
-        end_idx = manager->app_count;
-    }
+    app_manager_request_t request = manager->pending_request;
+    uint32_t app_id = manager->pending_app_id;
 
-    for (size_t i = start_idx; i < end_idx; i++) {
-        int y = APP_MANAGER_START_Y + (int)((i - start_idx) + 1) * APP_MANAGER_ITEM_HEIGHT;
+    manager->pending_request = app_manager_request_none;
+    manager->pending_app_id = 0;
 
-        if (i == manager->selected_index) {
-            canvas_draw_disc(manager->canvas, APP_MANAGER_CIRCLE_X, y - 3, APP_MANAGER_CIRCLE_RADIUS);
-        } else {
-            canvas_draw_circle(manager->canvas, APP_MANAGER_CIRCLE_X, y - 3, APP_MANAGER_CIRCLE_RADIUS);
-        }
-
-        canvas_draw_str(manager->canvas, APP_MANAGER_TEXT_X, y, manager->apps[i].name);
-    }
-
-    if (manager->scroll_offset > 0) {
-        canvas_draw_str(manager->canvas, 120, 20, "^");
-    }
-    if (end_idx < manager->app_count) {
-        canvas_draw_str(manager->canvas, 120, 60, "v");
+    if (request == app_manager_request_exit_to_launcher) {
+        app_manager_show_launcher(manager);
+    } else if (request == app_manager_request_start_app) {
+        app_manager_launch_app_by_id(manager, app_id);
     }
 }
 
-static void app_manager_launcher_input(app_manager_t* manager, input_key_t key, input_type_t type) {
+static void app_manager_request_exit_to_launcher_cb(void* context) {
+    app_manager_t* manager = (app_manager_t*)context;
     if (!manager) {
         return;
     }
+    manager->pending_request = app_manager_request_exit_to_launcher;
+}
 
-    if (type != input_type_press && type != input_type_short_press) {
+static void app_manager_request_start_app_cb(uint32_t app_id, void* context) {
+    app_manager_t* manager = (app_manager_t*)context;
+    if (!manager) {
         return;
     }
-
-    if (manager->app_count == 0) {
-        return;
-    }
-
-    switch (key) {
-        case input_key_up:
-            if (manager->selected_index > 0) {
-                manager->selected_index--;
-                if (manager->selected_index < manager->scroll_offset) {
-                    manager->scroll_offset = manager->selected_index;
-                }
-            }
-            break;
-        case input_key_down:
-            if (manager->selected_index + 1 < manager->app_count) {
-                manager->selected_index++;
-                if (manager->selected_index >= manager->scroll_offset + APP_MANAGER_VISIBLE_ITEMS) {
-                    manager->scroll_offset = manager->selected_index - APP_MANAGER_VISIBLE_ITEMS + 1;
-                }
-            }
-            break;
-        case input_key_ok:
-            app_manager_launch_app(manager, manager->selected_index);
-            break;
-        default:
-            break;
-    }
+    manager->pending_request = app_manager_request_start_app;
+    manager->pending_app_id = app_id;
 }

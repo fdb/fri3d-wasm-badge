@@ -14,4 +14,6 @@ typedef enum {
 typedef enum {
     input_type_press = 0,
     input_type_release = 1,
+    input_type_short_press = 2,
+    input_type_long_press = 3,
 } input_type_t;
