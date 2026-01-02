@@ -32,7 +32,7 @@ static bool mandelbrot_pixel(int x, int y) {
 }
 
 void render(void) {
-    canvas_set_color(color_black);
+    canvas_set_color(ColorBlack);
 
     for (int y = 0; y < 64; y++) {
         for (int x = 0; x < 128; x++) {

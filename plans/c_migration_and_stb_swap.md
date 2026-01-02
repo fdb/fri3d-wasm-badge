@@ -18,7 +18,7 @@ Move the project from mixed C/C++ to C-only with consistent snake_case naming, a
 3) Normalize naming to snake_case\n\
    - Update runtime/public APIs to `snake_case` types and functions.\n\
    - Update SDK headers (canvas/input/imgui/random) to match.\n\
-   - Update in-tree apps to use the new enum/type names (e.g. `color_black`, `input_key_up`, `input_type_press`).
+   - Update in-tree apps to use the new enum/type names (e.g. `ColorBlack`, `input_key_up`, `input_type_press`).
 
 4) Update build system for C-only\n\
    - Adjust `CMakeLists.txt` to `project(... C)` and set C standard.\n\

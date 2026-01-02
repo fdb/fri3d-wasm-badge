@@ -14,7 +14,7 @@
 #define UI_MAX_FOCUSABLE 32
 #define UI_MAX_DEFERRED 16
 #define UI_FONT_HEIGHT_PRIMARY 12
-#define UI_FONT_HEIGHT_SECONDARY 10
+#define UI_FONT_HEIGHT_SECONDARY 11
 #define UI_BUTTON_PADDING_X 4
 #define UI_BUTTON_PADDING_Y 2
 #define UI_MENU_ITEM_HEIGHT 12
@@ -94,11 +94,11 @@ static ui_context_t g_ctx = {0};
 // Internal Helpers
 // ----------------------------------------------------------------------------
 
-static int16_t ui_get_font_height(ui_font_t font) {
+static int16_t ui_get_font_height(Font font) {
     switch (font) {
-        case ui_font_primary:
+        case FontPrimary:
             return UI_FONT_HEIGHT_PRIMARY;
-        case ui_font_secondary:
+        case FontSecondary:
         default:
             return UI_FONT_HEIGHT_SECONDARY;
     }
@@ -161,14 +161,14 @@ static bool ui_in_centered_hstack(void) {
 }
 
 static void ui_draw_button_internal(int16_t x, int16_t y, int16_t w, int16_t h, const char* text, bool focused) {
-    canvas_set_font(font_secondary);
+    canvas_set_font(FontSecondary);
     if (focused) {
-        canvas_set_color(color_black);
+        canvas_set_color(ColorBlack);
         canvas_draw_rbox(x, y, w, h, 2);
-        canvas_set_color(color_white);
+        canvas_set_color(ColorWhite);
         canvas_draw_str(x + UI_BUTTON_PADDING_X, y + h - UI_BUTTON_PADDING_Y, text);
     } else {
-        canvas_set_color(color_black);
+        canvas_set_color(ColorBlack);
         canvas_draw_rframe(x, y, w, h, 2);
         canvas_draw_str(x + UI_BUTTON_PADDING_X, y + h - UI_BUTTON_PADDING_Y, text);
     }
@@ -414,27 +414,27 @@ void ui_set_position(int16_t x, int16_t y) {
 // Basic Widgets
 // ----------------------------------------------------------------------------
 
-void ui_label(const char* text, ui_font_t font, ui_align_t align) {
+void ui_label(const char* text, Font font, Align align) {
     int16_t font_height = ui_get_font_height(font);
     int16_t x, y, w;
     ui_layout_next(0, font_height, &x, &y, &w);
 
     // Set font
-    canvas_set_font((font_t)font);
-    canvas_set_color(color_black);
+    canvas_set_font(font);
+    canvas_set_color(ColorBlack);
 
     // Calculate text position based on alignment
     int16_t text_x;
     uint32_t text_width = canvas_string_width(text);
 
     switch (align) {
-        case ui_align_center:
+        case AlignCenter:
             text_x = x + (w - (int16_t)text_width) / 2;
             break;
-        case ui_align_right:
+        case AlignRight:
             text_x = x + w - (int16_t)text_width;
             break;
-        case ui_align_left:
+        case AlignLeft:
         default:
             text_x = x;
             break;
@@ -448,12 +448,12 @@ void ui_separator(void) {
     int16_t x, y, w;
     ui_layout_next(0, 5, &x, &y, &w);
 
-    canvas_set_color(color_black);
+    canvas_set_color(ColorBlack);
     canvas_draw_line(x, y + 2, x + w - 1, y + 2);
 }
 
 bool ui_button(const char* text) {
-    canvas_set_font(font_secondary);
+    canvas_set_font(FontSecondary);
     uint32_t text_width = canvas_string_width(text);
 
     int16_t btn_width = (int16_t)text_width + UI_BUTTON_PADDING_X * 2;
@@ -506,7 +506,7 @@ void ui_progress(float value, int16_t width) {
     int16_t bar_x = x + (w - bar_width) / 2;
 
     // Draw outline
-    canvas_set_color(color_black);
+    canvas_set_color(ColorBlack);
     canvas_draw_frame(bar_x, y, bar_width, bar_height);
 
     // Draw filled portion
@@ -524,7 +524,7 @@ void ui_icon(const uint8_t* data, uint8_t width, uint8_t height) {
     int16_t icon_x = x + (w - width) / 2;
 
     // Draw XBM icon pixel by pixel
-    canvas_set_color(color_black);
+    canvas_set_color(ColorBlack);
     for (uint8_t iy = 0; iy < height; iy++) {
         for (uint8_t ix = 0; ix < width; ix++) {
             uint16_t byte_idx = (iy * ((width + 7) / 8)) + (ix / 8);
@@ -537,7 +537,7 @@ void ui_icon(const uint8_t* data, uint8_t width, uint8_t height) {
 }
 
 bool ui_checkbox(const char* text, bool* checked) {
-    canvas_set_font(font_secondary);
+    canvas_set_font(FontSecondary);
 
     int16_t box_size = 10;
     int16_t item_height = UI_FONT_HEIGHT_SECONDARY + 2;
@@ -560,12 +560,12 @@ bool ui_checkbox(const char* text, bool* checked) {
     int16_t box_x = x + 2;
     int16_t box_y = y + (item_height - box_size) / 2;
 
-    canvas_set_color(color_black);
+    canvas_set_color(ColorBlack);
 
     if (focused) {
         // Focused: filled background
         canvas_draw_box(x, y, w, item_height);
-        canvas_set_color(color_white);
+        canvas_set_color(ColorWhite);
     }
 
     // Draw checkbox outline
@@ -625,7 +625,7 @@ bool ui_menu_item(const char* text, int16_t index) {
         return false;
     }
 
-    canvas_set_font(font_secondary);
+    canvas_set_font(FontSecondary);
 
     // Calculate position within visible area
     int16_t visible_index = index - scroll;
@@ -635,12 +635,12 @@ bool ui_menu_item(const char* text, int16_t index) {
     int16_t item_width = UI_SCREEN_WIDTH - UI_SCROLLBAR_WIDTH - 2;
 
     // Draw item
-    canvas_set_color(color_black);
+    canvas_set_color(ColorBlack);
 
     if (focused) {
         // Focused: filled background with inverted text
         canvas_draw_box(0, y, item_width, UI_MENU_ITEM_HEIGHT);
-        canvas_set_color(color_white);
+        canvas_set_color(ColorWhite);
     }
 
     canvas_draw_str(2, y + UI_MENU_ITEM_HEIGHT - 2, text);
@@ -674,7 +674,7 @@ bool ui_menu_item_value(const char* label, const char* value, int16_t index) {
         return false;
     }
 
-    canvas_set_font(font_secondary);
+    canvas_set_font(FontSecondary);
 
     // Calculate position within visible area
     int16_t visible_index = index - scroll;
@@ -684,12 +684,12 @@ bool ui_menu_item_value(const char* label, const char* value, int16_t index) {
     int16_t item_width = UI_SCREEN_WIDTH - UI_SCROLLBAR_WIDTH - 2;
 
     // Draw item
-    canvas_set_color(color_black);
+    canvas_set_color(ColorBlack);
 
     if (focused) {
         // Focused: filled background with inverted text
         canvas_draw_box(0, y, item_width, UI_MENU_ITEM_HEIGHT);
-        canvas_set_color(color_white);
+        canvas_set_color(ColorWhite);
     }
 
     // Draw label on left
@@ -718,7 +718,7 @@ void ui_menu_end(void) {
         int16_t thumb_y = g_ctx.menu.y_start +
             ((scrollbar_height - thumb_height) * scroll) / (g_ctx.menu.total - g_ctx.menu.visible);
 
-        canvas_set_color(color_black);
+        canvas_set_color(ColorBlack);
 
         // Draw dotted track line
         for (int16_t y = g_ctx.menu.y_start; y < g_ctx.menu.y_start + scrollbar_height; y += 2) {
@@ -747,11 +747,11 @@ void ui_menu_end(void) {
 // ----------------------------------------------------------------------------
 
 bool ui_footer_left(const char* text) {
-    canvas_set_font(font_secondary);
+    canvas_set_font(FontSecondary);
 
     int16_t y = UI_SCREEN_HEIGHT - UI_FOOTER_HEIGHT;
 
-    canvas_set_color(color_black);
+    canvas_set_color(ColorBlack);
 
     // Draw left arrow
     canvas_draw_line(2, y + 5, 6, y + 2);
@@ -767,7 +767,7 @@ bool ui_footer_left(const char* text) {
 }
 
 bool ui_footer_center(const char* text) {
-    canvas_set_font(font_secondary);
+    canvas_set_font(FontSecondary);
 
     int16_t y = UI_SCREEN_HEIGHT - UI_FOOTER_HEIGHT;
 
@@ -776,7 +776,7 @@ bool ui_footer_center(const char* text) {
     int16_t total_width = (int16_t)text_width + 12;  // text + OK symbol + spacing
     int16_t x = (UI_SCREEN_WIDTH - total_width) / 2;
 
-    canvas_set_color(color_black);
+    canvas_set_color(ColorBlack);
 
     // Draw OK symbol (small filled circle)
     canvas_draw_disc(x + 4, y + 5, 3);
@@ -790,7 +790,7 @@ bool ui_footer_center(const char* text) {
 }
 
 bool ui_footer_right(const char* text) {
-    canvas_set_font(font_secondary);
+    canvas_set_font(FontSecondary);
 
     int16_t y = UI_SCREEN_HEIGHT - UI_FOOTER_HEIGHT;
 
@@ -798,7 +798,7 @@ bool ui_footer_right(const char* text) {
     uint32_t text_width = canvas_string_width(text);
     int16_t x = UI_SCREEN_WIDTH - (int16_t)text_width - 10;
 
-    canvas_set_color(color_black);
+    canvas_set_color(ColorBlack);
 
     // Draw text
     canvas_draw_str(x, y + UI_FOOTER_HEIGHT - 2, text);

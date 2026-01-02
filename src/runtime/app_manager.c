@@ -204,8 +204,8 @@ static void app_manager_render_launcher(app_manager_t* manager) {
     }
 
     canvas_clear(manager->canvas);
-    canvas_set_color(manager->canvas, color_black);
-    canvas_set_font(manager->canvas, font_primary);
+    canvas_set_color(manager->canvas, ColorBlack);
+    canvas_set_font(manager->canvas, FontPrimary);
 
     canvas_draw_str(manager->canvas, 2, 10, "Fri3d Apps");
     canvas_draw_line(manager->canvas, 0, 12, 127, 12);
