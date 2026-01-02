@@ -1,4 +1,5 @@
 #include "wasm_runner.h"
+#include "trace.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,6 +21,7 @@ static void wasm_runner_lookup_functions(wasm_runner_t* runner);
 
 static void native_canvas_clear(wasm_exec_env_t exec_env) {
     (void)exec_env;
+    trace_call("canvas_clear", NULL, 0);
     if (g_canvas) {
         canvas_clear(g_canvas);
     }
@@ -27,16 +29,24 @@ static void native_canvas_clear(wasm_exec_env_t exec_env) {
 
 static uint32_t native_canvas_width(wasm_exec_env_t exec_env) {
     (void)exec_env;
-    return g_canvas ? canvas_width(g_canvas) : 0;
+    trace_call("canvas_width", NULL, 0);
+    uint32_t result = g_canvas ? canvas_width(g_canvas) : 0;
+    trace_result((int64_t)result);
+    return result;
 }
 
 static uint32_t native_canvas_height(wasm_exec_env_t exec_env) {
     (void)exec_env;
-    return g_canvas ? canvas_height(g_canvas) : 0;
+    trace_call("canvas_height", NULL, 0);
+    uint32_t result = g_canvas ? canvas_height(g_canvas) : 0;
+    trace_result((int64_t)result);
+    return result;
 }
 
 static void native_canvas_set_color(wasm_exec_env_t exec_env, uint32_t color) {
     (void)exec_env;
+    trace_arg_t args[] = { TRACE_ARG_INT(color) };
+    trace_call("canvas_set_color", args, 1);
     if (g_canvas) {
         canvas_set_color(g_canvas, (Color)color);
     }
@@ -44,6 +54,8 @@ static void native_canvas_set_color(wasm_exec_env_t exec_env, uint32_t color) {
 
 static void native_canvas_set_font(wasm_exec_env_t exec_env, uint32_t font) {
     (void)exec_env;
+    trace_arg_t args[] = { TRACE_ARG_INT(font) };
+    trace_call("canvas_set_font", args, 1);
     if (g_canvas) {
         canvas_set_font(g_canvas, (Font)font);
     }
@@ -51,6 +63,8 @@ static void native_canvas_set_font(wasm_exec_env_t exec_env, uint32_t font) {
 
 static void native_canvas_draw_dot(wasm_exec_env_t exec_env, int32_t x, int32_t y) {
     (void)exec_env;
+    trace_arg_t args[] = { TRACE_ARG_INT(x), TRACE_ARG_INT(y) };
+    trace_call("canvas_draw_dot", args, 2);
     if (g_canvas) {
         canvas_draw_dot(g_canvas, x, y);
     }
@@ -58,6 +72,8 @@ static void native_canvas_draw_dot(wasm_exec_env_t exec_env, int32_t x, int32_t 
 
 static void native_canvas_draw_line(wasm_exec_env_t exec_env, int32_t x1, int32_t y1, int32_t x2, int32_t y2) {
     (void)exec_env;
+    trace_arg_t args[] = { TRACE_ARG_INT(x1), TRACE_ARG_INT(y1), TRACE_ARG_INT(x2), TRACE_ARG_INT(y2) };
+    trace_call("canvas_draw_line", args, 4);
     if (g_canvas) {
         canvas_draw_line(g_canvas, x1, y1, x2, y2);
     }
@@ -65,6 +81,8 @@ static void native_canvas_draw_line(wasm_exec_env_t exec_env, int32_t x1, int32_
 
 static void native_canvas_draw_frame(wasm_exec_env_t exec_env, int32_t x, int32_t y, uint32_t width, uint32_t height) {
     (void)exec_env;
+    trace_arg_t args[] = { TRACE_ARG_INT(x), TRACE_ARG_INT(y), TRACE_ARG_INT(width), TRACE_ARG_INT(height) };
+    trace_call("canvas_draw_frame", args, 4);
     if (g_canvas) {
         canvas_draw_frame(g_canvas, x, y, width, height);
     }
@@ -72,6 +90,8 @@ static void native_canvas_draw_frame(wasm_exec_env_t exec_env, int32_t x, int32_
 
 static void native_canvas_draw_box(wasm_exec_env_t exec_env, int32_t x, int32_t y, uint32_t width, uint32_t height) {
     (void)exec_env;
+    trace_arg_t args[] = { TRACE_ARG_INT(x), TRACE_ARG_INT(y), TRACE_ARG_INT(width), TRACE_ARG_INT(height) };
+    trace_call("canvas_draw_box", args, 4);
     if (g_canvas) {
         canvas_draw_box(g_canvas, x, y, width, height);
     }
@@ -79,6 +99,8 @@ static void native_canvas_draw_box(wasm_exec_env_t exec_env, int32_t x, int32_t 
 
 static void native_canvas_draw_rframe(wasm_exec_env_t exec_env, int32_t x, int32_t y, uint32_t width, uint32_t height, uint32_t radius) {
     (void)exec_env;
+    trace_arg_t args[] = { TRACE_ARG_INT(x), TRACE_ARG_INT(y), TRACE_ARG_INT(width), TRACE_ARG_INT(height), TRACE_ARG_INT(radius) };
+    trace_call("canvas_draw_rframe", args, 5);
     if (g_canvas) {
         canvas_draw_rframe(g_canvas, x, y, width, height, radius);
     }
@@ -86,6 +108,8 @@ static void native_canvas_draw_rframe(wasm_exec_env_t exec_env, int32_t x, int32
 
 static void native_canvas_draw_rbox(wasm_exec_env_t exec_env, int32_t x, int32_t y, uint32_t width, uint32_t height, uint32_t radius) {
     (void)exec_env;
+    trace_arg_t args[] = { TRACE_ARG_INT(x), TRACE_ARG_INT(y), TRACE_ARG_INT(width), TRACE_ARG_INT(height), TRACE_ARG_INT(radius) };
+    trace_call("canvas_draw_rbox", args, 5);
     if (g_canvas) {
         canvas_draw_rbox(g_canvas, x, y, width, height, radius);
     }
@@ -93,6 +117,8 @@ static void native_canvas_draw_rbox(wasm_exec_env_t exec_env, int32_t x, int32_t
 
 static void native_canvas_draw_circle(wasm_exec_env_t exec_env, int32_t x, int32_t y, uint32_t radius) {
     (void)exec_env;
+    trace_arg_t args[] = { TRACE_ARG_INT(x), TRACE_ARG_INT(y), TRACE_ARG_INT(radius) };
+    trace_call("canvas_draw_circle", args, 3);
     if (g_canvas) {
         canvas_draw_circle(g_canvas, x, y, radius);
     }
@@ -100,6 +126,8 @@ static void native_canvas_draw_circle(wasm_exec_env_t exec_env, int32_t x, int32
 
 static void native_canvas_draw_disc(wasm_exec_env_t exec_env, int32_t x, int32_t y, uint32_t radius) {
     (void)exec_env;
+    trace_arg_t args[] = { TRACE_ARG_INT(x), TRACE_ARG_INT(y), TRACE_ARG_INT(radius) };
+    trace_call("canvas_draw_disc", args, 3);
     if (g_canvas) {
         canvas_draw_disc(g_canvas, x, y, radius);
     }
@@ -107,6 +135,8 @@ static void native_canvas_draw_disc(wasm_exec_env_t exec_env, int32_t x, int32_t
 
 static void native_canvas_draw_str(wasm_exec_env_t exec_env, int32_t x, int32_t y, const char* str) {
     (void)exec_env;
+    trace_arg_t args[] = { TRACE_ARG_INT(x), TRACE_ARG_INT(y), TRACE_ARG_STR(str) };
+    trace_call("canvas_draw_str", args, 3);
     if (g_canvas) {
         canvas_draw_str(g_canvas, x, y, str);
     }
@@ -114,11 +144,17 @@ static void native_canvas_draw_str(wasm_exec_env_t exec_env, int32_t x, int32_t 
 
 static uint32_t native_canvas_string_width(wasm_exec_env_t exec_env, const char* str) {
     (void)exec_env;
-    return g_canvas ? canvas_string_width(g_canvas, str) : 0;
+    trace_arg_t args[] = { TRACE_ARG_STR(str) };
+    trace_call("canvas_string_width", args, 1);
+    uint32_t result = g_canvas ? canvas_string_width(g_canvas, str) : 0;
+    trace_result((int64_t)result);
+    return result;
 }
 
 static void native_random_seed(wasm_exec_env_t exec_env, uint32_t seed) {
     (void)exec_env;
+    trace_arg_t args[] = { TRACE_ARG_INT(seed) };
+    trace_call("random_seed", args, 1);
     if (g_random) {
         random_seed(g_random, seed);
     }
@@ -126,16 +162,24 @@ static void native_random_seed(wasm_exec_env_t exec_env, uint32_t seed) {
 
 static uint32_t native_random_get(wasm_exec_env_t exec_env) {
     (void)exec_env;
-    return g_random ? random_get(g_random) : 0;
+    trace_call("random_get", NULL, 0);
+    uint32_t result = g_random ? random_get(g_random) : 0;
+    trace_result((int64_t)result);
+    return result;
 }
 
 static uint32_t native_random_range(wasm_exec_env_t exec_env, uint32_t max) {
     (void)exec_env;
-    return g_random ? random_range(g_random, max) : 0;
+    trace_arg_t args[] = { TRACE_ARG_INT(max) };
+    trace_call("random_range", args, 1);
+    uint32_t result = g_random ? random_range(g_random, max) : 0;
+    trace_result((int64_t)result);
+    return result;
 }
 
 static void native_exit_to_launcher(wasm_exec_env_t exec_env) {
     (void)exec_env;
+    trace_call("exit_to_launcher", NULL, 0);
     if (g_exit_to_launcher_cb) {
         g_exit_to_launcher_cb(g_app_callback_context);
     }
@@ -143,6 +187,8 @@ static void native_exit_to_launcher(wasm_exec_env_t exec_env) {
 
 static void native_start_app(wasm_exec_env_t exec_env, uint32_t app_id) {
     (void)exec_env;
+    trace_arg_t args[] = { TRACE_ARG_INT(app_id) };
+    trace_call("start_app", args, 1);
     if (g_start_app_cb) {
         g_start_app_cb(app_id, g_app_callback_context);
     }
@@ -418,8 +464,11 @@ void wasm_runner_call_on_input(wasm_runner_t* runner, uint32_t key, uint32_t typ
         return;
     }
 
-    uint32_t args[2] = { key, type };
-    wasm_runtime_call_wasm(runner->exec_env, runner->func_on_input, 2, args);
+    trace_arg_t trace_args[2] = { TRACE_ARG_INT(key), TRACE_ARG_INT(type) };
+    trace_call("on_input", trace_args, 2);
+
+    uint32_t call_args[2] = { key, type };
+    wasm_runtime_call_wasm(runner->exec_env, runner->func_on_input, 2, call_args);
 
     if (wasm_runtime_get_exception(runner->module_inst)) {
         fprintf(stderr, "WASM Exception in on_input: %s\n",

@@ -60,6 +60,24 @@ uv run tests/visual/run_visual_tests.py
 uv run tests/visual/run_visual_tests.py --update-golden
 ```
 
+### Trace Integration Tests
+
+Run this after changes that could affect runtime behavior to avoid regressions:
+
+```bash
+./build_trace_tests.sh
+```
+
+#### Updating Golden Traces
+
+Specs using `expected_mode: "exact"` compare against
+`tests/trace/expected/<app>/<spec>.json`. After intentional changes:
+
+```bash
+./build_trace_tests.sh
+cp tests/trace/output/<app>/<spec>.json tests/trace/expected/<app>/<spec>.json
+```
+
 ### CI Note (New Apps)
 
 If you add a new app with visual tests, also update the CI build list in

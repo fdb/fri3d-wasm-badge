@@ -7,6 +7,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 # Build options
 option(BUILD_EMULATOR "Build the desktop SDL emulator" ON)
 option(BUILD_WEB "Build the web/Emscripten version" OFF)
+option(BUILD_TRACE_TESTS "Build trace test harness" OFF)
 
 # ============================================================================
 # External Libraries
@@ -49,6 +50,11 @@ endif()
 
 if(BUILD_WEB)
     add_subdirectory(src/web)
+endif()
+
+if(BUILD_TRACE_TESTS)
+    target_compile_definitions(fri3d_runtime PUBLIC FRD_TRACE)
+    add_subdirectory(tests/trace/harness)
 endif()
 
 # Note: WASM apps are built separately with a WASM toolchain

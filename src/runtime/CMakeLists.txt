@@ -22,6 +22,7 @@ else()
         input.c
         random.c
         wasm_runner.c
+        trace.c
         app_manager.c
     )
 
