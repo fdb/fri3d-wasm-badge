@@ -14,7 +14,7 @@ uint32_t get_scene_count(void) { return 1; }
 void render(void) {
     // Use same seed each frame for consistent circles
     random_seed(g_seed);
-    canvas_set_color(ColorBlack);
+    canvas_set_color(color_black);
 
     // Draw 10 random circles
     for (int i = 0; i < 10; i++) {
@@ -26,8 +26,8 @@ void render(void) {
 }
 
 // Called by host for input events
-void on_input(InputKey key, InputType type) {
-    if (type == InputTypePress && key == InputKeyOk) {
+void on_input(input_key_t key, input_type_t type) {
+    if (type == input_type_press && key == input_key_ok) {
         // Generate new random seed for new circles
         g_seed = random_get();
     }

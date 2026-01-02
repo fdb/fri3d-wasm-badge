@@ -296,10 +296,10 @@ void render(void) {
 // Input handling
 // ----------------------------------------------------------------------------
 
-void on_input(InputKey key, InputType type) {
-    // Convert InputKey/InputType to UiKey/UiInputType
-    UiKey ui_key = (UiKey)key;
-    UiInputType ui_type = (type == InputTypePress) ? UI_INPUT_SHORT : UI_INPUT_RELEASE;
+void on_input(input_key_t key, input_type_t type) {
+    // Convert input_key_t/input_type_t to ui_key_t/ui_input_type_t
+    ui_key_t ui_key = (ui_key_t)key;
+    ui_input_type_t ui_type = (type == input_type_press) ? ui_input_short : ui_input_release;
 
     // Feed to IMGUI system
     ui_input(ui_key, ui_type);
@@ -317,13 +317,13 @@ void on_input(InputKey key, InputType type) {
     }
 
     // Additional scene-specific input handling
-    if (type == InputTypePress) {
+    if (type == input_type_press) {
         // Brightness adjustment in menu scene
         if (g_current_scene == SCENE_MENU && ui_get_focus() == 0) {
-            if (key == InputKeyLeft && g_brightness > 0) {
+            if (key == input_key_left && g_brightness > 0) {
                 g_brightness--;
             }
-            if (key == InputKeyRight && g_brightness < 10) {
+            if (key == input_key_right && g_brightness < 10) {
                 g_brightness++;
             }
         }

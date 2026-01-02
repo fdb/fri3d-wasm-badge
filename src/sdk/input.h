@@ -3,15 +3,15 @@
 #include <stdint.h>
 
 typedef enum {
-    InputKeyUp = 0,
-    InputKeyDown = 1,
-    InputKeyLeft = 2,
-    InputKeyRight = 3,
-    InputKeyOk = 4,      // A button / Enter / Z
-    InputKeyBack = 5,    // B button / Backspace / X
-} InputKey;
+    input_key_up = 0,
+    input_key_down = 1,
+    input_key_left = 2,
+    input_key_right = 3,
+    input_key_ok = 4,
+    input_key_back = 5,
+} input_key_t;
 
 typedef enum {
-    InputTypePress = 0,
-    InputTypeRelease = 1,
-} InputType;
+    input_type_press = 0,
+    input_type_release = 1,
+} input_type_t;

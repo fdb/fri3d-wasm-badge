@@ -1,133 +1,54 @@
 #pragma once
 
+#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
 #include <wasm_export.h>
-#include <cstdint>
-#include <string>
-#include <vector>
 
-namespace fri3d {
+#include "canvas.h"
+#include "random.h"
 
-// Forward declarations
-class Canvas;
-class Random;
+typedef struct {
+    uint8_t* heap_buffer;
+    size_t heap_size;
+    wasm_module_t module;
+    wasm_module_inst_t module_inst;
+    wasm_exec_env_t exec_env;
 
-/**
- * WASM module runner using WAMR (WebAssembly Micro Runtime).
- * Handles module loading, native function registration, and execution.
- */
-class WasmRunner {
-public:
-    WasmRunner();
-    ~WasmRunner();
+    wasm_function_inst_t func_render;
+    wasm_function_inst_t func_on_input;
+    wasm_function_inst_t func_set_scene;
+    wasm_function_inst_t func_get_scene;
+    wasm_function_inst_t func_get_scene_count;
 
-    /**
-     * Initialize the WAMR runtime.
-     * Must be called once before loading any modules.
-     * @param heapSize Size of the WAMR heap in bytes
-     * @return true on success
-     */
-    bool init(size_t heapSize = 10 * 1024 * 1024);
+    canvas_t* canvas;
+    random_t* random;
 
-    /**
-     * Set the canvas and random instances for native functions.
-     * Must be called before loading a module.
-     */
-    void setCanvas(Canvas* canvas);
-    void setRandom(Random* random);
+    char last_error[256];
+    char error_buffer[256];
+    bool initialized;
+} wasm_runner_t;
 
-    /**
-     * Load and instantiate a WASM module from file.
-     * Unloads any previously loaded module.
-     * @param path Path to the .wasm file
-     * @return true on success
-     */
-    bool loadModule(const std::string& path);
+bool wasm_runner_init(wasm_runner_t* runner, size_t heap_size);
+void wasm_runner_deinit(wasm_runner_t* runner);
 
-    /**
-     * Load and instantiate a WASM module from memory.
-     * Unloads any previously loaded module.
-     * @param data WASM binary data
-     * @param size Size of the data
-     * @return true on success
-     */
-    bool loadModuleFromMemory(const uint8_t* data, size_t size);
+void wasm_runner_set_canvas(wasm_runner_t* runner, canvas_t* canvas);
+void wasm_runner_set_random(wasm_runner_t* runner, random_t* random);
 
-    /**
-     * Unload the current module.
-     */
-    void unloadModule();
+bool wasm_runner_load_module(wasm_runner_t* runner, const char* path);
+bool wasm_runner_load_module_from_memory(wasm_runner_t* runner, const uint8_t* data, size_t size);
+void wasm_runner_unload_module(wasm_runner_t* runner);
 
-    /**
-     * Check if a module is currently loaded.
-     */
-    bool isModuleLoaded() const { return m_moduleInst != nullptr; }
+bool wasm_runner_is_module_loaded(const wasm_runner_t* runner);
 
-    /**
-     * Call the module's render() function.
-     */
-    void callRender();
+void wasm_runner_call_render(wasm_runner_t* runner);
+void wasm_runner_call_on_input(wasm_runner_t* runner, uint32_t key, uint32_t type);
 
-    /**
-     * Call the module's on_input(key, type) function.
-     */
-    void callOnInput(uint32_t key, uint32_t type);
+uint32_t wasm_runner_get_scene_count(wasm_runner_t* runner);
+void wasm_runner_set_scene(wasm_runner_t* runner, uint32_t scene);
+uint32_t wasm_runner_get_scene(wasm_runner_t* runner);
 
-    /**
-     * Get the number of scenes (for test apps).
-     */
-    uint32_t getSceneCount();
+bool wasm_runner_has_render_function(const wasm_runner_t* runner);
+bool wasm_runner_has_on_input_function(const wasm_runner_t* runner);
 
-    /**
-     * Set the current scene.
-     */
-    void setScene(uint32_t scene);
-
-    /**
-     * Get the current scene.
-     */
-    uint32_t getScene();
-
-    /**
-     * Check if render function exists.
-     */
-    bool hasRenderFunction() const { return m_funcRender != nullptr; }
-
-    /**
-     * Check if on_input function exists.
-     */
-    bool hasOnInputFunction() const { return m_funcOnInput != nullptr; }
-
-    /**
-     * Get the last error message.
-     */
-    const std::string& getLastError() const { return m_lastError; }
-
-private:
-    // WAMR state
-    uint8_t* m_heapBuffer = nullptr;
-    wasm_module_t m_module = nullptr;
-    wasm_module_inst_t m_moduleInst = nullptr;
-    wasm_exec_env_t m_execEnv = nullptr;
-
-    // Function handles
-    wasm_function_inst_t m_funcRender = nullptr;
-    wasm_function_inst_t m_funcOnInput = nullptr;
-    wasm_function_inst_t m_funcSetScene = nullptr;
-    wasm_function_inst_t m_funcGetScene = nullptr;
-    wasm_function_inst_t m_funcGetSceneCount = nullptr;
-
-    // Canvas and Random for native functions (not owned)
-    Canvas* m_canvas = nullptr;
-    Random* m_random = nullptr;
-
-    // Error handling
-    std::string m_lastError;
-    char m_errorBuffer[256];
-
-    bool m_initialized = false;
-
-    void registerNativeFunctions();
-    void lookupFunctions();
-};
-
-} // namespace fri3d
+const char* wasm_runner_get_last_error(const wasm_runner_t* runner);

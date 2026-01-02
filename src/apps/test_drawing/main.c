@@ -43,7 +43,7 @@ uint32_t get_scene_count(void) {
 
 // Scene rendering functions
 static void render_horizontal_lines(void) {
-    canvas_set_color(ColorBlack);
+    canvas_set_color(color_black);
     // Draw horizontal lines at regular intervals
     for (int y = 0; y < 64; y += 8) {
         canvas_draw_line(0, y, 127, y);
@@ -55,7 +55,7 @@ static void render_horizontal_lines(void) {
 }
 
 static void render_vertical_lines(void) {
-    canvas_set_color(ColorBlack);
+    canvas_set_color(color_black);
     // Draw vertical lines at regular intervals
     for (int x = 0; x < 128; x += 8) {
         canvas_draw_line(x, 0, x, 63);
@@ -67,7 +67,7 @@ static void render_vertical_lines(void) {
 }
 
 static void render_diagonal_lines(void) {
-    canvas_set_color(ColorBlack);
+    canvas_set_color(color_black);
     // Draw diagonal lines from corners
     canvas_draw_line(0, 0, 127, 63);
     canvas_draw_line(127, 0, 0, 63);
@@ -80,7 +80,7 @@ static void render_diagonal_lines(void) {
 
 static void render_random_pixels(void) {
     random_seed(RANDOM_SEED);
-    canvas_set_color(ColorBlack);
+    canvas_set_color(color_black);
     // Draw 500 random pixels
     for (int i = 0; i < 500; i++) {
         int32_t x = (int32_t)random_range(128);
@@ -91,7 +91,7 @@ static void render_random_pixels(void) {
 
 static void render_circles(void) {
     random_seed(RANDOM_SEED);
-    canvas_set_color(ColorBlack);
+    canvas_set_color(color_black);
     // Draw circles of various sizes
     canvas_draw_circle(64, 32, 30);  // Large center circle
     canvas_draw_circle(64, 32, 20);
@@ -105,7 +105,7 @@ static void render_circles(void) {
 
 static void render_filled_circles(void) {
     random_seed(RANDOM_SEED);
-    canvas_set_color(ColorBlack);
+    canvas_set_color(color_black);
     // Draw filled circles (discs)
     canvas_draw_disc(32, 32, 20);
     canvas_draw_disc(96, 32, 20);
@@ -113,12 +113,12 @@ static void render_filled_circles(void) {
     canvas_draw_disc(64, 16, 8);
     canvas_draw_disc(64, 48, 8);
     // Use XOR for overlapping effect
-    canvas_set_color(ColorXOR);
+    canvas_set_color(color_xor);
     canvas_draw_disc(64, 32, 18);
 }
 
 static void render_rectangles(void) {
-    canvas_set_color(ColorBlack);
+    canvas_set_color(color_black);
     // Draw concentric rectangles
     canvas_draw_frame(4, 4, 120, 56);
     canvas_draw_frame(14, 10, 100, 44);
@@ -132,19 +132,19 @@ static void render_rectangles(void) {
 }
 
 static void render_filled_rectangles(void) {
-    canvas_set_color(ColorBlack);
+    canvas_set_color(color_black);
     // Draw filled rectangles
     canvas_draw_box(10, 10, 30, 20);
     canvas_draw_box(88, 10, 30, 20);
     canvas_draw_box(10, 34, 30, 20);
     canvas_draw_box(88, 34, 30, 20);
     // Center box with XOR
-    canvas_set_color(ColorXOR);
+    canvas_set_color(color_xor);
     canvas_draw_box(30, 20, 68, 24);
 }
 
 static void render_rounded_rectangles(void) {
-    canvas_set_color(ColorBlack);
+    canvas_set_color(color_black);
     // Draw rounded rectangles with various corner radii
     canvas_draw_rframe(5, 5, 50, 25, 3);
     canvas_draw_rframe(73, 5, 50, 25, 8);
@@ -154,24 +154,24 @@ static void render_rounded_rectangles(void) {
 }
 
 static void render_text(void) {
-    canvas_set_color(ColorBlack);
+    canvas_set_color(color_black);
     // Primary font
-    canvas_set_font(FontPrimary);
+    canvas_set_font(font_primary);
     canvas_draw_str(5, 12, "Primary Font");
     // Secondary font
-    canvas_set_font(FontSecondary);
+    canvas_set_font(font_secondary);
     canvas_draw_str(5, 24, "Secondary Font Test");
     // Keyboard font
-    canvas_set_font(FontKeyboard);
+    canvas_set_font(font_keyboard);
     canvas_draw_str(5, 36, "Keyboard: ABCDEF");
     // Big numbers
-    canvas_set_font(FontBigNumbers);
+    canvas_set_font(font_big_numbers);
     canvas_draw_str(5, 58, "123");
 }
 
 static void render_mixed_primitives(void) {
     random_seed(RANDOM_SEED);
-    canvas_set_color(ColorBlack);
+    canvas_set_color(color_black);
 
     // Background grid
     for (int x = 0; x < 128; x += 16) {
@@ -197,12 +197,12 @@ static void render_mixed_primitives(void) {
     }
 
     // Text
-    canvas_set_font(FontSecondary);
+    canvas_set_font(font_secondary);
     canvas_draw_str(2, 8, "Mix");
 }
 
 static void render_checkerboard(void) {
-    canvas_set_color(ColorBlack);
+    canvas_set_color(color_black);
     // Draw 8x8 pixel checkerboard pattern
     for (int y = 0; y < 64; y += 8) {
         for (int x = 0; x < 128; x += 8) {
@@ -259,16 +259,16 @@ void render(void) {
 }
 
 // Handle input - allows cycling through scenes manually
-void on_input(InputKey key, InputType type) {
-    if (type != InputTypePress) return;
+void on_input(input_key_t key, input_type_t type) {
+    if (type != input_type_press) return;
 
     switch (key) {
-        case InputKeyRight:
-        case InputKeyDown:
+        case input_key_right:
+        case input_key_down:
             g_current_scene = (Scene)((g_current_scene + 1) % SCENE_COUNT);
             break;
-        case InputKeyLeft:
-        case InputKeyUp:
+        case input_key_left:
+        case input_key_up:
             g_current_scene = (Scene)((g_current_scene + SCENE_COUNT - 1) % SCENE_COUNT);
             break;
         default:

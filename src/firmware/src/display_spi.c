@@ -9,28 +9,24 @@
 #include "esp_log.h"
 #include <string.h>
 
-static const char* TAG = "display";
+static const char* log_tag = "display";
 
-// GPIO Pin Configuration (from hardware spec)
 #define PIN_MOSI    GPIO_NUM_6
-#define PIN_MISO    GPIO_NUM_8   // Not used for display, but defined for SPI
+#define PIN_MISO    GPIO_NUM_8
 #define PIN_SCK     GPIO_NUM_7
 #define PIN_CS      GPIO_NUM_5
 #define PIN_DC      GPIO_NUM_4
 #define PIN_RST     GPIO_NUM_48
 
-// SPI Configuration
 #define SPI_HOST    SPI2_HOST
-#define SPI_FREQ_HZ (10 * 1000 * 1000)  // 10 MHz
+#define SPI_FREQ_HZ (10 * 1000 * 1000)
 
-// Screen dimensions
 #define SCREEN_WIDTH  128
 #define SCREEN_HEIGHT 64
 
 static u8g2_t g_u8g2;
 static spi_device_handle_t g_spi;
 
-// u8g2 callback for byte communication via SPI
 static uint8_t u8x8_byte_esp32_hw_spi(u8x8_t* u8x8, uint8_t msg, uint8_t arg_int, void* arg_ptr) {
     switch (msg) {
         case U8X8_MSG_BYTE_SEND: {
@@ -42,16 +38,13 @@ static uint8_t u8x8_byte_esp32_hw_spi(u8x8_t* u8x8, uint8_t msg, uint8_t arg_int
             break;
         }
         case U8X8_MSG_BYTE_INIT:
-            // SPI already initialized
             break;
         case U8X8_MSG_BYTE_SET_DC:
             gpio_set_level(PIN_DC, arg_int);
             break;
         case U8X8_MSG_BYTE_START_TRANSFER:
-            // CS is handled by SPI driver
             break;
         case U8X8_MSG_BYTE_END_TRANSFER:
-            // CS is handled by SPI driver
             break;
         default:
             return 0;
@@ -59,11 +52,9 @@ static uint8_t u8x8_byte_esp32_hw_spi(u8x8_t* u8x8, uint8_t msg, uint8_t arg_int
     return 1;
 }
 
-// u8g2 callback for GPIO and delay
 static uint8_t u8x8_gpio_and_delay_esp32(u8x8_t* u8x8, uint8_t msg, uint8_t arg_int, void* arg_ptr) {
     switch (msg) {
         case U8X8_MSG_GPIO_AND_DELAY_INIT:
-            // GPIO already initialized
             break;
         case U8X8_MSG_DELAY_MILLI:
             vTaskDelay(pdMS_TO_TICKS(arg_int));
@@ -75,7 +66,6 @@ static uint8_t u8x8_gpio_and_delay_esp32(u8x8_t* u8x8, uint8_t msg, uint8_t arg_
             ets_delay_us(1);
             break;
         case U8X8_MSG_GPIO_CS:
-            // CS handled by SPI driver
             break;
         case U8X8_MSG_GPIO_DC:
             gpio_set_level(PIN_DC, arg_int);
@@ -90,10 +80,9 @@ static uint8_t u8x8_gpio_and_delay_esp32(u8x8_t* u8x8, uint8_t msg, uint8_t arg_
 }
 
 bool display_init(void) {
-    ESP_LOGI(TAG, "Initializing SPI display...");
+    ESP_LOGI(log_tag, "Initializing SPI display...");
 
-    // Configure GPIO pins
-    gpio_config_t io_conf = {};
+    gpio_config_t io_conf = {0};
     io_conf.intr_type = GPIO_INTR_DISABLE;
     io_conf.mode = GPIO_MODE_OUTPUT;
     io_conf.pin_bit_mask = (1ULL << PIN_DC) | (1ULL << PIN_RST);
@@ -101,8 +90,7 @@ bool display_init(void) {
     io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
     gpio_config(&io_conf);
 
-    // Initialize SPI bus
-    spi_bus_config_t bus_cfg = {};
+    spi_bus_config_t bus_cfg = {0};
     bus_cfg.mosi_io_num = PIN_MOSI;
     bus_cfg.miso_io_num = PIN_MISO;
     bus_cfg.sclk_io_num = PIN_SCK;
@@ -112,12 +100,11 @@ bool display_init(void) {
 
     esp_err_t ret = spi_bus_initialize(SPI_HOST, &bus_cfg, SPI_DMA_CH_AUTO);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize SPI bus: %s", esp_err_to_name(ret));
+        ESP_LOGE(log_tag, "Failed to initialize SPI bus: %s", esp_err_to_name(ret));
         return false;
     }
 
-    // Add SPI device
-    spi_device_interface_config_t dev_cfg = {};
+    spi_device_interface_config_t dev_cfg = {0};
     dev_cfg.clock_speed_hz = SPI_FREQ_HZ;
     dev_cfg.mode = 0;
     dev_cfg.spics_io_num = PIN_CS;
@@ -125,11 +112,10 @@ bool display_init(void) {
 
     ret = spi_bus_add_device(SPI_HOST, &dev_cfg, &g_spi);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to add SPI device: %s", esp_err_to_name(ret));
+        ESP_LOGE(log_tag, "Failed to add SPI device: %s", esp_err_to_name(ret));
         return false;
     }
 
-    // Initialize u8g2 for SSD1306 128x64
     u8g2_Setup_ssd1306_128x64_noname_f(
         &g_u8g2, U8G2_R0,
         u8x8_byte_esp32_hw_spi,
@@ -140,7 +126,7 @@ bool display_init(void) {
     u8g2_SetPowerSave(&g_u8g2, 0);
     u8g2_ClearBuffer(&g_u8g2);
 
-    ESP_LOGI(TAG, "Display initialized");
+    ESP_LOGI(log_tag, "Display initialized");
     return true;
 }
 

@@ -1,125 +1,102 @@
 #pragma once
 
-#include <cstddef>
-#include <cstdint>
-#include <functional>
-
-namespace fri3d {
+#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
 
 // Input key values matching the SDK
-enum class InputKey : uint8_t {
-    Up = 0,
-    Down = 1,
-    Left = 2,
-    Right = 3,
-    Ok = 4,
-    Back = 5,
-    Count = 6  // Number of keys
-};
+typedef enum {
+    input_key_up = 0,
+    input_key_down = 1,
+    input_key_left = 2,
+    input_key_right = 3,
+    input_key_ok = 4,
+    input_key_back = 5,
+} input_key_t;
+
+#define INPUT_KEY_COUNT 6
 
 // Input event types
-// ShortPress and LongPress are synthesized by InputManager
-enum class InputType : uint8_t {
-    Press = 0,      // Key pressed down
-    Release = 1,    // Key released
-    ShortPress = 2, // Key was pressed and released quickly (<300ms)
-    LongPress = 3   // Key held for >=500ms
-};
+// Short/long press are synthesized by the input manager
+typedef enum {
+    input_type_press = 0,
+    input_type_release = 1,
+    input_type_short_press = 2,
+    input_type_long_press = 3,
+} input_type_t;
 
 // Input event structure
-struct InputEvent {
-    InputKey key;
-    InputType type;
-};
+typedef struct {
+    input_key_t key;
+    input_type_t type;
+} input_event_t;
 
 // Timing constants (in milliseconds)
-constexpr uint32_t SHORT_PRESS_MAX_MS = 300;
-constexpr uint32_t LONG_PRESS_MS = 500;
-constexpr uint32_t RESET_COMBO_MS = 500;  // LEFT+BACK held for 500ms
+#define INPUT_SHORT_PRESS_MAX_MS 300
+#define INPUT_LONG_PRESS_MS 500
+#define INPUT_RESET_COMBO_MS 500
 
-/**
- * Abstract input handler interface.
- * Platform implementations poll for raw key presses.
- */
-class InputHandler {
-public:
-    virtual ~InputHandler() = default;
+// Input handler interface
+// Implementations should fill in the function pointers and context.
+typedef struct {
+    void* context;
+    void (*poll)(void* context);
+    bool (*has_event)(void* context);
+    input_event_t (*get_event)(void* context);
+    uint32_t (*get_time_ms)(void* context);
+} input_handler_t;
 
-    /**
-     * Poll for input events.
-     * Should be called each frame.
-     */
-    virtual void poll() = 0;
+// Reset callback type
+typedef void (*input_reset_callback_t)(void* context);
 
-    /**
-     * Check if an event is available.
-     */
-    virtual bool hasEvent() const = 0;
+// Input manager state
+typedef struct {
+    struct {
+        bool pressed;
+        uint32_t press_time;
+        bool long_press_fired;
+    } key_states[INPUT_KEY_COUNT];
 
-    /**
-     * Get the next event. Call hasEvent() first.
-     */
-    virtual InputEvent getEvent() = 0;
+    bool has_processed_event;
+    input_event_t processed_event;
 
-    /**
-     * Get current timestamp in milliseconds.
-     * Used for timing calculations.
-     */
-    virtual uint32_t getTimeMs() const = 0;
-};
+    uint32_t combo_start_time;
+    bool combo_active;
+    input_reset_callback_t reset_callback;
+    void* reset_callback_context;
+} input_manager_t;
 
-/**
- * Input manager that handles short/long press detection and reset combo.
- * Wraps a platform-specific InputHandler.
- */
-class InputManager {
-public:
-    using ResetCallback = std::function<void()>;
+void input_manager_init(input_manager_t* manager);
+void input_manager_set_reset_callback(input_manager_t* manager, input_reset_callback_t callback, void* context);
+void input_manager_update(input_manager_t* manager, input_handler_t* handler, uint32_t time_ms);
+bool input_manager_has_event(const input_manager_t* manager);
+input_event_t input_manager_get_event(input_manager_t* manager);
 
-    /**
-     * Set the callback to invoke when LEFT+BACK reset combo is triggered.
-     */
-    void setResetCallback(ResetCallback callback) { m_resetCallback = callback; }
+// Helper wrappers for input_handler_t
+static inline void input_handler_poll(input_handler_t* handler) {
+    if (handler && handler->poll) {
+        handler->poll(handler->context);
+    }
+}
 
-    /**
-     * Process input from the given handler.
-     * Call this each frame.
-     * @param handler Platform-specific input handler
-     * @param timeMs Current time in milliseconds
-     */
-    void update(InputHandler& handler, uint32_t timeMs);
+static inline bool input_handler_has_event(input_handler_t* handler) {
+    if (handler && handler->has_event) {
+        return handler->has_event(handler->context);
+    }
+    return false;
+}
 
-    /**
-     * Check if an input event is available after processing.
-     */
-    bool hasEvent() const { return m_hasProcessedEvent; }
+static inline input_event_t input_handler_get_event(input_handler_t* handler) {
+    input_event_t event = {0};
+    if (handler && handler->get_event) {
+        event = handler->get_event(handler->context);
+    }
+    return event;
+}
 
-    /**
-     * Get the next processed event.
-     */
-    InputEvent getEvent();
-
-private:
-    // Key state tracking
-    struct KeyState {
-        bool pressed = false;
-        uint32_t pressTime = 0;
-        bool longPressFired = false;
-    };
-
-    KeyState m_keyStates[static_cast<size_t>(InputKey::Count)];
-
-    // Processed event queue (single event for simplicity)
-    bool m_hasProcessedEvent = false;
-    InputEvent m_processedEvent;
-
-    // Reset combo tracking
-    uint32_t m_comboStartTime = 0;
-    bool m_comboActive = false;
-    ResetCallback m_resetCallback;
-
-    void checkResetCombo(uint32_t timeMs);
-    void queueEvent(InputKey key, InputType type);
-};
-
-} // namespace fri3d
+static inline uint32_t input_handler_get_time_ms(input_handler_t* handler) {
+    if (handler && handler->get_time_ms) {
+        return handler->get_time_ms(handler->context);
+    }
+    return 0;
+}

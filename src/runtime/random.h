@@ -1,39 +1,15 @@
 #pragma once
 
-#include <cstdint>
-#include <random>
+#include <stdint.h>
 
-namespace fri3d {
+#define RANDOM_MT_STATE_SIZE 624
 
-/**
- * Random number generator for WASM apps.
- * Uses Mersenne Twister for consistent behavior across platforms.
- */
-class Random {
-public:
-    /**
-     * Initialize with a random seed.
-     */
-    Random();
+typedef struct {
+    uint32_t mt[RANDOM_MT_STATE_SIZE];
+    uint32_t index;
+} random_t;
 
-    /**
-     * Set the seed for deterministic output.
-     */
-    void seed(uint32_t seed);
-
-    /**
-     * Get a random 32-bit number.
-     */
-    uint32_t get();
-
-    /**
-     * Get a random number in range [0, max).
-     * Returns 0 if max is 0.
-     */
-    uint32_t range(uint32_t max);
-
-private:
-    std::mt19937 m_rng;
-};
-
-} // namespace fri3d
+void random_init(random_t* random);
+void random_seed(random_t* random, uint32_t seed);
+uint32_t random_get(random_t* random);
+uint32_t random_range(random_t* random, uint32_t max);

@@ -1,45 +1,27 @@
 #pragma once
 
-#include "input.h"
-#include "display_sdl.h"
+#include <stdbool.h>
+#include <stdint.h>
+#include <stddef.h>
 #include <SDL.h>
-#include <queue>
 
-namespace fri3d {
+#include "display_sdl.h"
+#include "input.h"
 
-/**
- * SDL-based input handler for desktop emulator.
- * Maps keyboard keys to InputKey values.
- */
-class InputSDL : public InputHandler {
-public:
-    /**
-     * Create input handler.
-     * @param display Reference to display (for quit handling and time)
-     */
-    explicit InputSDL(DisplaySDL& display);
+typedef struct {
+    display_sdl_t* display;
+    input_event_t event_queue[32];
+    size_t queue_head;
+    size_t queue_tail;
+    bool screenshot_requested;
+} input_sdl_t;
 
-    // InputHandler interface
-    void poll() override;
-    bool hasEvent() const override;
-    InputEvent getEvent() override;
-    uint32_t getTimeMs() const override;
+void input_sdl_init(input_sdl_t* input, display_sdl_t* display);
+void input_sdl_poll(void* context);
+bool input_sdl_has_event(void* context);
+input_event_t input_sdl_get_event(void* context);
+uint32_t input_sdl_get_time_ms(void* context);
 
-    /**
-     * Check if screenshot was requested (S key).
-     */
-    bool wasScreenshotRequested();
+bool input_sdl_was_screenshot_requested(input_sdl_t* input);
 
-private:
-    DisplaySDL& m_display;
-    std::queue<InputEvent> m_eventQueue;
-    bool m_screenshotRequested = false;
-
-    /**
-     * Convert SDL keycode to InputKey.
-     * @return InputKey value, or -1 if not mapped
-     */
-    static int sdlKeyToInputKey(SDL_Keycode key);
-};
-
-} // namespace fri3d
+void input_sdl_bind_handler(input_sdl_t* input, input_handler_t* handler);

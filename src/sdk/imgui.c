@@ -30,11 +30,11 @@ typedef struct {
     int16_t y;
     int16_t width;
     int16_t height;
-    UiLayoutDirection direction;
+    ui_layout_direction_t direction;
     int16_t spacing;
     int16_t cursor;  // Current position in layout direction
     bool centered;   // For hstacks: defer drawing until end_stack for centering
-} UiLayoutStack;
+} ui_layout_stack_t;
 
 // Deferred button draw operation
 typedef struct {
@@ -44,11 +44,11 @@ typedef struct {
     int16_t height;
     const char* text;
     bool focused;
-} UiDeferredButton;
+} ui_deferred_button_t;
 
 typedef struct {
     // Layout stack
-    UiLayoutStack layout_stack[UI_MAX_LAYOUT_DEPTH];
+    ui_layout_stack_t layout_stack[UI_MAX_LAYOUT_DEPTH];
     int8_t layout_depth;
 
     // Focus tracking
@@ -57,8 +57,8 @@ typedef struct {
     int16_t prev_focus_count; // Focus count from previous frame
 
     // Input state for current frame
-    UiKey last_key;
-    UiInputType last_type;
+    ui_key_t last_key;
+    ui_input_type_t last_type;
     bool has_input;
     bool ok_pressed;
     bool back_pressed;
@@ -79,32 +79,32 @@ typedef struct {
     int16_t abs_y;
 
     // Deferred drawing for centered hstacks
-    UiDeferredButton deferred_buttons[UI_MAX_DEFERRED];
+    ui_deferred_button_t deferred_buttons[UI_MAX_DEFERRED];
     int8_t deferred_count;
 
-} UiContext;
+} ui_context_t;
 
 // ----------------------------------------------------------------------------
 // Global State
 // ----------------------------------------------------------------------------
 
-static UiContext g_ctx = {0};
+static ui_context_t g_ctx = {0};
 
 // ----------------------------------------------------------------------------
 // Internal Helpers
 // ----------------------------------------------------------------------------
 
-static int16_t ui_get_font_height(UiFont font) {
+static int16_t ui_get_font_height(ui_font_t font) {
     switch (font) {
-        case UI_FONT_PRIMARY:
+        case ui_font_primary:
             return UI_FONT_HEIGHT_PRIMARY;
-        case UI_FONT_SECONDARY:
+        case ui_font_secondary:
         default:
             return UI_FONT_HEIGHT_SECONDARY;
     }
 }
 
-static UiLayoutStack* ui_current_layout(void) {
+static ui_layout_stack_t* ui_current_layout(void) {
     if (g_ctx.layout_depth < 0) return NULL;
     return &g_ctx.layout_stack[g_ctx.layout_depth];
 }
@@ -119,7 +119,7 @@ static void ui_layout_next(int16_t width, int16_t height, int16_t* out_x, int16_
         return;
     }
 
-    UiLayoutStack* layout = ui_current_layout();
+    ui_layout_stack_t* layout = ui_current_layout();
     if (!layout) {
         *out_x = 0;
         *out_y = 0;
@@ -127,7 +127,7 @@ static void ui_layout_next(int16_t width, int16_t height, int16_t* out_x, int16_
         return;
     }
 
-    if (layout->direction == UI_LAYOUT_VERTICAL) {
+    if (layout->direction == ui_layout_vertical) {
         *out_x = layout->x;
         *out_y = layout->y + layout->cursor;
         *out_w = layout->width;
@@ -156,19 +156,19 @@ static bool ui_check_activated(int16_t widget_idx) {
 }
 
 static bool ui_in_centered_hstack(void) {
-    UiLayoutStack* layout = ui_current_layout();
-    return layout && layout->direction == UI_LAYOUT_HORIZONTAL && layout->centered;
+    ui_layout_stack_t* layout = ui_current_layout();
+    return layout && layout->direction == ui_layout_horizontal && layout->centered;
 }
 
 static void ui_draw_button_internal(int16_t x, int16_t y, int16_t w, int16_t h, const char* text, bool focused) {
-    canvas_set_font(FontSecondary);
+    canvas_set_font(font_secondary);
     if (focused) {
-        canvas_set_color(ColorBlack);
+        canvas_set_color(color_black);
         canvas_draw_rbox(x, y, w, h, 2);
-        canvas_set_color(ColorWhite);
+        canvas_set_color(color_white);
         canvas_draw_str(x + UI_BUTTON_PADDING_X, y + h - UI_BUTTON_PADDING_Y, text);
     } else {
-        canvas_set_color(ColorBlack);
+        canvas_set_color(color_black);
         canvas_draw_rframe(x, y, w, h, 2);
         canvas_draw_str(x + UI_BUTTON_PADDING_X, y + h - UI_BUTTON_PADDING_Y, text);
     }
@@ -190,12 +190,12 @@ void ui_begin(void) {
 
     // Reset layout to default full-screen vertical
     g_ctx.layout_depth = 0;
-    g_ctx.layout_stack[0] = (UiLayoutStack){
+    g_ctx.layout_stack[0] = (ui_layout_stack_t){
         .x = 0,
         .y = 0,
         .width = UI_SCREEN_WIDTH,
         .height = UI_SCREEN_HEIGHT,
-        .direction = UI_LAYOUT_VERTICAL,
+        .direction = ui_layout_vertical,
         .spacing = 0,
         .cursor = 0,
     };
@@ -232,15 +232,15 @@ void ui_end(void) {
     g_ctx.back_pressed = false;
 }
 
-void ui_input(UiKey key, UiInputType type) {
+void ui_input(ui_key_t key, ui_input_type_t type) {
     g_ctx.last_key = key;
     g_ctx.last_type = type;
     g_ctx.has_input = true;
 
     // Handle navigation on short press or repeat
-    if (type == UI_INPUT_SHORT || type == UI_INPUT_REPEAT || type == UI_INPUT_PRESS) {
+    if (type == ui_input_short || type == ui_input_repeat || type == ui_input_press) {
         switch (key) {
-            case UI_KEY_UP:
+            case ui_key_up:
                 if (g_ctx.prev_focus_count > 0) {
                     g_ctx.focus_index--;
                     if (g_ctx.focus_index < 0) {
@@ -249,7 +249,7 @@ void ui_input(UiKey key, UiInputType type) {
                 }
                 break;
 
-            case UI_KEY_DOWN:
+            case ui_key_down:
                 if (g_ctx.prev_focus_count > 0) {
                     g_ctx.focus_index++;
                     if (g_ctx.focus_index >= g_ctx.prev_focus_count) {
@@ -258,11 +258,11 @@ void ui_input(UiKey key, UiInputType type) {
                 }
                 break;
 
-            case UI_KEY_OK:
+            case ui_key_ok:
                 g_ctx.ok_pressed = true;
                 break;
 
-            case UI_KEY_BACK:
+            case ui_key_back:
                 g_ctx.back_pressed = true;
                 break;
 
@@ -283,18 +283,18 @@ bool ui_back_pressed(void) {
 void ui_vstack(int16_t spacing) {
     if (g_ctx.layout_depth >= UI_MAX_LAYOUT_DEPTH - 1) return;
 
-    UiLayoutStack* parent = ui_current_layout();
+    ui_layout_stack_t* parent = ui_current_layout();
     int16_t new_x = parent ? parent->x : 0;
     int16_t new_y = parent ? (parent->y + parent->cursor) : 0;
     int16_t new_width = parent ? parent->width : UI_SCREEN_WIDTH;
 
     g_ctx.layout_depth++;
-    g_ctx.layout_stack[g_ctx.layout_depth] = (UiLayoutStack){
+    g_ctx.layout_stack[g_ctx.layout_depth] = (ui_layout_stack_t){
         .x = new_x,
         .y = new_y,
         .width = new_width,
         .height = UI_SCREEN_HEIGHT - new_y,
-        .direction = UI_LAYOUT_VERTICAL,
+        .direction = ui_layout_vertical,
         .spacing = spacing,
         .cursor = 0,
     };
@@ -303,18 +303,18 @@ void ui_vstack(int16_t spacing) {
 void ui_hstack(int16_t spacing) {
     if (g_ctx.layout_depth >= UI_MAX_LAYOUT_DEPTH - 1) return;
 
-    UiLayoutStack* parent = ui_current_layout();
+    ui_layout_stack_t* parent = ui_current_layout();
     int16_t new_x = parent ? parent->x : 0;
     int16_t new_y = parent ? (parent->y + parent->cursor) : 0;
     int16_t new_width = parent ? parent->width : UI_SCREEN_WIDTH;
 
     g_ctx.layout_depth++;
-    g_ctx.layout_stack[g_ctx.layout_depth] = (UiLayoutStack){
+    g_ctx.layout_stack[g_ctx.layout_depth] = (ui_layout_stack_t){
         .x = new_x,
         .y = new_y,
         .width = new_width,
         .height = UI_SCREEN_HEIGHT - new_y,
-        .direction = UI_LAYOUT_HORIZONTAL,
+        .direction = ui_layout_horizontal,
         .spacing = spacing,
         .cursor = 0,
         .centered = false,
@@ -324,7 +324,7 @@ void ui_hstack(int16_t spacing) {
 void ui_hstack_centered(int16_t spacing) {
     if (g_ctx.layout_depth >= UI_MAX_LAYOUT_DEPTH - 1) return;
 
-    UiLayoutStack* parent = ui_current_layout();
+    ui_layout_stack_t* parent = ui_current_layout();
     int16_t new_x = parent ? parent->x : 0;
     int16_t new_y = parent ? (parent->y + parent->cursor) : 0;
     int16_t new_width = parent ? parent->width : UI_SCREEN_WIDTH;
@@ -333,12 +333,12 @@ void ui_hstack_centered(int16_t spacing) {
     g_ctx.deferred_count = 0;
 
     g_ctx.layout_depth++;
-    g_ctx.layout_stack[g_ctx.layout_depth] = (UiLayoutStack){
+    g_ctx.layout_stack[g_ctx.layout_depth] = (ui_layout_stack_t){
         .x = new_x,
         .y = new_y,
         .width = new_width,
         .height = UI_SCREEN_HEIGHT - new_y,
-        .direction = UI_LAYOUT_HORIZONTAL,
+        .direction = ui_layout_horizontal,
         .spacing = spacing,
         .cursor = 0,
         .centered = true,
@@ -348,10 +348,10 @@ void ui_hstack_centered(int16_t spacing) {
 void ui_end_stack(void) {
     if (g_ctx.layout_depth <= 0) return;
 
-    UiLayoutStack* ending = &g_ctx.layout_stack[g_ctx.layout_depth];
+    ui_layout_stack_t* ending = &g_ctx.layout_stack[g_ctx.layout_depth];
 
     // Handle centered hstack: draw deferred buttons with centering offset
-    if (ending->centered && ending->direction == UI_LAYOUT_HORIZONTAL) {
+    if (ending->centered && ending->direction == ui_layout_horizontal) {
         int16_t content_width = ending->cursor;
         if (ending->spacing > 0 && content_width > 0) {
             content_width -= ending->spacing;  // Remove trailing spacing
@@ -362,7 +362,7 @@ void ui_end_stack(void) {
 
         // Draw all deferred buttons with offset
         for (int8_t i = 0; i < g_ctx.deferred_count; i++) {
-            UiDeferredButton* btn = &g_ctx.deferred_buttons[i];
+            ui_deferred_button_t* btn = &g_ctx.deferred_buttons[i];
             ui_draw_button_internal(
                 btn->x + offset,
                 btn->y,
@@ -384,21 +384,21 @@ void ui_end_stack(void) {
     }
 
     // For hstacks, track the max height (for now, assume button height)
-    int16_t used_height = (ending->direction == UI_LAYOUT_HORIZONTAL)
+    int16_t used_height = (ending->direction == ui_layout_horizontal)
         ? (UI_FONT_HEIGHT_SECONDARY + UI_BUTTON_PADDING_Y * 2)
         : used_size;
 
     g_ctx.layout_depth--;
 
     // Advance parent cursor by the space this stack used
-    UiLayoutStack* parent = ui_current_layout();
-    if (parent && parent->direction == UI_LAYOUT_VERTICAL) {
+    ui_layout_stack_t* parent = ui_current_layout();
+    if (parent && parent->direction == ui_layout_vertical) {
         parent->cursor += used_height + parent->spacing;
     }
 }
 
 void ui_spacer(int16_t pixels) {
-    UiLayoutStack* layout = ui_current_layout();
+    ui_layout_stack_t* layout = ui_current_layout();
     if (layout) {
         layout->cursor += pixels;
     }
@@ -414,27 +414,27 @@ void ui_set_position(int16_t x, int16_t y) {
 // Basic Widgets
 // ----------------------------------------------------------------------------
 
-void ui_label(const char* text, UiFont font, UiAlign align) {
+void ui_label(const char* text, ui_font_t font, ui_align_t align) {
     int16_t font_height = ui_get_font_height(font);
     int16_t x, y, w;
     ui_layout_next(0, font_height, &x, &y, &w);
 
     // Set font
-    canvas_set_font((Font)font);
-    canvas_set_color(ColorBlack);
+    canvas_set_font((font_t)font);
+    canvas_set_color(color_black);
 
     // Calculate text position based on alignment
     int16_t text_x;
     uint32_t text_width = canvas_string_width(text);
 
     switch (align) {
-        case UI_ALIGN_CENTER:
+        case ui_align_center:
             text_x = x + (w - (int16_t)text_width) / 2;
             break;
-        case UI_ALIGN_RIGHT:
+        case ui_align_right:
             text_x = x + w - (int16_t)text_width;
             break;
-        case UI_ALIGN_LEFT:
+        case ui_align_left:
         default:
             text_x = x;
             break;
@@ -448,12 +448,12 @@ void ui_separator(void) {
     int16_t x, y, w;
     ui_layout_next(0, 5, &x, &y, &w);
 
-    canvas_set_color(ColorBlack);
+    canvas_set_color(color_black);
     canvas_draw_line(x, y + 2, x + w - 1, y + 2);
 }
 
 bool ui_button(const char* text) {
-    canvas_set_font(FontSecondary);
+    canvas_set_font(font_secondary);
     uint32_t text_width = canvas_string_width(text);
 
     int16_t btn_width = (int16_t)text_width + UI_BUTTON_PADDING_X * 2;
@@ -470,7 +470,7 @@ bool ui_button(const char* text) {
     // Check if we're in a centered hstack - defer drawing
     if (ui_in_centered_hstack()) {
         if (g_ctx.deferred_count < UI_MAX_DEFERRED) {
-            g_ctx.deferred_buttons[g_ctx.deferred_count++] = (UiDeferredButton){
+            g_ctx.deferred_buttons[g_ctx.deferred_count++] = (ui_deferred_button_t){
                 .x = x,
                 .y = y,
                 .width = btn_width,
@@ -506,7 +506,7 @@ void ui_progress(float value, int16_t width) {
     int16_t bar_x = x + (w - bar_width) / 2;
 
     // Draw outline
-    canvas_set_color(ColorBlack);
+    canvas_set_color(color_black);
     canvas_draw_frame(bar_x, y, bar_width, bar_height);
 
     // Draw filled portion
@@ -524,7 +524,7 @@ void ui_icon(const uint8_t* data, uint8_t width, uint8_t height) {
     int16_t icon_x = x + (w - width) / 2;
 
     // Draw XBM icon pixel by pixel
-    canvas_set_color(ColorBlack);
+    canvas_set_color(color_black);
     for (uint8_t iy = 0; iy < height; iy++) {
         for (uint8_t ix = 0; ix < width; ix++) {
             uint16_t byte_idx = (iy * ((width + 7) / 8)) + (ix / 8);
@@ -537,7 +537,7 @@ void ui_icon(const uint8_t* data, uint8_t width, uint8_t height) {
 }
 
 bool ui_checkbox(const char* text, bool* checked) {
-    canvas_set_font(FontSecondary);
+    canvas_set_font(font_secondary);
 
     int16_t box_size = 10;
     int16_t item_height = UI_FONT_HEIGHT_SECONDARY + 2;
@@ -560,12 +560,12 @@ bool ui_checkbox(const char* text, bool* checked) {
     int16_t box_x = x + 2;
     int16_t box_y = y + (item_height - box_size) / 2;
 
-    canvas_set_color(ColorBlack);
+    canvas_set_color(color_black);
 
     if (focused) {
         // Focused: filled background
         canvas_draw_box(x, y, w, item_height);
-        canvas_set_color(ColorWhite);
+        canvas_set_color(color_white);
     }
 
     // Draw checkbox outline
@@ -595,7 +595,7 @@ void ui_menu_begin(int16_t* scroll, int16_t visible, int16_t total) {
     g_ctx.menu.first_item_focus = g_ctx.focus_count;
 
     // Store y position where menu starts
-    UiLayoutStack* layout = ui_current_layout();
+    ui_layout_stack_t* layout = ui_current_layout();
     g_ctx.menu.y_start = layout ? (layout->y + layout->cursor) : 0;
 }
 
@@ -625,7 +625,7 @@ bool ui_menu_item(const char* text, int16_t index) {
         return false;
     }
 
-    canvas_set_font(FontSecondary);
+    canvas_set_font(font_secondary);
 
     // Calculate position within visible area
     int16_t visible_index = index - scroll;
@@ -635,12 +635,12 @@ bool ui_menu_item(const char* text, int16_t index) {
     int16_t item_width = UI_SCREEN_WIDTH - UI_SCROLLBAR_WIDTH - 2;
 
     // Draw item
-    canvas_set_color(ColorBlack);
+    canvas_set_color(color_black);
 
     if (focused) {
         // Focused: filled background with inverted text
         canvas_draw_box(0, y, item_width, UI_MENU_ITEM_HEIGHT);
-        canvas_set_color(ColorWhite);
+        canvas_set_color(color_white);
     }
 
     canvas_draw_str(2, y + UI_MENU_ITEM_HEIGHT - 2, text);
@@ -674,7 +674,7 @@ bool ui_menu_item_value(const char* label, const char* value, int16_t index) {
         return false;
     }
 
-    canvas_set_font(FontSecondary);
+    canvas_set_font(font_secondary);
 
     // Calculate position within visible area
     int16_t visible_index = index - scroll;
@@ -684,12 +684,12 @@ bool ui_menu_item_value(const char* label, const char* value, int16_t index) {
     int16_t item_width = UI_SCREEN_WIDTH - UI_SCROLLBAR_WIDTH - 2;
 
     // Draw item
-    canvas_set_color(ColorBlack);
+    canvas_set_color(color_black);
 
     if (focused) {
         // Focused: filled background with inverted text
         canvas_draw_box(0, y, item_width, UI_MENU_ITEM_HEIGHT);
-        canvas_set_color(ColorWhite);
+        canvas_set_color(color_white);
     }
 
     // Draw label on left
@@ -718,7 +718,7 @@ void ui_menu_end(void) {
         int16_t thumb_y = g_ctx.menu.y_start +
             ((scrollbar_height - thumb_height) * scroll) / (g_ctx.menu.total - g_ctx.menu.visible);
 
-        canvas_set_color(ColorBlack);
+        canvas_set_color(color_black);
 
         // Draw dotted track line
         for (int16_t y = g_ctx.menu.y_start; y < g_ctx.menu.y_start + scrollbar_height; y += 2) {
@@ -730,7 +730,7 @@ void ui_menu_end(void) {
     }
 
     // Advance layout cursor
-    UiLayoutStack* layout = ui_current_layout();
+    ui_layout_stack_t* layout = ui_current_layout();
     if (layout) {
         int16_t visible_count = g_ctx.menu.visible;
         if (g_ctx.menu.total < visible_count) {
@@ -747,11 +747,11 @@ void ui_menu_end(void) {
 // ----------------------------------------------------------------------------
 
 bool ui_footer_left(const char* text) {
-    canvas_set_font(FontSecondary);
+    canvas_set_font(font_secondary);
 
     int16_t y = UI_SCREEN_HEIGHT - UI_FOOTER_HEIGHT;
 
-    canvas_set_color(ColorBlack);
+    canvas_set_color(color_black);
 
     // Draw left arrow
     canvas_draw_line(2, y + 5, 6, y + 2);
@@ -762,12 +762,12 @@ bool ui_footer_left(const char* text) {
 
     // Check for left key press
     return g_ctx.has_input &&
-           g_ctx.last_key == UI_KEY_LEFT &&
-           (g_ctx.last_type == UI_INPUT_SHORT || g_ctx.last_type == UI_INPUT_PRESS);
+           g_ctx.last_key == ui_key_left &&
+           (g_ctx.last_type == ui_input_short || g_ctx.last_type == ui_input_press);
 }
 
 bool ui_footer_center(const char* text) {
-    canvas_set_font(FontSecondary);
+    canvas_set_font(font_secondary);
 
     int16_t y = UI_SCREEN_HEIGHT - UI_FOOTER_HEIGHT;
 
@@ -776,7 +776,7 @@ bool ui_footer_center(const char* text) {
     int16_t total_width = (int16_t)text_width + 12;  // text + OK symbol + spacing
     int16_t x = (UI_SCREEN_WIDTH - total_width) / 2;
 
-    canvas_set_color(ColorBlack);
+    canvas_set_color(color_black);
 
     // Draw OK symbol (small filled circle)
     canvas_draw_disc(x + 4, y + 5, 3);
@@ -790,7 +790,7 @@ bool ui_footer_center(const char* text) {
 }
 
 bool ui_footer_right(const char* text) {
-    canvas_set_font(FontSecondary);
+    canvas_set_font(font_secondary);
 
     int16_t y = UI_SCREEN_HEIGHT - UI_FOOTER_HEIGHT;
 
@@ -798,7 +798,7 @@ bool ui_footer_right(const char* text) {
     uint32_t text_width = canvas_string_width(text);
     int16_t x = UI_SCREEN_WIDTH - (int16_t)text_width - 10;
 
-    canvas_set_color(ColorBlack);
+    canvas_set_color(color_black);
 
     // Draw text
     canvas_draw_str(x, y + UI_FOOTER_HEIGHT - 2, text);
@@ -810,8 +810,8 @@ bool ui_footer_right(const char* text) {
 
     // Check for right key press
     return g_ctx.has_input &&
-           g_ctx.last_key == UI_KEY_RIGHT &&
-           (g_ctx.last_type == UI_INPUT_SHORT || g_ctx.last_type == UI_INPUT_PRESS);
+           g_ctx.last_key == ui_key_right &&
+           (g_ctx.last_type == ui_input_short || g_ctx.last_type == ui_input_press);
 }
 
 // ----------------------------------------------------------------------------

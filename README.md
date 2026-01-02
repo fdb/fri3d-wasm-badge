@@ -97,7 +97,7 @@ src/
 ├── firmware/     # ESP32-S3 PlatformIO project
 └── web/          # Web/Emscripten build
 
-libs/             # Git submodules (WAMR, u8g2, lodepng)
+libs/             # Git submodules (WAMR, u8g2) + headers (stb)
 cmake/            # CMake toolchain files
 tests/            # Visual regression tests
 ```
@@ -123,7 +123,7 @@ Git submodules:
 
 - WASM Micro Runtime (WAMR)
 - u8g2 graphics library
-- lodepng (PNG encoding)
+- stb_image_write (PNG encoding header in `libs/stb`)
 
 ## License
 
