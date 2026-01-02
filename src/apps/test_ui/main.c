@@ -328,8 +328,11 @@ void on_input(input_key_t key, input_type_t type) {
         return;
     }
 
-    // Handle back to exit or change scene for demo
-    if (ui_back_pressed()) {
+    // Handle back to exit or change scene for demo (only on short/repeat to avoid double steps)
+    if (key == input_key_back &&
+        (type == input_type_short_press || type == input_type_repeat) &&
+        ui_back_pressed()) {
+        printf("back pressed\n");
         // In a real app, this would exit
         // For demo, cycle scenes backwards
         if (g_current_scene == 0) {
@@ -337,6 +340,7 @@ void on_input(input_key_t key, input_type_t type) {
         } else {
             g_current_scene--;
         }
+        printf("switching to scene %d\n", g_current_scene);
         g_menu_scroll = 0;
     }
 
