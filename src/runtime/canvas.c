@@ -9,7 +9,7 @@ void canvas_init(canvas_t* canvas, u8g2_t* u8g2) {
     }
 
     canvas->u8g2 = u8g2;
-    canvas->current_color = color_black;
+    canvas->current_color = ColorBlack;
 }
 
 u8g2_t* canvas_get_u8g2(canvas_t* canvas) {
@@ -33,7 +33,7 @@ void canvas_clear(canvas_t* canvas) {
     u8g2_ClearBuffer(canvas->u8g2);
 }
 
-void canvas_set_color(canvas_t* canvas, color_t color) {
+void canvas_set_color(canvas_t* canvas, Color color) {
     if (!canvas || !canvas->u8g2) {
         return;
     }
@@ -41,32 +41,34 @@ void canvas_set_color(canvas_t* canvas, color_t color) {
     u8g2_SetDrawColor(canvas->u8g2, (uint8_t)color);
 }
 
-void canvas_set_font(canvas_t* canvas, font_t font) {
+void canvas_set_font(canvas_t* canvas, Font font) {
     if (!canvas || !canvas->u8g2) {
         return;
     }
 
+    u8g2_SetFontMode(canvas->u8g2, 1);
+
     switch (font) {
-        case font_primary:
-            u8g2_SetFont(canvas->u8g2, u8g2_font_6x10_tf);
+        case FontPrimary:
+            u8g2_SetFont(canvas->u8g2, u8g2_font_helvB08_tr);
             break;
-        case font_secondary:
-            u8g2_SetFont(canvas->u8g2, u8g2_font_5x7_tf);
+        case FontSecondary:
+            u8g2_SetFont(canvas->u8g2, u8g2_font_haxrcorp4089_tr);
             break;
-        case font_keyboard:
-            u8g2_SetFont(canvas->u8g2, u8g2_font_5x8_tf);
+        case FontKeyboard:
+            u8g2_SetFont(canvas->u8g2, u8g2_font_profont11_mr);
             break;
-        case font_big_numbers:
-            u8g2_SetFont(canvas->u8g2, u8g2_font_10x20_tf);
+        case FontBigNumbers:
+            u8g2_SetFont(canvas->u8g2, u8g2_font_profont22_tn);
             break;
         default:
-            u8g2_SetFont(canvas->u8g2, u8g2_font_6x10_tf);
+            u8g2_SetFont(canvas->u8g2, u8g2_font_helvB08_tr);
             break;
     }
 }
 
-color_t canvas_get_color(const canvas_t* canvas) {
-    return canvas ? canvas->current_color : color_black;
+Color canvas_get_color(const canvas_t* canvas) {
+    return canvas ? canvas->current_color : ColorBlack;
 }
 
 void canvas_draw_dot(canvas_t* canvas, int32_t x, int32_t y) {
@@ -128,7 +130,7 @@ void canvas_draw_circle(canvas_t* canvas, int32_t x, int32_t y, uint32_t radius)
         return;
     }
 
-    if (canvas->current_color == color_xor) {
+    if (canvas->current_color == ColorXOR) {
         canvas_draw_xor_circle(canvas, x, y, radius);
     } else {
         u8g2_DrawCircle(canvas->u8g2,
@@ -142,7 +144,7 @@ void canvas_draw_disc(canvas_t* canvas, int32_t x, int32_t y, uint32_t radius) {
         return;
     }
 
-    if (canvas->current_color == color_xor) {
+    if (canvas->current_color == ColorXOR) {
         canvas_draw_xor_disc(canvas, x, y, radius);
     } else {
         u8g2_DrawDisc(canvas->u8g2,
@@ -162,7 +164,7 @@ uint32_t canvas_string_width(canvas_t* canvas, const char* str) {
     if (!canvas || !canvas->u8g2 || !str) {
         return 0;
     }
-    return (uint32_t)u8g2_GetStrWidth(canvas->u8g2, str);
+    return (uint32_t)u8g2_GetUTF8Width(canvas->u8g2, str);
 }
 
 // ============================================================================

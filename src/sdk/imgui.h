@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#include "canvas.h"
+
 // ============================================================================
 // IMGUI View System for ESP32 128x64 Monochrome Display
 // Immediate Mode GUI - no persistent widgets, render and query in same call
@@ -29,23 +31,6 @@ typedef enum {
     ui_input_long = 3,
     ui_input_repeat = 4,
 } ui_input_type_t;
-
-// ----------------------------------------------------------------------------
-// Font and Alignment (matching canvas.h enums)
-// ----------------------------------------------------------------------------
-
-typedef enum {
-    ui_font_primary = 0,
-    ui_font_secondary = 1,
-    ui_font_keyboard = 2,
-    ui_font_big_numbers = 3,
-} ui_font_t;
-
-typedef enum {
-    ui_align_left = 0,
-    ui_align_right = 1,
-    ui_align_center = 2,
-} ui_align_t;
 
 // ----------------------------------------------------------------------------
 // Layout Direction
@@ -80,7 +65,7 @@ void ui_set_position(int16_t x, int16_t y);
 // Basic Widgets
 // ----------------------------------------------------------------------------
 
-void ui_label(const char* text, ui_font_t font, ui_align_t align);
+void ui_label(const char* text, Font font, Align align);
 void ui_separator(void);
 bool ui_button(const char* text);
 bool ui_button_at(int16_t x, int16_t y, const char* text);

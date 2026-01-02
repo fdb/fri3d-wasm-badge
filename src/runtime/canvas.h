@@ -8,22 +8,22 @@
 
 // Color values matching the SDK
 typedef enum {
-    color_white = 0,
-    color_black = 1,
-    color_xor = 2
-} color_t;
+    ColorWhite = 0,
+    ColorBlack = 1,
+    ColorXOR = 2
+} Color;
 
 // Font values matching the SDK
 typedef enum {
-    font_primary = 0,
-    font_secondary = 1,
-    font_keyboard = 2,
-    font_big_numbers = 3
-} font_t;
+    FontPrimary = 0,
+    FontSecondary = 1,
+    FontKeyboard = 2,
+    FontBigNumbers = 3
+} Font;
 
 typedef struct {
     u8g2_t* u8g2;
-    color_t current_color;
+    Color current_color;
 } canvas_t;
 
 /**
@@ -43,9 +43,9 @@ uint32_t canvas_height(const canvas_t* canvas);
 
 // Configuration
 void canvas_clear(canvas_t* canvas);
-void canvas_set_color(canvas_t* canvas, color_t color);
-void canvas_set_font(canvas_t* canvas, font_t font);
-color_t canvas_get_color(const canvas_t* canvas);
+void canvas_set_color(canvas_t* canvas, Color color);
+void canvas_set_font(canvas_t* canvas, Font font);
+Color canvas_get_color(const canvas_t* canvas);
 
 // Basic drawing
 void canvas_draw_dot(canvas_t* canvas, int32_t x, int32_t y);

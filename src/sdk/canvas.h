@@ -6,32 +6,32 @@
 #include "frd.h"
 
 typedef enum {
-    color_white = 0,
-    color_black = 1,
-    color_xor = 2,
-} color_t;
+    ColorWhite = 0,
+    ColorBlack = 1,
+    ColorXOR = 2,
+} Color;
 
 typedef enum {
-    align_left = 0,
-    align_right = 1,
-    align_center = 2,
-    align_top = 3,
-    align_bottom = 4,
-} align_t;
+    AlignLeft = 0,
+    AlignRight = 1,
+    AlignTop = 2,
+    AlignBottom = 3,
+    AlignCenter = 4,
+} Align;
 
 typedef enum {
-    font_primary = 0,
-    font_secondary = 1,
-    font_keyboard = 2,
-    font_big_numbers = 3,
-} font_t;
+    FontPrimary = 0,
+    FontSecondary = 1,
+    FontKeyboard = 2,
+    FontBigNumbers = 3,
+} Font;
 
 WASM_IMPORT("canvas_width") extern uint32_t canvas_width(void);
 WASM_IMPORT("canvas_height") extern uint32_t canvas_height(void);
 
 WASM_IMPORT("canvas_clear") extern void canvas_clear(void);
-WASM_IMPORT("canvas_set_color") extern void canvas_set_color(color_t color);
-WASM_IMPORT("canvas_set_font") extern void canvas_set_font(font_t font);
+WASM_IMPORT("canvas_set_color") extern void canvas_set_color(Color color);
+WASM_IMPORT("canvas_set_font") extern void canvas_set_font(Font font);
 
 WASM_IMPORT("canvas_draw_dot") extern void canvas_draw_dot(int32_t x, int32_t y);
 WASM_IMPORT("canvas_draw_line") extern void canvas_draw_line(int32_t x1, int32_t y1, int32_t x2, int32_t y2);

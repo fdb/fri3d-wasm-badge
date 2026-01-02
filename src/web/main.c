@@ -53,14 +53,14 @@ int js_canvas_height(void) {
 EMSCRIPTEN_KEEPALIVE
 #endif
 void js_canvas_set_color(int color) {
-    canvas_set_color(&g_canvas, (color_t)color);
+    canvas_set_color(&g_canvas, (Color)color);
 }
 
 #ifdef __EMSCRIPTEN__
 EMSCRIPTEN_KEEPALIVE
 #endif
 void js_canvas_set_font(int font) {
-    canvas_set_font(&g_canvas, (font_t)font);
+    canvas_set_font(&g_canvas, (Font)font);
 }
 
 #ifdef __EMSCRIPTEN__

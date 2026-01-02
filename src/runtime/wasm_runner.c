@@ -35,14 +35,14 @@ static uint32_t native_canvas_height(wasm_exec_env_t exec_env) {
 static void native_canvas_set_color(wasm_exec_env_t exec_env, uint32_t color) {
     (void)exec_env;
     if (g_canvas) {
-        canvas_set_color(g_canvas, (color_t)color);
+        canvas_set_color(g_canvas, (Color)color);
     }
 }
 
 static void native_canvas_set_font(wasm_exec_env_t exec_env, uint32_t font) {
     (void)exec_env;
     if (g_canvas) {
-        canvas_set_font(g_canvas, (font_t)font);
+        canvas_set_font(g_canvas, (Font)font);
     }
 }
 

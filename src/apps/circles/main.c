@@ -14,7 +14,7 @@ uint32_t get_scene_count(void) { return 1; }
 void render(void) {
     // Use same seed each frame for consistent circles
     random_seed(g_seed);
-    canvas_set_color(color_black);
+    canvas_set_color(ColorBlack);
 
     // Draw 10 random circles
     for (int i = 0; i < 10; i++) {
