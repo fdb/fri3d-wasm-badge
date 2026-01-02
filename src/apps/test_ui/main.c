@@ -57,13 +57,13 @@ uint32_t get_scene_count(void) {
 static void render_counter(void) {
     ui_begin();
 
-    ui_label("Counter Demo", UI_FONT_PRIMARY, UI_ALIGN_CENTER);
+    ui_label("Counter Demo", ui_font_primary, ui_align_center);
     ui_spacer(8);
 
     // Display counter value
     char buf[32];
     snprintf(buf, sizeof(buf), "Count: %d", g_counter);
-    ui_label(buf, UI_FONT_SECONDARY, UI_ALIGN_CENTER);
+    ui_label(buf, ui_font_secondary, ui_align_center);
     ui_spacer(8);
 
     // Buttons in centered horizontal layout
@@ -89,7 +89,7 @@ static void render_counter(void) {
 static void render_menu(void) {
     ui_begin();
 
-    ui_label("Settings Menu", UI_FONT_PRIMARY, UI_ALIGN_CENTER);
+    ui_label("Settings Menu", ui_font_primary, ui_align_center);
     ui_spacer(4);
 
     ui_menu_begin(&g_menu_scroll, 4, 6);
@@ -135,13 +135,13 @@ static void render_menu(void) {
 static void render_layout(void) {
     ui_begin();
 
-    ui_label("Layout Demo", UI_FONT_PRIMARY, UI_ALIGN_CENTER);
+    ui_label("Layout Demo", ui_font_primary, ui_align_center);
     ui_spacer(2);
 
     // Show text alignment options
-    ui_label("Left", UI_FONT_SECONDARY, UI_ALIGN_LEFT);
-    ui_label("Center", UI_FONT_SECONDARY, UI_ALIGN_CENTER);
-    ui_label("Right", UI_FONT_SECONDARY, UI_ALIGN_RIGHT);
+    ui_label("Left", ui_font_secondary, ui_align_left);
+    ui_label("Center", ui_font_secondary, ui_align_center);
+    ui_label("Right", ui_font_secondary, ui_align_right);
 
     ui_separator();
 
@@ -162,25 +162,25 @@ static void render_layout(void) {
 static void render_progress(void) {
     ui_begin();
 
-    ui_label("Progress Demo", UI_FONT_PRIMARY, UI_ALIGN_CENTER);
+    ui_label("Progress Demo", ui_font_primary, ui_align_center);
     ui_spacer(4);
 
     // Animated progress
-    ui_label("Loading:", UI_FONT_SECONDARY, UI_ALIGN_LEFT);
+    ui_label("Loading:", ui_font_secondary, ui_align_left);
     ui_spacer(2);
     ui_progress(g_progress, 0);
     ui_spacer(4);
 
     // Fixed progress bars at different values
-    ui_label("25%:", UI_FONT_SECONDARY, UI_ALIGN_LEFT);
+    ui_label("25%:", ui_font_secondary, ui_align_left);
     ui_spacer(2);
     ui_progress(0.25f, 0);
 
-    ui_label("50%:", UI_FONT_SECONDARY, UI_ALIGN_LEFT);
+    ui_label("50%:", ui_font_secondary, ui_align_left);
     ui_spacer(2);
     ui_progress(0.50f, 0);
 
-    ui_label("75%:", UI_FONT_SECONDARY, UI_ALIGN_LEFT);
+    ui_label("75%:", ui_font_secondary, ui_align_left);
     ui_spacer(2);
     ui_progress(0.75f, 0);
 
@@ -200,7 +200,7 @@ static void render_progress(void) {
 static void render_checkbox(void) {
     ui_begin();
 
-    ui_label("Checkbox Demo", UI_FONT_PRIMARY, UI_ALIGN_CENTER);
+    ui_label("Checkbox Demo", ui_font_primary, ui_align_center);
     ui_spacer(8);
 
     if (ui_checkbox("Option 1", &g_check1)) {
@@ -223,7 +223,7 @@ static void render_checkbox(void) {
              g_check1 ? 1 : 0,
              g_check2 ? 1 : 0,
              g_check3 ? 1 : 0);
-    ui_label(buf, UI_FONT_SECONDARY, UI_ALIGN_CENTER);
+    ui_label(buf, ui_font_secondary, ui_align_center);
 
     ui_end();
 }
@@ -235,7 +235,7 @@ static void render_checkbox(void) {
 static void render_footer(void) {
     ui_begin();
 
-    ui_label("Footer Demo", UI_FONT_PRIMARY, UI_ALIGN_CENTER);
+    ui_label("Footer Demo", ui_font_primary, ui_align_center);
     ui_spacer(8);
 
     static int left_count = 0;
@@ -244,10 +244,10 @@ static void render_footer(void) {
     // Show both counters on one line
     char buf[32];
     snprintf(buf, sizeof(buf), "Left: %d   Right: %d", left_count, right_count);
-    ui_label(buf, UI_FONT_SECONDARY, UI_ALIGN_CENTER);
+    ui_label(buf, ui_font_secondary, ui_align_center);
 
     ui_spacer(4);
-    ui_label("Press </> to change", UI_FONT_SECONDARY, UI_ALIGN_CENTER);
+    ui_label("Press </> to change", ui_font_secondary, ui_align_center);
 
     // Footer buttons
     if (ui_footer_left("Dec")) {
