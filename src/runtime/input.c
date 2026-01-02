@@ -24,8 +24,6 @@ void input_manager_update(input_manager_t* manager, input_handler_t* handler, ui
         return;
     }
 
-    manager->has_processed_event = false;
-
     input_handler_poll(handler);
 
     while (input_handler_has_event(handler)) {
@@ -69,7 +67,7 @@ void input_manager_update(input_manager_t* manager, input_handler_t* handler, ui
 }
 
 bool input_manager_has_event(const input_manager_t* manager) {
-    return manager ? manager->has_processed_event : false;
+    return manager ? manager->queue_head != manager->queue_tail : false;
 }
 
 input_event_t input_manager_get_event(input_manager_t* manager) {
@@ -77,8 +75,11 @@ input_event_t input_manager_get_event(input_manager_t* manager) {
     if (!manager) {
         return event;
     }
-    manager->has_processed_event = false;
-    event = manager->processed_event;
+    if (manager->queue_head == manager->queue_tail) {
+        return event;
+    }
+    event = manager->event_queue[manager->queue_tail];
+    manager->queue_tail = (manager->queue_tail + 1) % INPUT_EVENT_QUEUE_SIZE;
     return event;
 }
 
@@ -104,7 +105,14 @@ static void input_manager_check_reset_combo(input_manager_t* manager, uint32_t t
 }
 
 static void input_manager_queue_event(input_manager_t* manager, input_key_t key, input_type_t type) {
-    manager->has_processed_event = true;
-    manager->processed_event.key = key;
-    manager->processed_event.type = type;
+    if (!manager) {
+        return;
+    }
+    size_t next_head = (manager->queue_head + 1) % INPUT_EVENT_QUEUE_SIZE;
+    if (next_head == manager->queue_tail) {
+        return;
+    }
+    manager->event_queue[manager->queue_head].key = key;
+    manager->event_queue[manager->queue_head].type = type;
+    manager->queue_head = next_head;
 }

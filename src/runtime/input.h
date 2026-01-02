@@ -36,6 +36,9 @@ typedef struct {
 #define INPUT_LONG_PRESS_MS 500
 #define INPUT_RESET_COMBO_MS 500
 
+// Event queue size
+#define INPUT_EVENT_QUEUE_SIZE 16
+
 // Input handler interface
 // Implementations should fill in the function pointers and context.
 typedef struct {
@@ -57,8 +60,9 @@ typedef struct {
         bool long_press_fired;
     } key_states[INPUT_KEY_COUNT];
 
-    bool has_processed_event;
-    input_event_t processed_event;
+    input_event_t event_queue[INPUT_EVENT_QUEUE_SIZE];
+    size_t queue_head;
+    size_t queue_tail;
 
     uint32_t combo_start_time;
     bool combo_active;
