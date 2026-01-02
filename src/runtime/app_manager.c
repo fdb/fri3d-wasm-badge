@@ -187,12 +187,6 @@ void app_manager_handle_input(app_manager_t* manager, input_key_t key, input_typ
         return;
     }
 
-    if (!manager->in_launcher && key == input_key_back && type == input_type_short_press) {
-        app_manager_request_exit_to_launcher_cb(manager);
-        app_manager_process_pending(manager);
-        return;
-    }
-
     if (manager->in_launcher) {
         if (wasm_runner_is_module_loaded(&manager->wasm_runner)) {
             wasm_runner_call_on_input(&manager->wasm_runner, (uint32_t)key, (uint32_t)type);

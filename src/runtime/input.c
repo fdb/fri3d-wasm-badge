@@ -37,13 +37,18 @@ void input_manager_update(input_manager_t* manager, input_handler_t* handler, ui
             manager->key_states[key_index].pressed = true;
             manager->key_states[key_index].press_time = time_ms;
             manager->key_states[key_index].long_press_fired = false;
+            manager->key_states[key_index].last_repeat_time = time_ms;
 
             input_manager_queue_event(manager, raw_event.key, input_type_press);
         } else if (raw_event.type == input_type_release) {
             if (manager->key_states[key_index].pressed) {
                 uint32_t hold_time = time_ms - manager->key_states[key_index].press_time;
-                if (!manager->key_states[key_index].long_press_fired && hold_time < INPUT_SHORT_PRESS_MAX_MS) {
-                    input_manager_queue_event(manager, raw_event.key, input_type_short_press);
+                if (!manager->key_states[key_index].long_press_fired) {
+                    if (hold_time >= INPUT_LONG_PRESS_MS) {
+                        input_manager_queue_event(manager, raw_event.key, input_type_long_press);
+                    } else {
+                        input_manager_queue_event(manager, raw_event.key, input_type_short_press);
+                    }
                 }
 
                 manager->key_states[key_index].pressed = false;
@@ -58,7 +63,16 @@ void input_manager_update(input_manager_t* manager, input_handler_t* handler, ui
             uint32_t hold_time = time_ms - manager->key_states[i].press_time;
             if (hold_time >= INPUT_LONG_PRESS_MS) {
                 manager->key_states[i].long_press_fired = true;
+                manager->key_states[i].last_repeat_time = time_ms;
                 input_manager_queue_event(manager, (input_key_t)i, input_type_long_press);
+            }
+        }
+
+        if (manager->key_states[i].pressed && manager->key_states[i].long_press_fired) {
+            uint32_t since_repeat = time_ms - manager->key_states[i].last_repeat_time;
+            if (since_repeat >= INPUT_REPEAT_INTERVAL_MS) {
+                manager->key_states[i].last_repeat_time = time_ms;
+                input_manager_queue_event(manager, (input_key_t)i, input_type_repeat);
             }
         }
     }

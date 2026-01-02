@@ -314,6 +314,9 @@ void on_input(input_key_t key, input_type_t type) {
         case input_type_long_press:
             ui_type = ui_input_long;
             break;
+        case input_type_repeat:
+            ui_type = ui_input_repeat;
+            break;
         default:
             break;
     }

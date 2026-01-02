@@ -238,7 +238,7 @@ void ui_input(ui_key_t key, ui_input_type_t type) {
     g_ctx.has_input = true;
 
     // Handle navigation on short press or repeat
-    if (type == ui_input_short || type == ui_input_repeat || type == ui_input_press) {
+    if (type == ui_input_short || type == ui_input_repeat) {
         switch (key) {
             case ui_key_up:
                 if (g_ctx.prev_focus_count > 0) {
