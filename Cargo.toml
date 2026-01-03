@@ -1,0 +1,10 @@
+[workspace]
+members = [
+    "fri3d-runtime",
+    "fri3d-emulator",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
