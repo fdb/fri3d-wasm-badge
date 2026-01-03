@@ -97,11 +97,19 @@ int main(int argc, char* argv[]) {
     random_t random;
     random_init(&random);
 
+    input_sdl_t input_sdl;
+    input_sdl_init(&input_sdl, &display);
+
     app_manager_t app_manager;
     if (!app_manager_init(&app_manager, &canvas, &random)) {
         fprintf(stderr, "Failed to initialize app manager: %s\n", app_manager_get_last_error(&app_manager));
         display_sdl_deinit(&display);
         return 1;
+    }
+
+    wasm_runner_t* runner = app_manager_get_wasm_runner(&app_manager);
+    if (runner) {
+        wasm_runner_set_time_provider(runner, input_sdl_get_time_ms, &input_sdl);
     }
 
     app_manager_set_launcher_path(&app_manager, "build/apps/launcher/launcher.wasm");
@@ -150,11 +158,9 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    input_sdl_t input_sdl;
     input_handler_t input_handler;
     input_manager_t input_manager;
 
-    input_sdl_init(&input_sdl, &display);
     input_sdl_bind_handler(&input_sdl, &input_handler);
     input_manager_init(&input_manager);
     input_manager_set_reset_callback(&input_manager, reset_combo_callback, &app_manager);

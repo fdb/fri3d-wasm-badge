@@ -11,6 +11,8 @@ static random_t* g_random = NULL;
 static wasm_runner_exit_to_launcher_cb g_exit_to_launcher_cb = NULL;
 static wasm_runner_start_app_cb g_start_app_cb = NULL;
 static void* g_app_callback_context = NULL;
+static wasm_runner_time_ms_cb g_time_ms_cb = NULL;
+static void* g_time_ms_context = NULL;
 
 static void wasm_runner_register_native_functions(void);
 static void wasm_runner_lookup_functions(wasm_runner_t* runner);
@@ -177,6 +179,14 @@ static uint32_t native_random_range(wasm_exec_env_t exec_env, uint32_t max) {
     return result;
 }
 
+static uint32_t native_get_time_ms(wasm_exec_env_t exec_env) {
+    (void)exec_env;
+    trace_call("get_time_ms", NULL, 0);
+    uint32_t result = g_time_ms_cb ? g_time_ms_cb(g_time_ms_context) : 0;
+    trace_result((int64_t)result);
+    return result;
+}
+
 static void native_exit_to_launcher(wasm_exec_env_t exec_env) {
     (void)exec_env;
     trace_call("exit_to_launcher", NULL, 0);
@@ -213,6 +223,7 @@ static NativeSymbol g_native_symbols[] = {
     { "random_seed", (void*)native_random_seed, "(i)", NULL },
     { "random_get", (void*)native_random_get, "()i", NULL },
     { "random_range", (void*)native_random_range, "(i)i", NULL },
+    { "get_time_ms", (void*)native_get_time_ms, "()i", NULL },
     { "exit_to_launcher", (void*)native_exit_to_launcher, "()", NULL },
     { "start_app", (void*)native_start_app, "(i)", NULL },
 };
@@ -292,6 +303,14 @@ void wasm_runner_set_random(wasm_runner_t* runner, random_t* random) {
     }
     runner->random = random;
     g_random = random;
+}
+
+void wasm_runner_set_time_provider(wasm_runner_t* runner, wasm_runner_time_ms_cb callback, void* context) {
+    if (!runner) {
+        return;
+    }
+    g_time_ms_cb = callback;
+    g_time_ms_context = context;
 }
 
 void wasm_runner_set_app_callbacks(wasm_runner_t* runner,
