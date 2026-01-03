@@ -117,6 +117,7 @@ int main(int argc, char* argv[]) {
     app_manager_add_app(&app_manager, "Mandelbrot", "build/apps/mandelbrot/mandelbrot.wasm");
     app_manager_add_app(&app_manager, "Test Drawing", "build/apps/test_drawing/test_drawing.wasm");
     app_manager_add_app(&app_manager, "Test UI", "build/apps/test_ui/test_ui.wasm");
+    app_manager_add_app(&app_manager, "Snake", "build/apps/snake/snake.wasm");
 
     if (options.wasm_file) {
         if (!app_manager_launch_app_by_path(&app_manager, options.wasm_file)) {
