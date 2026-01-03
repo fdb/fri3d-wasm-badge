@@ -40,7 +40,7 @@ jobs:
 
     - name: Build WASM apps
       run: |
-        for app in test_drawing circles mandelbrot test_ui launcher; do
+        for app in test_drawing circles mandelbrot test_ui launcher snake; do
           echo "Building $app..."
           cmake -B build/apps/$app \
             -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/toolchain-wasm.cmake \

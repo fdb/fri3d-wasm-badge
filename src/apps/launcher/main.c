@@ -15,6 +15,7 @@ static const launcher_entry_t g_apps[] = {
     { "Mandelbrot", 2 },
     { "Test Drawing", 3 },
     { "Test UI", 4 },
+    { "Snake", 5 },
 };
 
 static int16_t g_menu_scroll = 0;
