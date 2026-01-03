@@ -183,6 +183,7 @@
                 this.pollInput = Module.cwrap('js_poll_input', 'number', []);
                 this.hasInputEvent = Module.cwrap('js_has_input_event', 'number', []);
                 this.getInputEvent = Module.cwrap('js_get_input_event', 'number', []);
+                this.getTimeMs = Module.cwrap('js_get_time_ms', 'number', []);
 
                 console.log('Fri3d Runtime initialized');
                 console.log('Canvas size:', this.canvas.width(), 'x', this.canvas.height());
@@ -231,6 +232,7 @@
                         random_seed: (seed) => self.random.seed(seed),
                         random_get: () => self.random.get(),
                         random_range: (max) => self.random.range(max),
+                        get_time_ms: () => self.getTimeMs(),
                         exit_to_launcher: () => self.requestExitToLauncher(),
                         start_app: (appId) => self.requestStartApp(appId),
                         launch_app: (value) => self.requestLaunchApp(value),

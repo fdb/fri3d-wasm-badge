@@ -9,3 +9,5 @@
 
 // WASM import helper macro
 #define WASM_IMPORT(name) __attribute__((import_module("env"), import_name(name)))
+
+WASM_IMPORT("get_time_ms") extern uint32_t get_time_ms(void);

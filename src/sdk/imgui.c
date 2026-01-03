@@ -6,6 +6,10 @@
 #include "canvas.h"
 #include "input.h"
 
+#include <ctype.h>
+#include <stdio.h>
+#include <string.h>
+
 // ----------------------------------------------------------------------------
 // Internal Constants
 // ----------------------------------------------------------------------------
@@ -20,6 +24,18 @@
 #define UI_MENU_ITEM_HEIGHT 12
 #define UI_FOOTER_HEIGHT 12
 #define UI_SCROLLBAR_WIDTH 3
+#define UI_VK_ORIGIN_X 1
+#define UI_VK_ORIGIN_Y 29
+#define UI_VK_ROW_COUNT 3
+#define UI_VK_VALIDATOR_TIMEOUT_MS 4000
+
+#define UI_VK_ENTER_KEY '\r'
+#define UI_VK_BACKSPACE_KEY '\b'
+
+#define UI_VK_BACKSPACE_W 16
+#define UI_VK_BACKSPACE_H 9
+#define UI_VK_ENTER_W 24
+#define UI_VK_ENTER_H 11
 
 // ----------------------------------------------------------------------------
 // Internal Types
@@ -45,6 +61,60 @@ typedef struct {
     const char* text;
     bool focused;
 } ui_deferred_button_t;
+
+typedef struct {
+    char text;
+    uint8_t x;
+    uint8_t y;
+} ui_vk_key_t;
+
+static const ui_vk_key_t g_vk_row_1[] = {
+    {'q', 1, 8},
+    {'w', 10, 8},
+    {'e', 19, 8},
+    {'r', 28, 8},
+    {'t', 37, 8},
+    {'y', 46, 8},
+    {'u', 55, 8},
+    {'i', 64, 8},
+    {'o', 73, 8},
+    {'p', 82, 8},
+    {'0', 91, 8},
+    {'1', 100, 8},
+    {'2', 110, 8},
+    {'3', 120, 8},
+};
+
+static const ui_vk_key_t g_vk_row_2[] = {
+    {'a', 1, 20},
+    {'s', 10, 20},
+    {'d', 19, 20},
+    {'f', 28, 20},
+    {'g', 37, 20},
+    {'h', 46, 20},
+    {'j', 55, 20},
+    {'k', 64, 20},
+    {'l', 73, 20},
+    {UI_VK_BACKSPACE_KEY, 82, 12},
+    {'4', 100, 20},
+    {'5', 110, 20},
+    {'6', 120, 20},
+};
+
+static const ui_vk_key_t g_vk_row_3[] = {
+    {'z', 1, 32},
+    {'x', 10, 32},
+    {'c', 19, 32},
+    {'v', 28, 32},
+    {'b', 37, 32},
+    {'n', 46, 32},
+    {'m', 55, 32},
+    {'_', 64, 32},
+    {UI_VK_ENTER_KEY, 74, 23},
+    {'7', 100, 32},
+    {'8', 110, 32},
+    {'9', 120, 32},
+};
 
 typedef struct {
     // Layout stack
@@ -174,6 +244,469 @@ static void ui_draw_button_internal(int16_t x, int16_t y, int16_t w, int16_t h, 
     }
 }
 
+static uint8_t ui_vk_row_size(uint8_t row_index) {
+    switch (row_index) {
+        case 0:
+            return (uint8_t)(sizeof(g_vk_row_1) / sizeof(g_vk_row_1[0]));
+        case 1:
+            return (uint8_t)(sizeof(g_vk_row_2) / sizeof(g_vk_row_2[0]));
+        case 2:
+            return (uint8_t)(sizeof(g_vk_row_3) / sizeof(g_vk_row_3[0]));
+        default:
+            return 0;
+    }
+}
+
+static const ui_vk_key_t* ui_vk_row(uint8_t row_index) {
+    switch (row_index) {
+        case 0:
+            return g_vk_row_1;
+        case 1:
+            return g_vk_row_2;
+        case 2:
+            return g_vk_row_3;
+        default:
+            return NULL;
+    }
+}
+
+static char ui_vk_selected_char(const ui_virtual_keyboard_t* keyboard) {
+    const ui_vk_key_t* row = ui_vk_row(keyboard->row);
+    if (!row) {
+        return 0;
+    }
+    return row[keyboard->col].text;
+}
+
+static bool ui_vk_is_lowercase(char letter) {
+    return (letter >= 'a' && letter <= 'z');
+}
+
+static char ui_vk_to_uppercase(char letter) {
+    if (letter == '_') {
+        return ' ';
+    }
+    if (ui_vk_is_lowercase(letter)) {
+        return (char)(letter - 0x20);
+    }
+    return letter;
+}
+
+static size_t ui_vk_text_length(const ui_virtual_keyboard_t* keyboard) {
+    if (!keyboard || !keyboard->buffer) {
+        return 0;
+    }
+    return strlen(keyboard->buffer);
+}
+
+static void ui_vk_backspace(ui_virtual_keyboard_t* keyboard) {
+    if (!keyboard || !keyboard->buffer || keyboard->capacity == 0) {
+        return;
+    }
+
+    if (keyboard->clear_default_text) {
+        keyboard->buffer[0] = '\0';
+        keyboard->clear_default_text = false;
+        return;
+    }
+
+    size_t length = strlen(keyboard->buffer);
+    if (length > 0) {
+        keyboard->buffer[length - 1] = '\0';
+    }
+}
+
+static void ui_vk_set_validator_message(ui_virtual_keyboard_t* keyboard, const char* message) {
+    if (!keyboard) {
+        return;
+    }
+    if (!message) {
+        keyboard->validator_message[0] = '\0';
+        return;
+    }
+    snprintf(keyboard->validator_message, sizeof(keyboard->validator_message), "%s", message);
+}
+
+static void ui_vk_show_validator(ui_virtual_keyboard_t* keyboard, uint32_t now_ms, const char* fallback) {
+    if (!keyboard) {
+        return;
+    }
+    keyboard->validator_visible = true;
+    keyboard->validator_deadline_ms = now_ms + UI_VK_VALIDATOR_TIMEOUT_MS;
+    if (keyboard->validator_message[0] == '\0') {
+        ui_vk_set_validator_message(keyboard, fallback);
+    }
+}
+
+static bool ui_vk_handle_ok(ui_virtual_keyboard_t* keyboard, bool shift, uint32_t now_ms) {
+    if (!keyboard || !keyboard->buffer || keyboard->capacity == 0) {
+        return false;
+    }
+
+    char selected = ui_vk_selected_char(keyboard);
+    size_t text_length = ui_vk_text_length(keyboard);
+
+    bool toggle_case = (text_length == 0) || keyboard->clear_default_text;
+    if (shift) {
+        toggle_case = !toggle_case;
+    }
+    if (toggle_case) {
+        selected = ui_vk_to_uppercase(selected);
+    }
+
+    if (selected == UI_VK_ENTER_KEY) {
+        if (keyboard->validator) {
+            keyboard->validator_message[0] = '\0';
+            bool ok = keyboard->validator(
+                keyboard->buffer,
+                keyboard->validator_message,
+                sizeof(keyboard->validator_message),
+                keyboard->validator_context);
+            if (!ok) {
+                ui_vk_show_validator(keyboard, now_ms, "Invalid input");
+                return false;
+            }
+        }
+
+        if (text_length >= keyboard->min_len) {
+            return true;
+        }
+        return false;
+    }
+
+    if (selected == UI_VK_BACKSPACE_KEY) {
+        ui_vk_backspace(keyboard);
+        keyboard->clear_default_text = false;
+        return false;
+    }
+
+    if (keyboard->clear_default_text) {
+        text_length = 0;
+    }
+
+    if (text_length + 1 < keyboard->capacity) {
+        keyboard->buffer[text_length] = selected;
+        keyboard->buffer[text_length + 1] = '\0';
+    }
+
+    keyboard->clear_default_text = false;
+    return false;
+}
+
+static void ui_vk_move_left(ui_virtual_keyboard_t* keyboard) {
+    int row_len = (int)ui_vk_row_size(keyboard->row);
+    if (row_len <= 0) {
+        return;
+    }
+    if (keyboard->col > 0) {
+        keyboard->col--;
+    } else {
+        keyboard->col = (uint8_t)(row_len - 1);
+    }
+}
+
+static void ui_vk_move_right(ui_virtual_keyboard_t* keyboard) {
+    int row_len = (int)ui_vk_row_size(keyboard->row);
+    if (row_len <= 0) {
+        return;
+    }
+    if (keyboard->col + 1 < (uint8_t)row_len) {
+        keyboard->col++;
+    } else {
+        keyboard->col = 0;
+    }
+}
+
+static void ui_vk_move_up(ui_virtual_keyboard_t* keyboard) {
+    if (!keyboard) {
+        return;
+    }
+    if (keyboard->row == 0) {
+        return;
+    }
+    keyboard->row = (uint8_t)(keyboard->row - 1);
+
+    int row_len = (int)ui_vk_row_size(keyboard->row);
+    if (row_len <= 0) {
+        keyboard->col = 0;
+        return;
+    }
+
+    if (keyboard->col > (uint8_t)(row_len - 6)) {
+        keyboard->col++;
+    }
+    if (keyboard->col >= (uint8_t)row_len) {
+        keyboard->col = (uint8_t)(row_len - 1);
+    }
+}
+
+static void ui_vk_move_down(ui_virtual_keyboard_t* keyboard) {
+    if (!keyboard) {
+        return;
+    }
+    if (keyboard->row + 1 >= UI_VK_ROW_COUNT) {
+        return;
+    }
+    keyboard->row++;
+
+    int row_len = (int)ui_vk_row_size(keyboard->row);
+    if (row_len <= 0) {
+        keyboard->col = 0;
+        return;
+    }
+
+    if (keyboard->col > (uint8_t)(row_len - 4) && keyboard->col > 0) {
+        keyboard->col--;
+    }
+    if (keyboard->col >= (uint8_t)row_len) {
+        keyboard->col = (uint8_t)(row_len - 1);
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Virtual Keyboard
+// ----------------------------------------------------------------------------
+
+void ui_virtual_keyboard_init(ui_virtual_keyboard_t* keyboard, char* buffer, size_t capacity) {
+    if (!keyboard) {
+        return;
+    }
+
+    memset(keyboard, 0, sizeof(*keyboard));
+    keyboard->buffer = buffer;
+    keyboard->capacity = capacity;
+    keyboard->min_len = 1;
+    keyboard->row = 0;
+    keyboard->col = 0;
+    keyboard->validator_message[0] = '\0';
+
+    if (buffer && buffer[0] != '\0') {
+        keyboard->row = 2;
+        keyboard->col = 8;
+    }
+}
+
+void ui_virtual_keyboard_set_min_length(ui_virtual_keyboard_t* keyboard, size_t min_len) {
+    if (!keyboard) {
+        return;
+    }
+    keyboard->min_len = min_len;
+}
+
+void ui_virtual_keyboard_set_validator(
+    ui_virtual_keyboard_t* keyboard,
+    ui_virtual_keyboard_validator_t validator,
+    void* context) {
+    if (!keyboard) {
+        return;
+    }
+    keyboard->validator = validator;
+    keyboard->validator_context = context;
+}
+
+bool ui_virtual_keyboard(ui_virtual_keyboard_t* keyboard, const char* header, uint32_t now_ms) {
+    if (!keyboard) {
+        return false;
+    }
+
+    if (keyboard->row >= UI_VK_ROW_COUNT) {
+        keyboard->row = 0;
+    }
+    uint8_t row_size = ui_vk_row_size(keyboard->row);
+    if (row_size == 0) {
+        keyboard->col = 0;
+    } else if (keyboard->col >= row_size) {
+        keyboard->col = row_size - 1;
+    }
+
+    if (keyboard->validator_visible && now_ms >= keyboard->validator_deadline_ms) {
+        keyboard->validator_visible = false;
+    }
+
+    bool submitted = false;
+
+    if (g_ctx.has_input) {
+        ui_key_t key = g_ctx.last_key;
+        ui_input_type_t type = g_ctx.last_type;
+
+        if (keyboard->validator_visible &&
+            (type == ui_input_short || type == ui_input_long || type == ui_input_repeat)) {
+            keyboard->validator_visible = false;
+        } else if (type == ui_input_short) {
+            switch (key) {
+                case ui_key_up:
+                    ui_vk_move_up(keyboard);
+                    break;
+                case ui_key_down:
+                    ui_vk_move_down(keyboard);
+                    break;
+                case ui_key_left:
+                    ui_vk_move_left(keyboard);
+                    break;
+                case ui_key_right:
+                    ui_vk_move_right(keyboard);
+                    break;
+                case ui_key_ok:
+                    submitted = ui_vk_handle_ok(keyboard, false, now_ms);
+                    break;
+                default:
+                    break;
+            }
+        } else if (type == ui_input_long) {
+            switch (key) {
+                case ui_key_ok:
+                    submitted = ui_vk_handle_ok(keyboard, true, now_ms);
+                    break;
+                case ui_key_back:
+                    ui_vk_backspace(keyboard);
+                    break;
+                default:
+                    break;
+            }
+        } else if (type == ui_input_repeat) {
+            switch (key) {
+                case ui_key_up:
+                    ui_vk_move_up(keyboard);
+                    break;
+                case ui_key_down:
+                    ui_vk_move_down(keyboard);
+                    break;
+                case ui_key_left:
+                    ui_vk_move_left(keyboard);
+                    break;
+                case ui_key_right:
+                    ui_vk_move_right(keyboard);
+                    break;
+                case ui_key_back:
+                    ui_vk_backspace(keyboard);
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+
+    const char* header_text = header ? header : "";
+    const char* text = keyboard->buffer ? keyboard->buffer : "";
+    size_t text_length = ui_vk_text_length(keyboard);
+
+    canvas_set_color(ColorBlack);
+
+    canvas_set_font(FontPrimary);
+    canvas_draw_str(2, 8, header_text);
+
+    canvas_draw_rframe(1, 12, 126, 15, 2);
+
+    canvas_set_font(FontSecondary);
+
+    uint32_t needed_width = UI_SCREEN_WIDTH - 8;
+    int16_t start_pos = 4;
+
+    if (canvas_string_width(text) > needed_width) {
+        canvas_draw_str(start_pos, 22, "...");
+        start_pos += 6;
+        needed_width -= 8;
+    }
+
+    const char* visible_text = text;
+    while (visible_text && canvas_string_width(visible_text) > needed_width) {
+        visible_text++;
+    }
+
+    uint32_t visible_width = canvas_string_width(visible_text);
+
+    if (keyboard->clear_default_text) {
+        canvas_draw_rbox(start_pos - 1, 14, visible_width + 2, 10, 2);
+        canvas_set_color(ColorWhite);
+    } else {
+        canvas_draw_str(start_pos + (int16_t)visible_width + 1, 22, "|");
+    }
+
+    canvas_draw_str(start_pos, 22, visible_text);
+
+    canvas_set_font(FontKeyboard);
+
+    for (uint8_t row = 0; row < UI_VK_ROW_COUNT; row++) {
+        const ui_vk_key_t* keys = ui_vk_row(row);
+        uint8_t column_count = ui_vk_row_size(row);
+
+        for (uint8_t column = 0; column < column_count; column++) {
+            const ui_vk_key_t* key = &keys[column];
+            bool selected = (keyboard->row == row && keyboard->col == column);
+
+            int16_t key_x = UI_VK_ORIGIN_X + key->x;
+            int16_t key_y = UI_VK_ORIGIN_Y + key->y;
+
+            if (key->text == UI_VK_ENTER_KEY) {
+                canvas_set_color(ColorBlack);
+                if (selected) {
+                    canvas_draw_rbox(key_x, key_y, UI_VK_ENTER_W, UI_VK_ENTER_H, 2);
+                    canvas_set_color(ColorWhite);
+                } else {
+                    canvas_draw_rframe(key_x, key_y, UI_VK_ENTER_W, UI_VK_ENTER_H, 2);
+                }
+                canvas_set_font(FontSecondary);
+                const char* label = "OK";
+                uint32_t label_width = canvas_string_width(label);
+                int16_t label_x = key_x + ((int16_t)UI_VK_ENTER_W - (int16_t)label_width) / 2;
+                canvas_draw_str(label_x, key_y + UI_VK_ENTER_H - 2, label);
+                canvas_set_font(FontKeyboard);
+                continue;
+            }
+
+            if (key->text == UI_VK_BACKSPACE_KEY) {
+                canvas_set_color(ColorBlack);
+                if (selected) {
+                    canvas_draw_rbox(key_x, key_y, UI_VK_BACKSPACE_W, UI_VK_BACKSPACE_H, 2);
+                    canvas_set_color(ColorWhite);
+                } else {
+                    canvas_draw_rframe(key_x, key_y, UI_VK_BACKSPACE_W, UI_VK_BACKSPACE_H, 2);
+                }
+                int16_t mid_y = key_y + (UI_VK_BACKSPACE_H / 2);
+                int16_t left_x = key_x + 3;
+                int16_t right_x = key_x + UI_VK_BACKSPACE_W - 4;
+                canvas_draw_line(left_x, mid_y, right_x, mid_y);
+                canvas_draw_line(left_x, mid_y, left_x + 3, mid_y - 3);
+                canvas_draw_line(left_x, mid_y, left_x + 3, mid_y + 3);
+                continue;
+            }
+
+            if (selected) {
+                canvas_set_color(ColorBlack);
+                canvas_draw_box(key_x - 1, key_y - 8, 7, 10);
+                canvas_set_color(ColorWhite);
+            } else {
+                canvas_set_color(ColorBlack);
+            }
+
+            char glyph = key->text;
+            if (keyboard->clear_default_text ||
+                (text_length == 0 && ui_vk_is_lowercase(key->text))) {
+                glyph = ui_vk_to_uppercase(glyph);
+            }
+
+            char str[2] = { glyph, '\0' };
+            canvas_draw_str(key_x, key_y, str);
+        }
+    }
+
+    if (keyboard->validator_visible) {
+        canvas_set_font(FontSecondary);
+        canvas_set_color(ColorWhite);
+        canvas_draw_box(8, 10, 112, 44);
+        canvas_set_color(ColorBlack);
+        canvas_draw_rframe(8, 8, 112, 48, 3);
+        canvas_draw_rframe(9, 9, 110, 46, 2);
+
+        const char* message = keyboard->validator_message;
+        uint32_t msg_width = canvas_string_width(message);
+        int16_t msg_x = (UI_SCREEN_WIDTH - (int16_t)msg_width) / 2;
+        canvas_draw_str(msg_x, 34, message);
+    }
+
+    return submitted;
+}
+
 // ----------------------------------------------------------------------------
 // Context Management
 // ----------------------------------------------------------------------------
@@ -233,9 +766,11 @@ void ui_end(void) {
 }
 
 void ui_input(ui_key_t key, ui_input_type_t type) {
-    g_ctx.last_key = key;
-    g_ctx.last_type = type;
-    g_ctx.has_input = true;
+    if (type != ui_input_release) {
+        g_ctx.last_key = key;
+        g_ctx.last_type = type;
+        g_ctx.has_input = true;
+    }
 
     // Handle navigation on short press or repeat
     if (type == ui_input_short || type == ui_input_repeat) {
