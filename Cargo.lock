@@ -86,6 +86,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "645cbb3a84e60b7531617d5ae4e57f7e27308f6445f5abf653209ea76dec8dff"
 
 [[package]]
+name = "fri3d-app-dots"
+version = "0.1.0"
+dependencies = [
+ "fri3d-wasm-api",
+]
+
+[[package]]
 name = "fri3d-emulator"
 version = "0.1.0"
 dependencies = [
@@ -99,6 +106,10 @@ version = "0.1.0"
 dependencies = [
  "wasmi",
 ]
+
+[[package]]
+name = "fri3d-wasm-api"
+version = "0.1.0"
 
 [[package]]
 name = "futures"

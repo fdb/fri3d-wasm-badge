@@ -2,6 +2,13 @@
 members = [
     "fri3d-runtime",
     "fri3d-emulator",
+    "fri3d-wasm-api",
+    "fri3d-app-dots",
+]
+default-members = [
+    "fri3d-runtime",
+    "fri3d-emulator",
+    "fri3d-wasm-api",
 ]
 resolver = "2"
 

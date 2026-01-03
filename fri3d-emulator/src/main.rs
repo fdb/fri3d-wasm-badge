@@ -135,26 +135,39 @@ fn main() {
     }
 
     let mut buffer = vec![0u32; (canvas.borrow().width() * canvas.borrow().height()) as usize];
+    let mut needs_render = true;
 
     while window.borrow().is_open() {
         let time_ms = start.elapsed().as_millis() as u32;
         input_manager.update(&mut input, time_ms);
 
+        let mut had_event = false;
         while let Some(event) = input_manager.next_event() {
             app_manager
                 .borrow_mut()
                 .handle_input(event.key, event.kind);
+            had_event = true;
         }
 
-        app_manager.borrow_mut().render();
-        render_canvas(&canvas.borrow(), &mut buffer);
+        needs_render |= had_event;
+        if needs_render {
+            app_manager.borrow_mut().render();
+            render_canvas(&canvas.borrow(), &mut buffer);
+            needs_render = false;
 
-        if window
-            .borrow_mut()
-            .update_with_buffer(&buffer, canvas.borrow().width() as usize, canvas.borrow().height() as usize)
-            .is_err()
-        {
-            break;
+            if window
+                .borrow_mut()
+                .update_with_buffer(
+                    &buffer,
+                    canvas.borrow().width() as usize,
+                    canvas.borrow().height() as usize,
+                )
+                .is_err()
+            {
+                break;
+            }
+        } else {
+            window.borrow_mut().update();
         }
     }
 }

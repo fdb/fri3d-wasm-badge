@@ -4,7 +4,7 @@ Purpose: guide a staged Rust reimplementation while keeping the current C/C++ co
 
 ## Goals
 
-- Preserve behavior and output across platforms (emulator, web, firmware).
+- Preserve behavior and output across platforms (emulator, web, firmware), except where we intentionally move to event/timer-driven rendering for power savings.
 - Keep the same WASM app API and runtime semantics as the C runtime.
 - Use a Rust workspace with multiple crates (e.g., `fri3d-runtime`, `fri3d-emulator`, `fri3d-platform-*`).
 - Use Rust-native dependencies where appropriate (e.g., `wasmi` for WASM, `minifb` for desktop display).
@@ -17,7 +17,7 @@ Purpose: guide a staged Rust reimplementation while keeping the current C/C++ co
 
 ### Stage 001: Basics
 
-- Document core invariants: 128x64 1bpp framebuffer, input model, WASM imports/exports, full-frame redraw, deterministic tests.
+- Document core invariants: 128x64 1bpp framebuffer, input model, WASM imports/exports, event/timer-driven full-frame redraw, deterministic tests.
 - Define platform-neutral architecture: platform layer (display/input/time) + shared runtime + apps.
 - Rust mapping: define shared crates, traits, and types that mirror the runtime boundaries.
 
@@ -63,6 +63,8 @@ Purpose: guide a staged Rust reimplementation while keeping the current C/C++ co
 - Workspace root `Cargo.toml` with member crates.
 - `fri3d-runtime` crate with core runtime modules.
 - `fri3d-emulator` crate with display/input/time backends.
+- `fri3d-wasm-api` crate that exposes safe wrappers for `env` imports so apps stay `unsafe`-free.
+- Example `fri3d-app-*` crates that compile to WASM and export `render()`.
 - Baseline tests or validation harness to compare outputs against C runtime.
 
 ## Constraints
