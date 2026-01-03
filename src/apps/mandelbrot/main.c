@@ -51,6 +51,9 @@ void on_input(input_key_t key, input_type_t type) {
             return;
         }
         if (type == input_type_short_press) {
+            // Zoom out from center
+            g_x_offset += 0.05f * g_x_zoom;
+            g_y_offset += 0.05f * g_y_zoom;
             g_x_zoom *= 1.1f;
             g_y_zoom *= 1.1f;
             g_zoom -= 0.15f;
@@ -63,7 +66,8 @@ void on_input(input_key_t key, input_type_t type) {
         return;
     }
 
-    float step = 0.1f / g_zoom;
+    // Scale step with actual zoom level (smaller g_x_zoom = more zoomed in)
+    float step = g_x_zoom * 0.03f;
 
     switch (key) {
         case input_key_up:
@@ -79,6 +83,9 @@ void on_input(input_key_t key, input_type_t type) {
             g_x_offset -= step;
             break;
         case input_key_ok:
+            // Zoom in from center
+            g_x_offset -= 0.05f * g_x_zoom;
+            g_y_offset -= 0.05f * g_y_zoom;
             g_x_zoom *= 0.9f;
             g_y_zoom *= 0.9f;
             g_zoom += 0.15f;
