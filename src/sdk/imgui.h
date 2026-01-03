@@ -42,6 +42,41 @@ typedef enum {
 } ui_layout_direction_t;
 
 // ----------------------------------------------------------------------------
+// Virtual Keyboard
+// ----------------------------------------------------------------------------
+
+typedef bool (*ui_virtual_keyboard_validator_t)(
+    const char* text,
+    char* message,
+    size_t message_size,
+    void* context);
+
+typedef struct {
+    char* buffer;
+    size_t capacity;
+    size_t min_len;
+
+    uint8_t row;
+    uint8_t col;
+
+    bool clear_default_text;
+
+    bool validator_visible;
+    uint32_t validator_deadline_ms;
+    ui_virtual_keyboard_validator_t validator;
+    void* validator_context;
+    char validator_message[64];
+} ui_virtual_keyboard_t;
+
+void ui_virtual_keyboard_init(ui_virtual_keyboard_t* keyboard, char* buffer, size_t capacity);
+void ui_virtual_keyboard_set_min_length(ui_virtual_keyboard_t* keyboard, size_t min_len);
+void ui_virtual_keyboard_set_validator(
+    ui_virtual_keyboard_t* keyboard,
+    ui_virtual_keyboard_validator_t validator,
+    void* context);
+bool ui_virtual_keyboard(ui_virtual_keyboard_t* keyboard, const char* header, uint32_t now_ms);
+
+// ----------------------------------------------------------------------------
 // Context Management
 // ----------------------------------------------------------------------------
 

@@ -76,6 +76,9 @@ void input_sdl_poll(void* context) {
                 display_sdl_set_quit(input->display, true);
             }
         } else if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
+            if (event.type == SDL_KEYDOWN && event.key.repeat != 0) {
+                continue;
+            }
             if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_s) {
                 input->screenshot_requested = true;
                 continue;

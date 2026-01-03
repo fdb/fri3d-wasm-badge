@@ -8,6 +8,7 @@
 #include <input.h>
 #include <imgui.h>
 #include <stdio.h>
+#include <string.h>
 
 // Scene definitions
 typedef enum {
@@ -17,6 +18,7 @@ typedef enum {
     SCENE_PROGRESS,
     SCENE_CHECKBOX,
     SCENE_FOOTER,
+    SCENE_KEYBOARD,
     SCENE_COUNT
 } Scene;
 
@@ -33,6 +35,11 @@ static float g_progress = 0.0f;
 static bool g_check1 = false;
 static bool g_check2 = true;
 static bool g_check3 = false;
+static ui_virtual_keyboard_t g_keyboard;
+static char g_keyboard_buffer[32] = "guest";
+static bool g_keyboard_saved = false;
+static uint32_t g_keyboard_saved_until = 0;
+static char g_keyboard_saved_text[32] = {0};
 
 // Export scene functions for testing
 uint32_t get_scene(void) {
@@ -44,6 +51,16 @@ void set_scene(uint32_t scene) {
         g_current_scene = (Scene)scene;
         // Reset scene-specific state
         g_menu_scroll = 0;
+
+        if (g_current_scene == SCENE_KEYBOARD) {
+            snprintf(g_keyboard_buffer, sizeof(g_keyboard_buffer), "guest");
+            ui_virtual_keyboard_init(&g_keyboard, g_keyboard_buffer, sizeof(g_keyboard_buffer));
+            ui_virtual_keyboard_set_min_length(&g_keyboard, 3);
+            g_keyboard.clear_default_text = true;
+            g_keyboard_saved = false;
+            g_keyboard_saved_until = 0;
+            g_keyboard_saved_text[0] = '\0';
+        }
     }
 }
 
@@ -265,6 +282,58 @@ static void render_footer(void) {
 }
 
 // ----------------------------------------------------------------------------
+// Scene: Virtual Keyboard
+// ----------------------------------------------------------------------------
+
+static bool keyboard_validator(const char* text, char* message, size_t message_size, void* context) {
+    (void)context;
+    size_t len = text ? strlen(text) : 0;
+
+    if (len < 3) {
+        snprintf(message, message_size, "Min 3 chars");
+        return false;
+    }
+
+    for (size_t i = 0; i < len; i++) {
+        if (text[i] == ' ') {
+            snprintf(message, message_size, "No spaces");
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static void render_keyboard(void) {
+    ui_begin();
+
+    uint32_t now_ms = get_time_ms();
+
+    if (g_keyboard_saved && now_ms >= g_keyboard_saved_until) {
+        g_keyboard_saved = false;
+    }
+
+    if (!g_keyboard.validator) {
+        ui_virtual_keyboard_set_validator(&g_keyboard, keyboard_validator, NULL);
+    }
+
+    char header[32];
+    if (g_keyboard_saved) {
+        snprintf(header, sizeof(header), "Saved: %s", g_keyboard_saved_text);
+    } else {
+        snprintf(header, sizeof(header), "Enter Name");
+    }
+
+    if (ui_virtual_keyboard(&g_keyboard, header, now_ms)) {
+        g_keyboard_saved = true;
+        g_keyboard_saved_until = now_ms + 2000;
+        snprintf(g_keyboard_saved_text, sizeof(g_keyboard_saved_text), "%s", g_keyboard_buffer);
+    }
+
+    ui_end();
+}
+
+// ----------------------------------------------------------------------------
 // Main render function
 // ----------------------------------------------------------------------------
 
@@ -287,6 +356,9 @@ void render(void) {
             break;
         case SCENE_FOOTER:
             render_footer();
+            break;
+        case SCENE_KEYBOARD:
+            render_keyboard();
             break;
         default:
             break;
@@ -335,11 +407,10 @@ void on_input(input_key_t key, input_type_t type) {
         // In a real app, this would exit
         // For demo, cycle scenes backwards
         if (g_current_scene == 0) {
-            g_current_scene = SCENE_COUNT - 1;
+            set_scene(SCENE_COUNT - 1);
         } else {
-            g_current_scene--;
+            set_scene((uint32_t)(g_current_scene - 1));
         }
-        g_menu_scroll = 0;
     }
 
     // Additional scene-specific input handling
