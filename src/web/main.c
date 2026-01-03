@@ -206,18 +206,12 @@ int js_get_time_ms(void) {
 
 static void main_loop(void) {
     if (display_sdl_should_quit(&g_display)) {
-#ifdef __EMSCRIPTEN__
-        emscripten_cancel_main_loop();
-#endif
         return;
     }
 
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
         if (event.type == SDL_QUIT) {
-#ifdef __EMSCRIPTEN__
-            emscripten_cancel_main_loop();
-#endif
             return;
         }
     }
@@ -245,14 +239,15 @@ int main(int argc, char* argv[]) {
     printf("Canvas size: %ux%u\n", (unsigned)canvas_width(&g_canvas), (unsigned)canvas_height(&g_canvas));
 
 #ifdef __EMSCRIPTEN__
-    emscripten_set_main_loop(main_loop, 60, 0);
+    emscripten_exit_with_live_runtime();
+    return 0;
 #else
     while (!display_sdl_should_quit(&g_display)) {
         main_loop();
         SDL_Delay(16);
     }
-#endif
 
     display_sdl_deinit(&g_display);
     return 0;
+#endif
 }

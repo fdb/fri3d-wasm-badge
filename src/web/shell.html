@@ -44,21 +44,6 @@
             border-radius: 8px;
         }
 
-        .app-selector {
-            margin-top: 15px;
-            text-align: center;
-        }
-
-        .app-selector select {
-            background: #0f3460;
-            color: #fff;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            font-size: 14px;
-            cursor: pointer;
-        }
-
         .controls {
             margin-top: 20px;
             text-align: center;
@@ -129,16 +114,6 @@
 
         <canvas id="canvas" class="hidden" width="512" height="256"></canvas>
 
-        <div id="app-selector" class="app-selector hidden">
-            <select id="app-select">
-                <option value="">-- Select an app --</option>
-                <option value="/apps/circles/circles.wasm">Circles</option>
-                <option value="/apps/mandelbrot/mandelbrot.wasm">Mandelbrot</option>
-                <option value="/apps/test_drawing/test_drawing.wasm">Test Drawing</option>
-                <option value="/apps/test_ui/test_ui.wasm">Test UI</option>
-            </select>
-        </div>
-
         <div id="controls" class="controls hidden">
             <h3>Controls</h3>
             <p>
@@ -162,7 +137,17 @@
         const Fri3dRuntime = {
             currentApp: null,
             appMemory: null,
+            ready: false,
             animationId: null,
+            pendingRequest: null,
+            switchInProgress: false,
+            launcherPath: '/apps/launcher/launcher.wasm',
+            appRegistry: [
+                { id: 1, name: 'Circles', path: '/apps/circles/circles.wasm' },
+                { id: 2, name: 'Mandelbrot', path: '/apps/mandelbrot/mandelbrot.wasm' },
+                { id: 3, name: 'Test Drawing', path: '/apps/test_drawing/test_drawing.wasm' },
+                { id: 4, name: 'Test UI', path: '/apps/test_ui/test_ui.wasm' }
+            ],
 
             // Wrapper functions for C++ exports (set after Module loads)
             canvas: null,
@@ -201,6 +186,7 @@
 
                 console.log('Fri3d Runtime initialized');
                 console.log('Canvas size:', this.canvas.width(), 'x', this.canvas.height());
+                this.ready = true;
             },
 
             // Read a null-terminated string from WASM memory
@@ -245,8 +231,64 @@
                         random_seed: (seed) => self.random.seed(seed),
                         random_get: () => self.random.get(),
                         random_range: (max) => self.random.range(max),
+                        exit_to_launcher: () => self.requestExitToLauncher(),
+                        start_app: (appId) => self.requestStartApp(appId),
+                        launch_app: (value) => self.requestLaunchApp(value),
                     }
                 };
+            },
+
+            requestExitToLauncher: function() {
+                this.pendingRequest = { type: 'launcher' };
+            },
+
+            requestStartApp: function(appId) {
+                this.pendingRequest = { type: 'start_app', appId: appId >>> 0 };
+            },
+
+            requestLaunchApp: function(value) {
+                const appId = value >>> 0;
+                if (this.findAppById(appId)) {
+                    this.requestStartApp(appId);
+                    return;
+                }
+                const path = this.readString(value);
+                if (path) {
+                    this.pendingRequest = { type: 'path', path: path };
+                } else {
+                    this.log('launch_app: invalid app id or path');
+                }
+            },
+
+            findAppById: function(appId) {
+                return this.appRegistry.find((app) => app.id === appId) || null;
+            },
+
+            processPendingRequest: function() {
+                if (!this.pendingRequest || this.switchInProgress) {
+                    return;
+                }
+
+                const request = this.pendingRequest;
+                this.pendingRequest = null;
+
+                if (request.type === 'launcher') {
+                    this.loadApp(this.launcherPath);
+                } else if (request.type === 'start_app') {
+                    if (request.appId === 0) {
+                        this.loadApp(this.launcherPath);
+                        return;
+                    }
+                    const entry = this.findAppById(request.appId);
+                    if (!entry) {
+                        this.log('start_app: unknown app id ' + request.appId);
+                        this.loadApp(this.launcherPath);
+                        return;
+                    }
+                    this.loadApp(entry.path);
+                } else if (request.type === 'path') {
+                    this.loadApp(request.path);
+                }
             },
 
             // Load and run a WASM app
@@ -255,6 +297,7 @@
 
                 // Stop current app
                 this.stopApp();
+                this.switchInProgress = true;
 
                 try {
                     // Read file from Emscripten's virtual filesystem
@@ -274,35 +317,22 @@
                 } catch (e) {
                     console.error('Failed to load app:', e);
                     this.log('Error loading app: ' + e.message);
+                    if (path !== this.launcherPath) {
+                        this.requestExitToLauncher();
+                    }
+                } finally {
+                    this.switchInProgress = false;
                 }
             },
 
             startRenderLoop: function() {
+                if (this.animationId) {
+                    return;
+                }
                 const self = this;
 
                 function frame() {
-                    if (!self.currentApp) return;
-
-                    // Poll input from SDL
-                    self.pollInput();
-
-                    // Handle input events
-                    while (self.hasInputEvent()) {
-                        const event = self.getInputEvent();
-                        if (event >= 0 && self.currentApp.exports.on_input) {
-                            const key = (event >> 8) & 0xFF;
-                            const type = event & 0xFF;
-                            self.currentApp.exports.on_input(key, type);
-                        }
-                    }
-
-                    // Render
-                    if (self.currentApp.exports.render) {
-                        self.canvas.clear();
-                        self.currentApp.exports.render();
-                        self.displayFlush();
-                    }
-
+                    self.tick();
                     self.animationId = requestAnimationFrame(frame);
                 }
 
@@ -310,12 +340,36 @@
             },
 
             stopApp: function() {
-                if (this.animationId) {
-                    cancelAnimationFrame(this.animationId);
-                    this.animationId = null;
-                }
                 this.currentApp = null;
                 this.appMemory = null;
+            },
+
+            tick: function() {
+                if (!this.ready) {
+                    return;
+                }
+
+                // Poll input from SDL
+                this.pollInput();
+
+                // Handle input events
+                while (this.hasInputEvent()) {
+                    const event = this.getInputEvent();
+                    if (event >= 0 && this.currentApp && this.currentApp.exports.on_input) {
+                        const key = (event >> 8) & 0xFF;
+                        const type = event & 0xFF;
+                        this.currentApp.exports.on_input(key, type);
+                    }
+                }
+
+                // Render
+                if (this.currentApp && this.currentApp.exports.render) {
+                    this.canvas.clear();
+                    this.currentApp.exports.render();
+                    this.displayFlush();
+                }
+
+                this.processPendingRequest();
             },
 
             log: function(msg) {
@@ -341,7 +395,6 @@
             onRuntimeInitialized: function() {
                 document.getElementById('loading').classList.add('hidden');
                 document.getElementById('canvas').classList.remove('hidden');
-                document.getElementById('app-selector').classList.remove('hidden');
                 document.getElementById('controls').classList.remove('hidden');
 
                 // Wait for C++ to initialize (canvas becomes non-zero size)
@@ -356,19 +409,8 @@
 
                     console.log('Canvas ready:', width, 'x', Fri3dRuntime.canvas.height());
 
-                    // Setup app selector
-                    document.getElementById('app-select').addEventListener('change', function(e) {
-                        if (e.target.value) {
-                            Fri3dRuntime.loadApp(e.target.value);
-                        } else {
-                            Fri3dRuntime.stopApp();
-                        }
-                    });
-
-                    // Auto-load first app
-                    const firstApp = '/apps/circles/circles.wasm';
-                    document.getElementById('app-select').value = firstApp;
-                    Fri3dRuntime.loadApp(firstApp);
+                    // Start with launcher like the desktop emulator
+                    Fri3dRuntime.loadApp(Fri3dRuntime.launcherPath);
                 }
 
                 waitForCanvas();
