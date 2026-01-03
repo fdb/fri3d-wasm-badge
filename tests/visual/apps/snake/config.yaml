@@ -1,0 +1,5 @@
+name: Snake
+description: Classic snake game (initial board state)
+
+scenes:
+  - name: Default Board

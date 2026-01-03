@@ -11,7 +11,7 @@ mkdir -p "${ZIG_GLOBAL_CACHE_DIR}" "${ZIG_LOCAL_CACHE_DIR}"
 cmake -B "${ROOT_DIR}/build/trace" -DBUILD_TRACE_TESTS=ON -DBUILD_EMULATOR=OFF
 cmake --build "${ROOT_DIR}/build/trace"
 
-for app in circles test_drawing mandelbrot test_ui; do
+for app in circles test_drawing mandelbrot test_ui snake; do
   echo "Building ${app}..."
   ZIG_GLOBAL_CACHE_DIR="${ZIG_GLOBAL_CACHE_DIR}" ZIG_LOCAL_CACHE_DIR="${ZIG_LOCAL_CACHE_DIR}" \
     cmake -B "${ROOT_DIR}/build/apps/${app}" \

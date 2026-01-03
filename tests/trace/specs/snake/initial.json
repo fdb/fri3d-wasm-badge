@@ -1,0 +1,6 @@
+{
+  "app": "snake",
+  "frames": 1,
+  "seed": 42,
+  "expected_mode": "exact"
+}
