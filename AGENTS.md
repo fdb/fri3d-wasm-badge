@@ -84,6 +84,10 @@ If you add a new app with visual tests, also update the CI build list in
 `.github/workflows/visual-tests.yml` so the app's WASM binary is built before
 `run_visual_tests.py` runs.
 
+If you add a new app with trace specs, also update the CI build list in
+`.github/workflows/trace-tests.yml` so the app's WASM binary is built before
+`run_trace_tests.py` runs.
+
 ## Project Structure
 
 ```
