@@ -32,29 +32,35 @@ Reference: `src/emulator/`
 - Options: `--test`, `--scene`, `--screenshot`, `--headless`.
 - Loop: poll input, synthesize events, deliver to app, render, flush, ~60fps delay.
 
-## Web emulator (Emscripten + JS runtime)
+## Web emulator (Rust wasm host + JS runtime)
 
 References: `src/web/main.c`, `src/web/shell.html`
 
-### C side (Emscripten)
+### Rust wasm host
 
-- Exposes `js_*` functions to JS for canvas ops, RNG, input polling, display flush.
-- Uses the same `display_sdl` + `input_sdl` code paths but compiled with Emscripten SDL.
-- Does not run WAMR; the browser instantiates app WASM directly.
+- Build a `fri3d-web` wasm module that exposes the runtime building blocks:
+  - Canvas drawing + font rendering identical to native (`fri3d-runtime` canvas).
+  - Random and input manager logic for parity.
+  - Framebuffer access (pointer + size) for JS blitting to `<canvas>`.
+- JS bridges app imports to these Rust exports (no `unsafe` in apps).
 
-### JS side (shell.html)
+### JS runtime (shell)
 
-- `Fri3dRuntime`:
-  - Loads `launcher.wasm` and other apps from the Emscripten FS (`/apps/...`).
-  - Provides an import object under module name `env` with canvas/random/time/app functions.
-  - Drives the frame loop with `requestAnimationFrame`.
-  - Polls input via the exported C input manager (`js_poll_input`, `js_get_input_event`).
-- App switching:
-  - `exit_to_launcher` and `start_app` set a pending request.
-  - `processPendingRequest()` loads the launcher or app by ID/path.
-- Input delivery:
-  - `js_get_input_event` packs `(key << 8) | type`.
-  - JS decodes and calls `on_input(key, type)` if exported.
+- Loads the Rust host module and app WASM binaries.
+- App WASM runs natively in the browser (no Wasmi/WAMR in web).
+- Provides `env` imports for apps by forwarding to the Rust host:
+  - Canvas operations, random, time, input, and `request_render()`.
+  - Timer control via `start_timer_ms()` / `stop_timer()` to schedule renders.
+- Event-driven loop:
+  - Render on input events, `request_render()`, or when a timer tick is due.
+  - Avoid continuous redraws to conserve energy.
+
+### App switching + input delivery
+
+- `exit_to_launcher()` and `start_app()` set a pending request.
+- JS swaps the current app WASM and triggers an immediate render.
+- Input events are queued in the Rust input manager; JS drains synthesized
+  events each frame and forwards them to the app's `on_input()` export.
 
 ## ESP32-S3 firmware (hardware target)
 
@@ -80,3 +86,8 @@ References: `src/firmware/README.md`, `src/firmware/src/*.c`
 
 - The firmware should eventually reuse the same runtime modules (canvas, input manager, app manager, wasm runner) as the emulator.
 - Input GPIO should feed the runtime input manager so long/short/repeat behavior matches other platforms.
+- Rust porting plan:
+  - Create a `fri3d-firmware` crate (ESP-IDF/PlatformIO) that provides display,
+    input, and time backends for the shared runtime.
+  - Keep rendering event-driven with optional app timers to conserve battery.
+  - Integrate the WASM runner (Wasmi) once platform memory limits are validated.

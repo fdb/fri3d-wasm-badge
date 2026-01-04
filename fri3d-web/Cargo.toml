@@ -1,0 +1,10 @@
+[package]
+name = "fri3d-web"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+fri3d-runtime = { path = "../fri3d-runtime" }

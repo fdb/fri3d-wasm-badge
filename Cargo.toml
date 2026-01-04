@@ -3,6 +3,7 @@ members = [
     "fri3d-runtime",
     "fri3d-emulator",
     "fri3d-wasm-api",
+    "fri3d-web",
     "fri3d-app-circles",
     "fri3d-app-dots",
     "fri3d-app-launcher",

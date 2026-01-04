@@ -189,6 +189,13 @@ name = "fri3d-wasm-api"
 version = "0.1.0"
 
 [[package]]
+name = "fri3d-web"
+version = "0.1.0"
+dependencies = [
+ "fri3d-runtime",
+]
+
+[[package]]
 name = "futures"
 version = "0.3.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
