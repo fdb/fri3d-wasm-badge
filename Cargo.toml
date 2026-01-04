@@ -4,6 +4,7 @@ members = [
     "fri3d-emulator",
     "fri3d-wasm-api",
     "fri3d-web",
+    "fri3d-trace-harness",
     "fri3d-app-circles",
     "fri3d-app-dots",
     "fri3d-app-launcher",

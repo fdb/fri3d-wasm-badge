@@ -1,0 +1,11 @@
+{
+  "app": "snake",
+  "frames": 3,
+  "mode": "event",
+  "duration_ms": 600,
+  "expected_mode": "contains",
+  "required": [
+    { "fn": "start_timer_ms" },
+    { "frame": 2, "fn": "canvas_draw_box" }
+  ]
+}

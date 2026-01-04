@@ -21,31 +21,15 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y \
-          cmake \
           build-essential
 
-    - name: Setup Zig
-      uses: goto-bus-stop/setup-zig@v2
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
       with:
-        version: 0.11.0
-
-    - name: Build trace harness
-      run: |
-        cmake -B build/trace -DBUILD_TRACE_TESTS=ON -DBUILD_EMULATOR=OFF
-        cmake --build build/trace
-
-    - name: Build WASM apps
-      run: |
-        for app in circles test_drawing mandelbrot test_ui snake; do
-          echo "Building $app..."
-          cmake -B build/apps/$app \
-            -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/toolchain-wasm.cmake \
-            -S src/apps/$app
-          cmake --build build/apps/$app
-        done
+        targets: wasm32-unknown-unknown
 
     - name: Run trace tests
-      run: python3 tests/trace/run_trace_tests.py
+      run: ./build_trace_tests.sh
 
     - name: Upload trace outputs
       uses: actions/upload-artifact@v4

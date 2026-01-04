@@ -48,6 +48,10 @@ impl TimerState {
         self.next_ms = Some(next);
         true
     }
+
+    fn next_ms(&self) -> Option<u32> {
+        self.next_ms
+    }
 }
 
 #[derive(Default)]
@@ -269,6 +273,10 @@ impl WasmRunner {
     pub fn timer_due(&mut self, now_ms: u32) -> bool {
         let state = self.store.data_mut();
         state.timer.due(now_ms)
+    }
+
+    pub fn timer_next_ms(&self) -> Option<u32> {
+        self.store.data().timer.next_ms()
     }
 
     pub fn last_error(&self) -> &str {
