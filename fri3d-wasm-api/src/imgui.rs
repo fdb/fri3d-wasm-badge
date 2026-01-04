@@ -677,6 +677,34 @@ pub fn ui_menu_begin(scroll: &mut i16, visible: i16, total: i16) {
         } else {
             0
         };
+
+        // Ensure focused item is visible before drawing any menu rows.
+        if ctx.focus_index >= ctx.menu_first_item_focus {
+            let focused_item = ctx.focus_index - ctx.menu_first_item_focus;
+            if focused_item >= 0 && focused_item < total {
+                let mut next_scroll = ctx.menu_scroll;
+                if focused_item < next_scroll {
+                    next_scroll = focused_item;
+                } else if focused_item >= next_scroll + ctx.menu_visible {
+                    next_scroll = focused_item - ctx.menu_visible + 1;
+                }
+
+                if total > ctx.menu_visible {
+                    let max_scroll = total - ctx.menu_visible;
+                    if next_scroll > max_scroll {
+                        next_scroll = max_scroll;
+                    }
+                } else {
+                    next_scroll = 0;
+                }
+
+                if next_scroll < 0 {
+                    next_scroll = 0;
+                }
+
+                ctx.menu_scroll = next_scroll;
+            }
+        }
     });
 }
 
