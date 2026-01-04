@@ -7,7 +7,7 @@ echo "=== Building all Rust targets ==="
 echo ""
 
 echo "=== Building Rust emulator ==="
-cargo build -p fri3d-emulator
+./build_emulator.sh
 
 echo ""
 
