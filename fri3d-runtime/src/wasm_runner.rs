@@ -11,6 +11,45 @@ pub type ExitToLauncherCallback = Rc<dyn Fn()>;
 pub type StartAppCallback = Rc<dyn Fn(u32)>;
 pub type TimeMsCallback = Rc<dyn Fn() -> u32>;
 
+#[derive(Copy, Clone, Debug, Default)]
+struct TimerState {
+    interval_ms: Option<u32>,
+    next_ms: Option<u32>,
+}
+
+impl TimerState {
+    fn start(&mut self, now_ms: u32, interval_ms: u32) {
+        if interval_ms == 0 {
+            self.stop();
+            return;
+        }
+        self.interval_ms = Some(interval_ms);
+        self.next_ms = Some(now_ms.saturating_add(interval_ms));
+    }
+
+    fn stop(&mut self) {
+        self.interval_ms = None;
+        self.next_ms = None;
+    }
+
+    fn due(&mut self, now_ms: u32) -> bool {
+        let (Some(interval), Some(next_ms)) = (self.interval_ms, self.next_ms) else {
+            return false;
+        };
+
+        if now_ms < next_ms {
+            return false;
+        }
+
+        let mut next = next_ms;
+        while now_ms >= next {
+            next = next.saturating_add(interval);
+        }
+        self.next_ms = Some(next);
+        true
+    }
+}
+
 #[derive(Default)]
 struct HostState {
     canvas: Option<Rc<RefCell<Canvas>>>,
@@ -19,8 +58,7 @@ struct HostState {
     exit_to_launcher: Option<ExitToLauncherCallback>,
     start_app: Option<StartAppCallback>,
     render_requested: bool,
-    timer_interval_ms: Option<u32>,
-    timer_next_ms: Option<u32>,
+    timer: TimerState,
 }
 
 pub struct WasmRunner {
@@ -150,8 +188,7 @@ impl WasmRunner {
         self.func_get_scene_count = None;
         let state = self.store.data_mut();
         state.render_requested = false;
-        state.timer_interval_ms = None;
-        state.timer_next_ms = None;
+        state.timer.stop();
     }
 
     pub fn is_module_loaded(&self) -> bool {
@@ -231,20 +268,7 @@ impl WasmRunner {
 
     pub fn timer_due(&mut self, now_ms: u32) -> bool {
         let state = self.store.data_mut();
-        let (Some(interval), Some(next_ms)) = (state.timer_interval_ms, state.timer_next_ms) else {
-            return false;
-        };
-
-        if interval == 0 || now_ms < next_ms {
-            return false;
-        }
-
-        let mut next = next_ms;
-        while now_ms >= next {
-            next = next.saturating_add(interval);
-        }
-        state.timer_next_ms = Some(next);
-        true
+        state.timer.due(now_ms)
     }
 
     pub fn last_error(&self) -> &str {
@@ -604,20 +628,13 @@ fn register_host_functions(linker: &mut Linker<HostState>) {
                     &[trace::TraceArg::Int(interval_ms as i64)],
                 );
                 let interval = interval_ms.max(0) as u32;
-                if interval == 0 {
-                    caller.data_mut().timer_interval_ms = None;
-                    caller.data_mut().timer_next_ms = None;
-                    return;
-                }
                 let now = caller
                     .data()
                     .time_ms
                     .as_ref()
                     .map(|cb| cb())
                     .unwrap_or(0);
-                let state = caller.data_mut();
-                state.timer_interval_ms = Some(interval);
-                state.timer_next_ms = Some(now.saturating_add(interval));
+                caller.data_mut().timer.start(now, interval);
             },
         )
         .expect("register start_timer_ms");
@@ -625,8 +642,7 @@ fn register_host_functions(linker: &mut Linker<HostState>) {
     linker
         .func_wrap("env", "stop_timer", |mut caller: Caller<'_, HostState>| {
             trace::trace_call("stop_timer", &[]);
-            caller.data_mut().timer_interval_ms = None;
-            caller.data_mut().timer_next_ms = None;
+            caller.data_mut().timer.stop();
         })
         .expect("register stop_timer");
 
@@ -674,4 +690,35 @@ fn read_c_string(caller: &mut Caller<'_, HostState>, ptr: i32) -> String {
     }
 
     String::from_utf8_lossy(&data[start..end]).to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TimerState;
+
+    #[test]
+    fn timer_not_due_before_interval() {
+        let mut timer = TimerState::default();
+        timer.start(1000, 100);
+        assert!(!timer.due(1000));
+        assert!(!timer.due(1099));
+        assert!(timer.due(1100));
+    }
+
+    #[test]
+    fn timer_catches_up_on_large_jump() {
+        let mut timer = TimerState::default();
+        timer.start(1000, 100);
+        assert!(timer.due(1350));
+        assert!(!timer.due(1399));
+        assert!(timer.due(1400));
+    }
+
+    #[test]
+    fn timer_stop_disables_due() {
+        let mut timer = TimerState::default();
+        timer.start(500, 50);
+        timer.stop();
+        assert!(!timer.due(1000));
+    }
 }
