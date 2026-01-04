@@ -18,6 +18,7 @@ struct HostState {
     time_ms: Option<TimeMsCallback>,
     exit_to_launcher: Option<ExitToLauncherCallback>,
     start_app: Option<StartAppCallback>,
+    render_requested: bool,
 }
 
 pub struct WasmRunner {
@@ -213,6 +214,13 @@ impl WasmRunner {
 
     pub fn has_on_input_function(&self) -> bool {
         self.func_on_input.is_some()
+    }
+
+    pub fn take_render_request(&mut self) -> bool {
+        let state = self.store.data_mut();
+        let requested = state.render_requested;
+        state.render_requested = false;
+        requested
     }
 
     pub fn last_error(&self) -> &str {
@@ -561,6 +569,13 @@ fn register_host_functions(linker: &mut Linker<HostState>) {
             value
         })
         .expect("register get_time_ms");
+
+    linker
+        .func_wrap("env", "request_render", |mut caller: Caller<'_, HostState>| {
+            trace::trace_call("request_render", &[]);
+            caller.data_mut().render_requested = true;
+        })
+        .expect("register request_render");
 
     linker
         .func_wrap("env", "exit_to_launcher", |caller: Caller<'_, HostState>| {

@@ -559,6 +559,10 @@ pub fn ui_button(text: &str) -> bool {
             draw_button_internal(btn_x, y, btn_width, btn_height, text, focused);
         }
 
+        if activated {
+            crate::request_render();
+        }
+
         activated
     })
 }
@@ -632,6 +636,7 @@ pub fn ui_checkbox(text: &str, checked: &mut bool) -> bool {
 
         if activated {
             *checked = !*checked;
+            crate::request_render();
         }
 
         let box_x = x + 2;
@@ -650,6 +655,10 @@ pub fn ui_checkbox(text: &str, checked: &mut bool) -> bool {
         }
 
         canvas_draw_str((box_x + box_size + 4) as i32, (y + item_height - 2) as i32, text);
+        if activated {
+            crate::request_render();
+        }
+
         activated
     })
 }
@@ -716,6 +725,10 @@ pub fn ui_menu_item(text: &str, index: i16) -> bool {
         }
 
         canvas_draw_str(2, (y + UI_MENU_ITEM_HEIGHT - 2) as i32, text);
+        if activated {
+            crate::request_render();
+        }
+
         activated
     })
 }
@@ -759,6 +772,10 @@ pub fn ui_menu_item_value(label: &str, value: &str, index: i16) -> bool {
         canvas_draw_str(2, (y + UI_MENU_ITEM_HEIGHT - 2) as i32, label);
         let value_width = canvas_string_width(value) as i16;
         canvas_draw_str((item_width - value_width - 2) as i32, (y + UI_MENU_ITEM_HEIGHT - 2) as i32, value);
+        if activated {
+            crate::request_render();
+        }
+
         activated
     })
 }
@@ -824,10 +841,14 @@ pub fn ui_footer_left(text: &str) -> bool {
         canvas_draw_line(2, (y + 5) as i32, 6, (y + 8) as i32);
         canvas_draw_str(9, (y + UI_FOOTER_HEIGHT - 2) as i32, text);
 
-        ctx.has_input
+        let activated = ctx.has_input
             && ctx.last_key == input::KEY_LEFT as u8
             && (ctx.last_type == input::TYPE_SHORT_PRESS as u8
-                || ctx.last_type == input::TYPE_PRESS as u8)
+                || ctx.last_type == input::TYPE_PRESS as u8);
+        if activated {
+            crate::request_render();
+        }
+        activated
     })
 }
 
@@ -863,10 +884,14 @@ pub fn ui_footer_right(text: &str) -> bool {
         canvas_draw_line((arrow_x + 4) as i32, (y + 5) as i32, arrow_x as i32, (y + 2) as i32);
         canvas_draw_line((arrow_x + 4) as i32, (y + 5) as i32, arrow_x as i32, (y + 8) as i32);
 
-        ctx.has_input
+        let activated = ctx.has_input
             && ctx.last_key == input::KEY_RIGHT as u8
             && (ctx.last_type == input::TYPE_SHORT_PRESS as u8
-                || ctx.last_type == input::TYPE_PRESS as u8)
+                || ctx.last_type == input::TYPE_PRESS as u8);
+        if activated {
+            crate::request_render();
+        }
+        activated
     })
 }
 
@@ -1406,6 +1431,10 @@ pub fn ui_virtual_keyboard<const N: usize>(
         let msg_width = canvas_string_width(message) as i16;
         let msg_x = (UI_SCREEN_WIDTH - msg_width) / 2;
         canvas_draw_str(msg_x as i32, 34, message);
+    }
+
+    if submitted {
+        crate::request_render();
     }
 
     submitted

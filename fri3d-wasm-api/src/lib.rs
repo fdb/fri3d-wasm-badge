@@ -23,6 +23,7 @@ mod bindings {
         pub fn random_get() -> i32;
         pub fn random_range(max: i32) -> i32;
         pub fn get_time_ms() -> i32;
+        pub fn request_render();
         pub fn exit_to_launcher();
         pub fn start_app(app_id: i32);
     }
@@ -79,6 +80,8 @@ mod bindings {
     pub fn get_time_ms() -> i32 {
         0
     }
+
+    pub fn request_render() {}
 
     pub fn exit_to_launcher() {}
 
@@ -311,6 +314,18 @@ pub fn get_time_ms() -> u32 {
     #[cfg(not(target_arch = "wasm32"))]
     {
         bindings::get_time_ms().max(0) as u32
+    }
+}
+
+pub fn request_render() {
+    #[cfg(target_arch = "wasm32")]
+    unsafe {
+        bindings::request_render();
+        return;
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        bindings::request_render();
     }
 }
 

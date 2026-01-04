@@ -122,17 +122,31 @@ impl AppManager {
     }
 
     pub fn render(&mut self) {
-        if self.in_launcher {
-            if self.wasm_runner.is_module_loaded() {
-                self.wasm_runner.call_render();
+        let mut passes = 0;
+        loop {
+            if self.in_launcher {
+                if self.wasm_runner.is_module_loaded() {
+                    self.wasm_runner.call_render();
+                } else {
+                    self.render_launcher_error();
+                }
             } else {
-                self.render_launcher_error();
+                self.wasm_runner.call_render();
             }
-        } else {
-            self.wasm_runner.call_render();
-        }
 
-        self.process_pending();
+            self.process_pending();
+            passes += 1;
+
+            if passes >= 2 {
+                break;
+            }
+            if !self.wasm_runner.take_render_request() {
+                break;
+            }
+            if !self.wasm_runner.is_module_loaded() && !self.in_launcher {
+                break;
+            }
+        }
     }
 
     pub fn handle_input(&mut self, key: InputKey, kind: InputType) {
