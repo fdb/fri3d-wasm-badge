@@ -212,6 +212,9 @@ fn register_focusable(ctx: &mut UiContext) -> i16 {
     if ctx.focus_count >= UI_MAX_FOCUSABLE {
         return -1;
     }
+    if ctx.focus_count == 0 && ctx.focus_index < 0 {
+        ctx.focus_index = 0;
+    }
     let idx = ctx.focus_count;
     ctx.focus_count += 1;
     idx
