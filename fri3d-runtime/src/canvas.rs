@@ -476,3 +476,94 @@ impl FontDrawTarget for Canvas {
         self.draw_hline_color(x, y, length, color);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{Color, Font};
+
+    fn idx(canvas: &Canvas, x: u32, y: u32) -> usize {
+        (y * canvas.width() + x) as usize
+    }
+
+    #[test]
+    fn draw_dot_sets_expected_pixel() {
+        let mut canvas = Canvas::new();
+        canvas.clear();
+        canvas.set_color(Color::Black);
+        canvas.draw_dot(2, 3);
+
+        let index = idx(&canvas, 2, 3);
+        assert_eq!(canvas.buffer()[index], 1);
+    }
+
+    #[test]
+    fn draw_line_horizontal() {
+        let mut canvas = Canvas::new();
+        canvas.clear();
+        canvas.set_color(Color::Black);
+        canvas.draw_line(0, 0, 3, 0);
+
+        for x in 0..=3 {
+            assert_eq!(canvas.buffer()[idx(&canvas, x, 0)], 1);
+        }
+        assert_eq!(canvas.buffer()[idx(&canvas, 0, 1)], 0);
+    }
+
+    #[test]
+    fn draw_line_vertical() {
+        let mut canvas = Canvas::new();
+        canvas.clear();
+        canvas.set_color(Color::Black);
+        canvas.draw_line(2, 0, 2, 3);
+
+        for y in 0..=3 {
+            assert_eq!(canvas.buffer()[idx(&canvas, 2, y)], 1);
+        }
+        assert_eq!(canvas.buffer()[idx(&canvas, 1, 0)], 0);
+    }
+
+    #[test]
+    fn draw_frame_border_only() {
+        let mut canvas = Canvas::new();
+        canvas.clear();
+        canvas.set_color(Color::Black);
+        canvas.draw_frame(0, 0, 3, 3);
+
+        assert_eq!(canvas.buffer()[idx(&canvas, 0, 0)], 1);
+        assert_eq!(canvas.buffer()[idx(&canvas, 1, 0)], 1);
+        assert_eq!(canvas.buffer()[idx(&canvas, 2, 0)], 1);
+        assert_eq!(canvas.buffer()[idx(&canvas, 0, 1)], 1);
+        assert_eq!(canvas.buffer()[idx(&canvas, 2, 1)], 1);
+        assert_eq!(canvas.buffer()[idx(&canvas, 0, 2)], 1);
+        assert_eq!(canvas.buffer()[idx(&canvas, 1, 2)], 1);
+        assert_eq!(canvas.buffer()[idx(&canvas, 2, 2)], 1);
+        assert_eq!(canvas.buffer()[idx(&canvas, 1, 1)], 0);
+    }
+
+    #[test]
+    fn draw_box_fills_area() {
+        let mut canvas = Canvas::new();
+        canvas.clear();
+        canvas.set_color(Color::Black);
+        canvas.draw_box(1, 1, 2, 2);
+
+        assert_eq!(canvas.buffer()[idx(&canvas, 1, 1)], 1);
+        assert_eq!(canvas.buffer()[idx(&canvas, 2, 1)], 1);
+        assert_eq!(canvas.buffer()[idx(&canvas, 1, 2)], 1);
+        assert_eq!(canvas.buffer()[idx(&canvas, 2, 2)], 1);
+        assert_eq!(canvas.buffer()[idx(&canvas, 0, 0)], 0);
+    }
+
+    #[test]
+    fn draw_str_sets_pixels() {
+        let mut canvas = Canvas::new();
+        canvas.clear();
+        canvas.set_color(Color::Black);
+        canvas.set_font(Font::Primary);
+        canvas.draw_str(0, 10, "A");
+
+        let filled = canvas.buffer().iter().filter(|&&value| value == 1).count();
+        assert!(filled > 10);
+    }
+}

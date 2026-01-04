@@ -1,0 +1,7 @@
+{
+  "name": "fri3d-web-smoke-tests",
+  "private": true,
+  "devDependencies": {
+    "playwright": "^1.41.2"
+  }
+}

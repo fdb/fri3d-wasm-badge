@@ -31,5 +31,25 @@ jobs:
     - name: Setup Rust
       uses: dtolnay/rust-toolchain@stable
 
+    - name: Add wasm32 target
+      run: rustup target add wasm32-unknown-unknown
+
     - name: Run cargo tests
       run: cargo test
+
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+
+    - name: Install web smoke test dependencies
+      run: |
+        cd tests/web
+        npm install
+        npx playwright install --with-deps chromium
+
+    - name: Build web emulator
+      run: ./build_web.sh
+
+    - name: Run web smoke tests
+      run: node tests/web/run_web_smoke_tests.js

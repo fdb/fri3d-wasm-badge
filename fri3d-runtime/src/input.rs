@@ -194,3 +194,158 @@ impl InputKey {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct TestBackend {
+        queue: VecDeque<InputEvent>,
+    }
+
+    impl TestBackend {
+        fn new() -> Self {
+            Self {
+                queue: VecDeque::new(),
+            }
+        }
+
+        fn push(&mut self, key: InputKey, kind: InputType) {
+            self.queue.push_back(InputEvent { key, kind });
+        }
+    }
+
+    impl InputBackend for TestBackend {
+        fn poll(&mut self) {}
+
+        fn has_event(&self) -> bool {
+            !self.queue.is_empty()
+        }
+
+        fn next_event(&mut self) -> Option<InputEvent> {
+            self.queue.pop_front()
+        }
+    }
+
+    fn drain_events(manager: &mut InputManager) -> Vec<InputEvent> {
+        let mut out = Vec::new();
+        while let Some(event) = manager.next_event() {
+            out.push(event);
+        }
+        out
+    }
+
+    #[test]
+    fn short_press_queues_short_and_release() {
+        let mut manager = InputManager::new();
+        let mut backend = TestBackend::new();
+
+        backend.push(InputKey::Ok, InputType::Press);
+        manager.update(&mut backend, 0);
+        assert_eq!(
+            drain_events(&mut manager),
+            vec![InputEvent {
+                key: InputKey::Ok,
+                kind: InputType::Press
+            }]
+        );
+
+        backend.push(InputKey::Ok, InputType::Release);
+        manager.update(&mut backend, 200);
+        assert_eq!(
+            drain_events(&mut manager),
+            vec![
+                InputEvent {
+                    key: InputKey::Ok,
+                    kind: InputType::ShortPress
+                },
+                InputEvent {
+                    key: InputKey::Ok,
+                    kind: InputType::Release
+                }
+            ]
+        );
+    }
+
+    #[test]
+    fn long_press_and_repeat_fire_while_held() {
+        let mut manager = InputManager::new();
+        let mut backend = TestBackend::new();
+
+        backend.push(InputKey::Ok, InputType::Press);
+        manager.update(&mut backend, 0);
+        assert_eq!(
+            drain_events(&mut manager),
+            vec![InputEvent {
+                key: InputKey::Ok,
+                kind: InputType::Press
+            }]
+        );
+
+        manager.update(&mut backend, INPUT_LONG_PRESS_MS);
+        assert_eq!(
+            drain_events(&mut manager),
+            vec![InputEvent {
+                key: InputKey::Ok,
+                kind: InputType::LongPress
+            }]
+        );
+
+        manager.update(&mut backend, INPUT_LONG_PRESS_MS + INPUT_REPEAT_INTERVAL_MS);
+        assert_eq!(
+            drain_events(&mut manager),
+            vec![InputEvent {
+                key: InputKey::Ok,
+                kind: InputType::Repeat
+            }]
+        );
+
+        manager.update(
+            &mut backend,
+            INPUT_LONG_PRESS_MS + INPUT_REPEAT_INTERVAL_MS * 2,
+        );
+        assert_eq!(
+            drain_events(&mut manager),
+            vec![InputEvent {
+                key: InputKey::Ok,
+                kind: InputType::Repeat
+            }]
+        );
+
+        backend.push(InputKey::Ok, InputType::Release);
+        manager.update(
+            &mut backend,
+            INPUT_LONG_PRESS_MS + INPUT_REPEAT_INTERVAL_MS * 2 + 10,
+        );
+        assert_eq!(
+            drain_events(&mut manager),
+            vec![InputEvent {
+                key: InputKey::Ok,
+                kind: InputType::Release
+            }]
+        );
+    }
+
+    #[test]
+    fn reset_combo_fires_after_hold_threshold() {
+        let mut manager = InputManager::new();
+        let mut backend = TestBackend::new();
+        let reset_count = std::rc::Rc::new(std::cell::Cell::new(0));
+        let count = reset_count.clone();
+        manager.set_reset_callback(move || {
+            count.set(count.get() + 1);
+        });
+
+        backend.push(InputKey::Left, InputType::Press);
+        backend.push(InputKey::Back, InputType::Press);
+        manager.update(&mut backend, 0);
+        drain_events(&mut manager);
+        assert_eq!(reset_count.get(), 0);
+
+        manager.update(&mut backend, INPUT_RESET_COMBO_MS - 1);
+        assert_eq!(reset_count.get(), 0);
+
+        manager.update(&mut backend, INPUT_RESET_COMBO_MS);
+        assert_eq!(reset_count.get(), 1);
+    }
+}
