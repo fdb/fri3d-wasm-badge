@@ -151,6 +151,7 @@ const Fri3dRuntime = {
     timerIntervalMs: 0,
     nextTimerMs: 0,
     loopScheduled: false,
+    pressedKeys: null,
     launcherPath: '/apps/launcher/launcher.wasm',
     appRegistry: [
         { id: 1, name: 'Circles', path: '/apps/circles/circles.wasm' },
@@ -193,7 +194,7 @@ const Fri3dRuntime = {
     },
 
     setupInput() {
-        const pressed = new Set();
+        this.pressedKeys = new Set();
         const handleKey = (event, isDown) => {
             const key = this.mapKey(event.key);
             if (key === null) {
@@ -202,16 +203,16 @@ const Fri3dRuntime = {
             event.preventDefault();
             const keyId = `${key}`;
             if (isDown) {
-                if (event.repeat || pressed.has(keyId)) {
+                if (event.repeat || this.pressedKeys.has(keyId)) {
                     return;
                 }
-                pressed.add(keyId);
+                this.pressedKeys.add(keyId);
                 this.host.frd_input_push_event(key, 0);
             } else {
-                if (!pressed.has(keyId)) {
+                if (!this.pressedKeys.has(keyId)) {
                     return;
                 }
-                pressed.delete(keyId);
+                this.pressedKeys.delete(keyId);
                 this.host.frd_input_push_event(key, 1);
             }
             this.scheduleLoop();
@@ -399,6 +400,7 @@ const Fri3dRuntime = {
         this.loopScheduled = false;
         const now = Math.floor(performance.now());
         this.host.frd_input_update(now);
+        const hasHeldKeys = this.pressedKeys && this.pressedKeys.size > 0;
 
         let hadEvent = false;
         while (this.host.frd_input_has_event()) {
@@ -435,12 +437,20 @@ const Fri3dRuntime = {
             this.drawFrame();
         }
 
-        if (this.timerIntervalMs > 0 || this.renderRequested || this.pendingRequest) {
-            this.scheduleLoop();
+        if (this.timerIntervalMs > 0 || this.renderRequested || this.pendingRequest || hasHeldKeys) {
+            let delayMs = 0;
+            if (!this.renderRequested && !this.pendingRequest) {
+                if (hasHeldKeys) {
+                    delayMs = 16;
+                } else if (this.timerIntervalMs > 0) {
+                    delayMs = Math.max(0, this.nextTimerMs - now);
+                }
+            }
+            this.scheduleLoop(delayMs);
         }
     },
 
-    scheduleLoop() {
+    scheduleLoop(delayMs = 0) {
         if (this.loopScheduled) {
             return;
         }
@@ -461,6 +471,5 @@ window.addEventListener('load', () => {
     Fri3dRuntime.init().catch((err) => console.error(err));
 });
 </script>
-    {{{ SCRIPT }}}
 </body>
 </html>
