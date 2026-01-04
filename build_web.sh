@@ -22,7 +22,6 @@ if [ ! -f "$HOST_WASM" ]; then
 fi
 
 cp "$HOST_WASM" "$OUTPUT_DIR/fri3d_web.wasm"
-cp "src/web/shell.html" "$OUTPUT_DIR/fri3d_web.html"
 cp "src/web/shell.html" "$OUTPUT_DIR/index.html"
 
 cp -R build/apps/* "$APP_OUTPUT_DIR/"
@@ -33,4 +32,4 @@ echo ""
 echo "To run the web emulator:"
 echo "  cd build/web && python3 -m http.server 8080"
 echo ""
-echo "Then open: http://localhost:8080/fri3d_web.html"
+echo "Then open: http://localhost:8080/"
