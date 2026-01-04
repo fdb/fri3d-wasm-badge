@@ -12,6 +12,8 @@ Responsibilities:
 - Load/unload WASM modules via the wasm runner.
 - Forward `render()` and `on_input()` calls to the active module.
 - Handle app-initiated requests to switch apps (via callbacks from wasm runner).
+- Use event-driven rendering by default (input-driven + request_render), with
+  optional app-controlled timers for animations or game loops to conserve power.
 
 Behavior summary:
 - App IDs are 1-based in the registry. ID 0 maps to the launcher.
@@ -54,6 +56,11 @@ Imports registered (names + signatures):
   - `random_range(i32) -> i32`
 - Time:
   - `get_time_ms() -> i32`
+- Timer:
+  - `start_timer_ms(i32) -> void`
+  - `stop_timer() -> void`
+- Render:
+  - `request_render() -> void`
 - App control:
   - `exit_to_launcher() -> void`
   - `start_app(i32) -> void`
@@ -61,6 +68,10 @@ Imports registered (names + signatures):
 Runtime details:
 - `wasm_runner_call_render()` clears the canvas before invoking `render()`.
 - Input is delivered via `on_input(key, type)` if the export exists.
+- `request_render()` asks the host to perform one extra render pass after the
+  current frame to avoid one-frame-late UI updates.
+- `start_timer_ms()` schedules periodic renders at the requested interval until
+  `stop_timer()` is called or the app unloads.
 - Exceptions during WASM calls are printed to stderr and cleared.
 
 ## Input manager

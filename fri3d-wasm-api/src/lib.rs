@@ -23,6 +23,8 @@ mod bindings {
         pub fn random_get() -> i32;
         pub fn random_range(max: i32) -> i32;
         pub fn get_time_ms() -> i32;
+        pub fn start_timer_ms(interval_ms: i32);
+        pub fn stop_timer();
         pub fn request_render();
         pub fn exit_to_launcher();
         pub fn start_app(app_id: i32);
@@ -80,6 +82,10 @@ mod bindings {
     pub fn get_time_ms() -> i32 {
         0
     }
+
+    pub fn start_timer_ms(_interval_ms: i32) {}
+
+    pub fn stop_timer() {}
 
     pub fn request_render() {}
 
@@ -314,6 +320,30 @@ pub fn get_time_ms() -> u32 {
     #[cfg(not(target_arch = "wasm32"))]
     {
         bindings::get_time_ms().max(0) as u32
+    }
+}
+
+pub fn start_timer_ms(interval_ms: u32) {
+    #[cfg(target_arch = "wasm32")]
+    unsafe {
+        bindings::start_timer_ms(interval_ms as i32);
+        return;
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        bindings::start_timer_ms(interval_ms as i32);
+    }
+}
+
+pub fn stop_timer() {
+    #[cfg(target_arch = "wasm32")]
+    unsafe {
+        bindings::stop_timer();
+        return;
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        bindings::stop_timer();
     }
 }
 

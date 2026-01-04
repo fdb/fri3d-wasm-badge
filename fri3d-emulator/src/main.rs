@@ -325,7 +325,8 @@ fn main() {
             had_event = true;
         }
 
-        needs_render |= had_event;
+        let timer_due = app_manager.borrow_mut().poll_timer(time_ms);
+        needs_render |= had_event || timer_due;
         if needs_render {
             app_manager.borrow_mut().render();
             render_canvas(&canvas.borrow(), &mut buffer);

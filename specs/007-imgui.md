@@ -22,6 +22,9 @@ References: `docs/imgui.md`, `src/sdk/imgui.h`, `src/sdk/imgui.c`
   - On short/repeat: handles focus navigation (up/down) and sets `ok_pressed`/`back_pressed`.
 - `ui_end()`:
   - Clamps focus to valid range; clears input flags for next frame.
+- Widgets that mutate state (activate, toggle, scroll, submit) call `request_render()`
+  to invalidate the frame; the host performs one extra render pass to avoid
+  one-frame-late UI updates in on-demand rendering.
 
 ## Layout model
 

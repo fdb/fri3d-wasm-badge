@@ -26,6 +26,7 @@ References: `src/sdk/*.h`, `src/apps/*/main.c`
 - Canvas API: see `src/sdk/canvas.h` and `specs/004-canvas.md`.
 - Input enums: `input_key_t`, `input_type_t` in `src/sdk/input.h`.
 - Time: `get_time_ms()` in `src/sdk/frd.h`.
+- Timer: `start_timer_ms(interval_ms)` and `stop_timer()` (periodic renders).
 - App control: `exit_to_launcher()`, `start_app(id)` in `src/sdk/app.h`.
 - Random: `random_seed/get/range` in `src/sdk/random.h`.
 
@@ -34,6 +35,8 @@ References: `src/sdk/*.h`, `src/apps/*/main.c`
 - Apps usually map Back short press to exit via `exit_to_launcher()`.
 - Some apps use Back long press to exit when short press is repurposed.
 - Apps should be deterministic when used with visual tests (fixed RNG seeds or scenes).
+- Apps should only start timers when needed (animations/game loops) and stop them
+  when leaving animated scenes to conserve battery.
 
 ## Built-in apps (pre-IMGUI)
 

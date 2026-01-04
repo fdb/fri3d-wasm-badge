@@ -7,6 +7,7 @@ const MAX_SNAKE_LEN: usize = 253;
 const BOARD_MAX_X: u8 = 30;
 const BOARD_MAX_Y: u8 = 14;
 const STEP_INTERVAL_MS: u32 = 250;
+const SNAKE_TIMER_MS: u32 = STEP_INTERVAL_MS;
 
 #[derive(Copy, Clone)]
 struct Point {
@@ -81,6 +82,7 @@ fn init_game(state: &mut SnakeState) {
     state.state = GameState::Life;
     state.last_step_ms = api::get_time_ms();
     state.initialized = true;
+    api::start_timer_ms(SNAKE_TIMER_MS);
 }
 
 fn ensure_initialized(state: &mut SnakeState) {
@@ -235,6 +237,10 @@ fn update_state(state: &mut SnakeState) {
 
     while elapsed >= STEP_INTERVAL_MS {
         process_step(state);
+        if state.state == GameState::GameOver {
+            api::stop_timer();
+            break;
+        }
         state.last_step_ms = state.last_step_ms.wrapping_add(STEP_INTERVAL_MS);
         elapsed = now_ms.wrapping_sub(state.last_step_ms);
     }

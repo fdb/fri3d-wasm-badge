@@ -158,6 +158,12 @@ src/
 - **Long press**: >= 500ms
 - **Reset combo**: LEFT + BACK held for 500ms returns to launcher
 
+## Power/Battery Goals
+
+- Default to event-driven rendering (input or explicit `request_render()`).
+- Use app timers only when needed (animations/game loops) and stop them when idle.
+- Avoid continuous redraws to conserve battery on physical devices.
+
 ## WASM App Requirements
 
 Apps must export:

@@ -12,6 +12,7 @@ Purpose: guide a staged Rust reimplementation while keeping the current C/C++ co
 - Keep C code in place for reference and fallback until Rust reaches feature parity.
 - Avoid `unsafe` by default across runtime and apps; isolate any unavoidable `unsafe` in small, well-audited boundaries or alternative safe APIs.
 - Avoid the `sdk` label in Rust; prefer `fri3d-runtime` (and related crates) for shared APIs.
+- Prefer event-driven rendering; use explicit app timers only when needed to minimize battery drain.
 
 ## Staged plan
 

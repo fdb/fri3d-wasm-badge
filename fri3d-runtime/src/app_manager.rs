@@ -134,13 +134,14 @@ impl AppManager {
                 self.wasm_runner.call_render();
             }
 
-            self.process_pending();
+            let switched = self.process_pending();
             passes += 1;
 
             if passes >= 2 {
                 break;
             }
-            if !self.wasm_runner.take_render_request() {
+            let rerender = switched || self.wasm_runner.take_render_request();
+            if !rerender {
                 break;
             }
             if !self.wasm_runner.is_module_loaded() && !self.in_launcher {
@@ -161,6 +162,13 @@ impl AppManager {
         self.process_pending();
     }
 
+    pub fn poll_timer(&mut self, now_ms: u32) -> bool {
+        if !self.wasm_runner.is_module_loaded() {
+            return false;
+        }
+        self.wasm_runner.timer_due(now_ms)
+    }
+
     pub fn last_error(&self) -> &str {
         &self.last_error
     }
@@ -173,7 +181,7 @@ impl AppManager {
         &mut self.wasm_runner
     }
 
-    fn process_pending(&mut self) {
+    fn process_pending(&mut self) -> bool {
         let (request, app_id) = {
             let mut pending = self.pending.borrow_mut();
             let request = pending.request;
@@ -184,11 +192,12 @@ impl AppManager {
         };
 
         match request {
-            AppRequest::None => {}
-            AppRequest::ExitToLauncher => self.show_launcher(),
-            AppRequest::StartApp => {
-                self.launch_app_by_id(app_id);
+            AppRequest::None => false,
+            AppRequest::ExitToLauncher => {
+                self.show_launcher();
+                true
             }
+            AppRequest::StartApp => self.launch_app_by_id(app_id),
         }
     }
 

@@ -19,6 +19,8 @@ struct HostState {
     exit_to_launcher: Option<ExitToLauncherCallback>,
     start_app: Option<StartAppCallback>,
     render_requested: bool,
+    timer_interval_ms: Option<u32>,
+    timer_next_ms: Option<u32>,
 }
 
 pub struct WasmRunner {
@@ -146,6 +148,10 @@ impl WasmRunner {
         self.func_set_scene = None;
         self.func_get_scene = None;
         self.func_get_scene_count = None;
+        let state = self.store.data_mut();
+        state.render_requested = false;
+        state.timer_interval_ms = None;
+        state.timer_next_ms = None;
     }
 
     pub fn is_module_loaded(&self) -> bool {
@@ -221,6 +227,24 @@ impl WasmRunner {
         let requested = state.render_requested;
         state.render_requested = false;
         requested
+    }
+
+    pub fn timer_due(&mut self, now_ms: u32) -> bool {
+        let state = self.store.data_mut();
+        let (Some(interval), Some(next_ms)) = (state.timer_interval_ms, state.timer_next_ms) else {
+            return false;
+        };
+
+        if interval == 0 || now_ms < next_ms {
+            return false;
+        }
+
+        let mut next = next_ms;
+        while now_ms >= next {
+            next = next.saturating_add(interval);
+        }
+        state.timer_next_ms = Some(next);
+        true
     }
 
     pub fn last_error(&self) -> &str {
@@ -569,6 +593,42 @@ fn register_host_functions(linker: &mut Linker<HostState>) {
             value
         })
         .expect("register get_time_ms");
+
+    linker
+        .func_wrap(
+            "env",
+            "start_timer_ms",
+            |mut caller: Caller<'_, HostState>, interval_ms: i32| {
+                trace::trace_call(
+                    "start_timer_ms",
+                    &[trace::TraceArg::Int(interval_ms as i64)],
+                );
+                let interval = interval_ms.max(0) as u32;
+                if interval == 0 {
+                    caller.data_mut().timer_interval_ms = None;
+                    caller.data_mut().timer_next_ms = None;
+                    return;
+                }
+                let now = caller
+                    .data()
+                    .time_ms
+                    .as_ref()
+                    .map(|cb| cb())
+                    .unwrap_or(0);
+                let state = caller.data_mut();
+                state.timer_interval_ms = Some(interval);
+                state.timer_next_ms = Some(now.saturating_add(interval));
+            },
+        )
+        .expect("register start_timer_ms");
+
+    linker
+        .func_wrap("env", "stop_timer", |mut caller: Caller<'_, HostState>| {
+            trace::trace_call("stop_timer", &[]);
+            caller.data_mut().timer_interval_ms = None;
+            caller.data_mut().timer_next_ms = None;
+        })
+        .expect("register stop_timer");
 
     linker
         .func_wrap("env", "request_render", |mut caller: Caller<'_, HostState>| {

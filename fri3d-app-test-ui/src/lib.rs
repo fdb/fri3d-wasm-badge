@@ -4,6 +4,7 @@
 use fri3d_wasm_api as api;
 
 const SCENE_COUNT: u32 = 7;
+const PROGRESS_TIMER_MS: u32 = 1000 / 15;
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 #[repr(u32)]
@@ -45,6 +46,7 @@ fn set_scene_impl(scene: u32) {
         return;
     }
 
+    let prev_scene = CURRENT_SCENE.get();
     let new_scene = match scene {
         0 => Scene::Counter,
         1 => Scene::Menu,
@@ -54,6 +56,13 @@ fn set_scene_impl(scene: u32) {
         5 => Scene::Footer,
         _ => Scene::Keyboard,
     };
+
+    if prev_scene == Scene::Progress && new_scene != Scene::Progress {
+        api::stop_timer();
+    }
+    if prev_scene != Scene::Progress && new_scene == Scene::Progress {
+        api::start_timer_ms(PROGRESS_TIMER_MS);
+    }
 
     CURRENT_SCENE.set(new_scene);
     MENU_SCROLL.set(0);
