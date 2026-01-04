@@ -5,9 +5,11 @@ members = [
     "fri3d-wasm-api",
     "fri3d-app-circles",
     "fri3d-app-dots",
+    "fri3d-app-launcher",
     "fri3d-app-mandelbrot",
     "fri3d-app-snake",
     "fri3d-app-test-drawing",
+    "fri3d-app-test-ui",
 ]
 default-members = [
     "fri3d-runtime",

@@ -388,6 +388,16 @@ pub mod input {
     pub const TYPE_REPEAT: u32 = 4;
 }
 
+pub mod align {
+    pub const LEFT: u32 = 0;
+    pub const RIGHT: u32 = 1;
+    pub const TOP: u32 = 2;
+    pub const BOTTOM: u32 = 3;
+    pub const CENTER: u32 = 4;
+}
+
+pub mod imgui;
+
 #[macro_export]
 macro_rules! export_render {
     ($func:path) => {

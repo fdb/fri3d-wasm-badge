@@ -134,6 +134,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "fri3d-app-launcher"
+version = "0.1.0"
+dependencies = [
+ "fri3d-wasm-api",
+]
+
+[[package]]
 name = "fri3d-app-mandelbrot"
 version = "0.1.0"
 dependencies = [
@@ -149,6 +156,13 @@ dependencies = [
 
 [[package]]
 name = "fri3d-app-test-drawing"
+version = "0.1.0"
+dependencies = [
+ "fri3d-wasm-api",
+]
+
+[[package]]
+name = "fri3d-app-test-ui"
 version = "0.1.0"
 dependencies = [
  "fri3d-wasm-api",
