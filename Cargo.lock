@@ -120,7 +120,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "fri3d-app-circles"
+version = "0.1.0"
+dependencies = [
+ "fri3d-wasm-api",
+]
+
+[[package]]
 name = "fri3d-app-dots"
+version = "0.1.0"
+dependencies = [
+ "fri3d-wasm-api",
+]
+
+[[package]]
+name = "fri3d-app-mandelbrot"
+version = "0.1.0"
+dependencies = [
+ "fri3d-wasm-api",
+]
+
+[[package]]
+name = "fri3d-app-snake"
 version = "0.1.0"
 dependencies = [
  "fri3d-wasm-api",

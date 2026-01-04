@@ -2,6 +2,12 @@ use crate::font::{FontData, FontDrawTarget};
 use crate::types::{Color, Font};
 use crate::{SCREEN_HEIGHT, SCREEN_WIDTH};
 
+const DRAW_UPPER_RIGHT: u8 = 0x01;
+const DRAW_UPPER_LEFT: u8 = 0x02;
+const DRAW_LOWER_LEFT: u8 = 0x04;
+const DRAW_LOWER_RIGHT: u8 = 0x08;
+const DRAW_ALL: u8 = DRAW_UPPER_RIGHT | DRAW_UPPER_LEFT | DRAW_LOWER_LEFT | DRAW_LOWER_RIGHT;
+
 pub struct Canvas {
     width: u32,
     height: u32,
@@ -65,28 +71,44 @@ impl Canvas {
     }
 
     pub fn draw_line(&mut self, x1: i32, y1: i32, x2: i32, y2: i32) {
-        let mut x0 = x1;
-        let mut y0 = y1;
-        let dx = (x2 - x1).abs();
-        let sx = if x1 < x2 { 1 } else { -1 };
-        let dy = -(y2 - y1).abs();
-        let sy = if y1 < y2 { 1 } else { -1 };
-        let mut err = dx + dy;
+        let mut x1 = x1;
+        let mut y1 = y1;
+        let mut x2 = x2;
+        let mut y2 = y2;
 
-        loop {
-            self.set_pixel_with_color(x0, y0, self.color);
-            if x0 == x2 && y0 == y2 {
-                break;
+        let mut dx = (x2 - x1).abs();
+        let mut dy = (y2 - y1).abs();
+        let mut swap_xy = false;
+
+        if dy > dx {
+            swap_xy = true;
+            std::mem::swap(&mut x1, &mut y1);
+            std::mem::swap(&mut x2, &mut y2);
+            std::mem::swap(&mut dx, &mut dy);
+        }
+
+        if x1 > x2 {
+            std::mem::swap(&mut x1, &mut x2);
+            std::mem::swap(&mut y1, &mut y2);
+        }
+
+        let mut err = dx >> 1;
+        let ystep = if y2 > y1 { 1 } else { -1 };
+        let mut y = y1;
+
+        let mut x = x1;
+        while x <= x2 {
+            if !swap_xy {
+                self.set_pixel_with_color(x, y, self.color);
+            } else {
+                self.set_pixel_with_color(y, x, self.color);
             }
-            let e2 = 2 * err;
-            if e2 >= dy {
-                err += dy;
-                x0 += sx;
-            }
-            if e2 <= dx {
+            err -= dy;
+            if err < 0 {
+                y += ystep;
                 err += dx;
-                y0 += sy;
             }
+            x += 1;
         }
     }
 
@@ -124,15 +146,35 @@ impl Canvas {
             return;
         }
 
-        self.draw_hline_color(x + r, y, (w - 2 * r) as u32, self.color);
-        self.draw_hline_color(x + r, y + h - 1, (w - 2 * r) as u32, self.color);
-        self.draw_vline_color(x, y + r, (h - 2 * r) as u32, self.color);
-        self.draw_vline_color(x + w - 1, y + r, (h - 2 * r) as u32, self.color);
+        let mut xl = x + r;
+        let mut yu = y + r;
+        let xr = x + w - r - 1;
+        let yl = y + h - r - 1;
 
-        self.draw_circle_quadrants(x + r, y + r, r, true, false, false, false);
-        self.draw_circle_quadrants(x + w - 1 - r, y + r, r, false, true, false, false);
-        self.draw_circle_quadrants(x + r, y + h - 1 - r, r, false, false, true, false);
-        self.draw_circle_quadrants(x + w - 1 - r, y + h - 1 - r, r, false, false, false, true);
+        self.draw_circle_with_option(xl, yu, r, DRAW_UPPER_LEFT, self.color);
+        self.draw_circle_with_option(xr, yu, r, DRAW_UPPER_RIGHT, self.color);
+        self.draw_circle_with_option(xl, yl, r, DRAW_LOWER_LEFT, self.color);
+        self.draw_circle_with_option(xr, yl, r, DRAW_LOWER_RIGHT, self.color);
+
+        let mut ww = w - r - r;
+        let mut hh = h - r - r;
+
+        xl += 1;
+        yu += 1;
+
+        if ww >= 3 {
+            ww -= 2;
+            let edge_y = y + h - 1;
+            self.draw_hline_color(xl, y, ww as u32, self.color);
+            self.draw_hline_color(xl, edge_y, ww as u32, self.color);
+        }
+
+        if hh >= 3 {
+            hh -= 2;
+            let edge_x = x + w - 1;
+            self.draw_vline_color(x, yu, hh as u32, self.color);
+            self.draw_vline_color(edge_x, yu, hh as u32, self.color);
+        }
     }
 
     pub fn draw_rbox(&mut self, x: i32, y: i32, width: u32, height: u32, radius: u32) {
@@ -148,14 +190,32 @@ impl Canvas {
             return;
         }
 
-        self.draw_box(x + r, y, (w - 2 * r) as u32, height);
-        self.draw_box(x, y + r, r as u32, (h - 2 * r) as u32);
-        self.draw_box(x + w - r, y + r, r as u32, (h - 2 * r) as u32);
+        let mut xl = x + r;
+        let mut yu = y + r;
+        let xr = x + w - r - 1;
+        let yl = y + h - r - 1;
 
-        self.draw_disc(x + r, y + r, r as u32);
-        self.draw_disc(x + w - 1 - r, y + r, r as u32);
-        self.draw_disc(x + r, y + h - 1 - r, r as u32);
-        self.draw_disc(x + w - 1 - r, y + h - 1 - r, r as u32);
+        self.draw_disc_with_option(xl, yu, r, DRAW_UPPER_LEFT, self.color);
+        self.draw_disc_with_option(xr, yu, r, DRAW_UPPER_RIGHT, self.color);
+        self.draw_disc_with_option(xl, yl, r, DRAW_LOWER_LEFT, self.color);
+        self.draw_disc_with_option(xr, yl, r, DRAW_LOWER_RIGHT, self.color);
+
+        let mut ww = w - r - r;
+        let mut hh = h - r - r;
+
+        xl += 1;
+        yu += 1;
+
+        if ww >= 3 {
+            ww -= 2;
+            self.draw_box(xl, y, ww as u32, (r + 1) as u32);
+            self.draw_box(xl, yl, ww as u32, (r + 1) as u32);
+        }
+
+        if hh >= 3 {
+            hh -= 2;
+            self.draw_box(x, yu, w as u32, hh as u32);
+        }
     }
 
     pub fn draw_circle(&mut self, x: i32, y: i32, radius: u32) {
@@ -163,47 +223,15 @@ impl Canvas {
             self.draw_xor_circle(x, y, radius);
             return;
         }
-        let r = radius as i32;
-        if r <= 0 {
-            self.set_pixel_with_color(x, y, self.color);
-            return;
-        }
-        let mut dx = 0;
-        let mut dy = r;
-        let mut d = 1 - r;
-        while dx <= dy {
-            self.draw_circle_points(x, y, dx, dy, self.color);
-            if d < 0 {
-                d += 2 * dx + 3;
-            } else {
-                d += 2 * (dx - dy) + 5;
-                dy -= 1;
-            }
-            dx += 1;
-        }
+        self.draw_circle_with_option(x, y, radius as i32, DRAW_ALL, self.color);
     }
 
     pub fn draw_disc(&mut self, x0: i32, y0: i32, radius: u32) {
-        if radius == 0 {
-            self.set_pixel_with_color(x0, y0, self.color);
+        if self.color == Color::Xor {
+            self.draw_xor_disc(x0, y0, radius);
             return;
         }
-        let r = radius as i32;
-        let r_sq = r * r;
-        for dy in -r..=r {
-            let y_sq = dy * dy;
-            if y_sq > r_sq {
-                continue;
-            }
-            let mut x_extent = 0;
-            while (x_extent + 1) * (x_extent + 1) <= r_sq - y_sq {
-                x_extent += 1;
-            }
-            let line_x = x0 - x_extent;
-            let line_y = y0 + dy;
-            let line_w = (2 * x_extent + 1) as u32;
-            self.draw_hline_color(line_x, line_y, line_w, self.color);
-        }
+        self.draw_disc_with_option(x0, y0, radius as i32, DRAW_ALL, self.color);
     }
 
     pub fn draw_str(&mut self, x: i32, y: i32, text: &str) {
@@ -250,17 +278,6 @@ impl Canvas {
         }
     }
 
-    fn draw_circle_points(&mut self, x0: i32, y0: i32, dx: i32, dy: i32, color: Color) {
-        self.set_pixel_with_color(x0 + dx, y0 + dy, color);
-        self.set_pixel_with_color(x0 - dx, y0 + dy, color);
-        self.set_pixel_with_color(x0 + dx, y0 - dy, color);
-        self.set_pixel_with_color(x0 - dx, y0 - dy, color);
-        self.set_pixel_with_color(x0 + dy, y0 + dx, color);
-        self.set_pixel_with_color(x0 - dy, y0 + dx, color);
-        self.set_pixel_with_color(x0 + dy, y0 - dx, color);
-        self.set_pixel_with_color(x0 - dy, y0 - dx, color);
-    }
-
     fn draw_xor_circle(&mut self, x0: i32, y0: i32, radius: u32) {
         if radius == 0 {
             self.set_pixel_with_color(x0, y0, Color::Xor);
@@ -303,48 +320,153 @@ impl Canvas {
         }
     }
 
-    fn draw_circle_quadrants(
+    fn draw_circle_section(
+        &mut self,
+        x: i32,
+        y: i32,
+        x0: i32,
+        y0: i32,
+        option: u8,
+        color: Color,
+    ) {
+        if option & DRAW_UPPER_RIGHT != 0 {
+            self.set_pixel_with_color(x0 + x, y0 - y, color);
+            self.set_pixel_with_color(x0 + y, y0 - x, color);
+        }
+        if option & DRAW_UPPER_LEFT != 0 {
+            self.set_pixel_with_color(x0 - x, y0 - y, color);
+            self.set_pixel_with_color(x0 - y, y0 - x, color);
+        }
+        if option & DRAW_LOWER_RIGHT != 0 {
+            self.set_pixel_with_color(x0 + x, y0 + y, color);
+            self.set_pixel_with_color(x0 + y, y0 + x, color);
+        }
+        if option & DRAW_LOWER_LEFT != 0 {
+            self.set_pixel_with_color(x0 - x, y0 + y, color);
+            self.set_pixel_with_color(x0 - y, y0 + x, color);
+        }
+    }
+
+    fn draw_circle_with_option(
         &mut self,
         x0: i32,
         y0: i32,
         radius: i32,
-        top_left: bool,
-        top_right: bool,
-        bottom_left: bool,
-        bottom_right: bool,
+        option: u8,
+        color: Color,
     ) {
-        if radius <= 0 {
+        if radius < 0 {
             return;
         }
-        let mut dx = 0;
-        let mut dy = radius;
-        let mut d = 1 - radius;
 
-        while dx <= dy {
-            if top_left {
-                self.set_pixel_with_color(x0 - dx, y0 - dy, self.color);
-                self.set_pixel_with_color(x0 - dy, y0 - dx, self.color);
+        let mut f = 1 - radius;
+        let mut dd_f_x = 1;
+        let mut dd_f_y = -2 * radius;
+        let mut x = 0;
+        let mut y = radius;
+
+        self.draw_circle_section(x, y, x0, y0, option, color);
+
+        while x < y {
+            if f >= 0 {
+                y -= 1;
+                dd_f_y += 2;
+                f += dd_f_y;
             }
-            if top_right {
-                self.set_pixel_with_color(x0 + dx, y0 - dy, self.color);
-                self.set_pixel_with_color(x0 + dy, y0 - dx, self.color);
+            x += 1;
+            dd_f_x += 2;
+            f += dd_f_x;
+
+            self.draw_circle_section(x, y, x0, y0, option, color);
+        }
+    }
+
+    fn draw_disc_section(
+        &mut self,
+        x: i32,
+        y: i32,
+        x0: i32,
+        y0: i32,
+        option: u8,
+        color: Color,
+    ) {
+        if option & DRAW_UPPER_RIGHT != 0 {
+            self.draw_vline_color(x0 + x, y0 - y, (y + 1) as u32, color);
+            self.draw_vline_color(x0 + y, y0 - x, (x + 1) as u32, color);
+        }
+        if option & DRAW_UPPER_LEFT != 0 {
+            self.draw_vline_color(x0 - x, y0 - y, (y + 1) as u32, color);
+            self.draw_vline_color(x0 - y, y0 - x, (x + 1) as u32, color);
+        }
+        if option & DRAW_LOWER_RIGHT != 0 {
+            self.draw_vline_color(x0 + x, y0, (y + 1) as u32, color);
+            self.draw_vline_color(x0 + y, y0, (x + 1) as u32, color);
+        }
+        if option & DRAW_LOWER_LEFT != 0 {
+            self.draw_vline_color(x0 - x, y0, (y + 1) as u32, color);
+            self.draw_vline_color(x0 - y, y0, (x + 1) as u32, color);
+        }
+    }
+
+    fn draw_disc_with_option(
+        &mut self,
+        x0: i32,
+        y0: i32,
+        radius: i32,
+        option: u8,
+        color: Color,
+    ) {
+        if radius < 0 {
+            return;
+        }
+
+        let mut f = 1 - radius;
+        let mut dd_f_x = 1;
+        let mut dd_f_y = -2 * radius;
+        let mut x = 0;
+        let mut y = radius;
+
+        self.draw_disc_section(x, y, x0, y0, option, color);
+
+        while x < y {
+            if f >= 0 {
+                y -= 1;
+                dd_f_y += 2;
+                f += dd_f_y;
             }
-            if bottom_left {
-                self.set_pixel_with_color(x0 - dx, y0 + dy, self.color);
-                self.set_pixel_with_color(x0 - dy, y0 + dx, self.color);
-            }
-            if bottom_right {
-                self.set_pixel_with_color(x0 + dx, y0 + dy, self.color);
-                self.set_pixel_with_color(x0 + dy, y0 + dx, self.color);
+            x += 1;
+            dd_f_x += 2;
+            f += dd_f_x;
+
+            self.draw_disc_section(x, y, x0, y0, option, color);
+        }
+    }
+
+    fn draw_xor_disc(&mut self, x0: i32, y0: i32, radius: u32) {
+        if radius == 0 {
+            self.set_pixel_with_color(x0, y0, Color::Xor);
+            return;
+        }
+
+        let r = radius as i32;
+        let r_sq = r * r;
+
+        for dy in -r..=r {
+            let y_sq = dy * dy;
+            if y_sq > r_sq {
+                continue;
             }
 
-            if d < 0 {
-                d += 2 * dx + 3;
-            } else {
-                d += 2 * (dx - dy) + 5;
-                dy -= 1;
+            let mut x_extent = 0;
+            while (x_extent + 1) * (x_extent + 1) <= r_sq - y_sq {
+                x_extent += 1;
             }
-            dx += 1;
+
+            let line_y = y0 + dy;
+            let line_x = x0 - x_extent;
+            let line_w = (2 * x_extent + 1) as u32;
+
+            self.draw_hline_color(line_x, line_y, line_w, Color::Xor);
         }
     }
 }

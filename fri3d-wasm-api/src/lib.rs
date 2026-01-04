@@ -20,7 +20,9 @@ mod bindings {
         pub fn canvas_draw_str(x: i32, y: i32, text: *const u8);
         pub fn canvas_string_width(text: *const u8) -> i32;
         pub fn random_seed(seed: i32);
+        pub fn random_get() -> i32;
         pub fn random_range(max: i32) -> i32;
+        pub fn get_time_ms() -> i32;
         pub fn exit_to_launcher();
         pub fn start_app(app_id: i32);
     }
@@ -66,7 +68,15 @@ mod bindings {
 
     pub fn random_seed(_seed: i32) {}
 
+    pub fn random_get() -> i32 {
+        0
+    }
+
     pub fn random_range(_max: i32) -> i32 {
+        0
+    }
+
+    pub fn get_time_ms() -> i32 {
         0
     }
 
@@ -268,6 +278,17 @@ pub fn random_seed(seed: u32) {
     }
 }
 
+pub fn random_get() -> u32 {
+    #[cfg(target_arch = "wasm32")]
+    unsafe {
+        return bindings::random_get().max(0) as u32;
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        bindings::random_get().max(0) as u32
+    }
+}
+
 pub fn random_range(max: u32) -> u32 {
     if max == 0 {
         return 0;
@@ -279,6 +300,17 @@ pub fn random_range(max: u32) -> u32 {
     #[cfg(not(target_arch = "wasm32"))]
     {
         bindings::random_range(max as i32).max(0) as u32
+    }
+}
+
+pub fn get_time_ms() -> u32 {
+    #[cfg(target_arch = "wasm32")]
+    unsafe {
+        return bindings::get_time_ms().max(0) as u32;
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        bindings::get_time_ms().max(0) as u32
     }
 }
 

@@ -430,31 +430,27 @@ def generate_html_report(results: list[TestResult], output_path: Path):
 # Prerequisites Check
 # =============================================================================
 
-def check_prerequisites(apps: list[App]) -> bool:
-    """Verify host emulator and app binaries exist."""
+def check_prerequisites() -> bool:
+    """Verify host emulator exists."""
     if not HOST_EMULATOR.exists():
         print(f"Error: Emulator not found at {HOST_EMULATOR}")
         print("Build with: cargo build -p fri3d-emulator")
         print("Or set FRI3D_EMULATOR to the emulator path")
         return False
 
+    return True
+
+
+def filter_apps_with_wasm(apps: list[App]) -> tuple[list[App], list[str]]:
+    """Return apps with WASM binaries and a list of missing app ids."""
+    available = []
     missing = []
     for app in apps:
-        if not find_wasm_binary(app.id):
+        if find_wasm_binary(app.id):
+            available.append(app)
+        else:
             missing.append(app.id)
-
-    if missing:
-        print(f"Error: WASM binaries not found for: {', '.join(missing)}")
-        print("Build apps with: cargo build -p fri3d-app-<app> --target wasm32-unknown-unknown")
-        print("Or use the C toolchain:")
-        for app_id in missing:
-            rust_name = f"fri3d-app-{app_id.replace('_', '-')}"
-            print(f"  cargo build -p {rust_name} --target wasm32-unknown-unknown")
-            print(f"  cmake -B build/apps/{app_id} -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-wasm.cmake -S src/apps/{app_id}")
-            print(f"  cmake --build build/apps/{app_id}")
-        return False
-
-    return True
+    return available, missing
 
 
 def has_golden_images(app: App) -> bool:
@@ -507,8 +503,16 @@ def main():
         apps = all_apps
 
     # Check prerequisites
-    if not check_prerequisites(apps):
+    if not check_prerequisites():
         sys.exit(1)
+
+    # Filter apps based on available WASM binaries
+    apps, missing_apps = filter_apps_with_wasm(apps)
+    if args.app and missing_apps:
+        print(f"Error: WASM binary not found for {missing_apps[0]}")
+        sys.exit(1)
+    if missing_apps and not args.app:
+        print(f"Skipping apps without WASM binaries: {', '.join(missing_apps)}")
 
     # Warn if no golden images (unless updating)
     if not args.update_golden and not has_any_golden_images(apps):

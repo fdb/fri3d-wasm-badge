@@ -19,3 +19,4 @@ These apps require the IMGUI system described in `specs/007-imgui.md` and should
 
 - IMGUI behavior must match to keep this app's visuals and input flow consistent.
 - Run visual + trace tests after IMGUI and these apps are implemented.
+- Visual tests currently skip IMGUI/launcher apps when their Rust WASM binaries are missing; re-enable full coverage after porting `launcher` and `test_ui`.
