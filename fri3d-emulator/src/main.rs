@@ -213,6 +213,7 @@ fn main() {
         manager.add_app("Test Drawing", "build/apps/test_drawing/test_drawing.wasm");
         manager.add_app("Test UI", "build/apps/test_ui/test_ui.wasm");
         manager.add_app("Snake", "build/apps/snake/snake.wasm");
+        manager.add_app("WiFi Pet", "build/apps/wifi_pet/wifi_pet.wasm");
     }
 
     if let Some(path) = options.wasm_file.as_ref() {

@@ -169,6 +169,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "fri3d-app-wifi-pet"
+version = "0.1.0"
+dependencies = [
+ "fri3d-wasm-api",
+]
+
+[[package]]
 name = "fri3d-emulator"
 version = "0.1.0"
 dependencies = [

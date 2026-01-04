@@ -8,12 +8,13 @@ struct LauncherEntry {
     id: u32,
 }
 
-const APPS: [LauncherEntry; 5] = [
+const APPS: [LauncherEntry; 6] = [
     LauncherEntry { name: "Circles", id: 1 },
     LauncherEntry { name: "Mandelbrot", id: 2 },
     LauncherEntry { name: "Test Drawing", id: 3 },
     LauncherEntry { name: "Test UI", id: 4 },
     LauncherEntry { name: "Snake", id: 5 },
+    LauncherEntry { name: "WiFi Pet", id: 6 },
 ];
 
 static MENU_SCROLL: api::AppCell<i16> = api::AppCell::new(0);

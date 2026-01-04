@@ -12,6 +12,7 @@ members = [
     "fri3d-app-snake",
     "fri3d-app-test-drawing",
     "fri3d-app-test-ui",
+    "fri3d-app-wifi-pet",
 ]
 default-members = [
     "fri3d-runtime",

@@ -73,6 +73,12 @@ These apps are used to validate canvas primitives and runtime behavior before IM
 - Uses `random_range()` to place fruit on even grid positions.
 - Back short/long press exits; `OK` restarts after game over.
 
+### WiFi Pet (`fri3d-app-wifi-pet`)
+
+- Simulated WiFi pet that wanders toward pseudo-APs and eats them to recharge.
+- Timer-driven updates (200ms) using the new `start_timer_ms` API.
+- `OK` spawns a new AP; arrow keys nudge the pet; Back short press exits.
+
 ## Porting expectations
 
 - Preserve input semantics and timings for determinism and tests.
