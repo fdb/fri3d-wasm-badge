@@ -1,5 +1,7 @@
 pub mod app_manager;
 pub mod canvas;
+pub mod font;
+pub mod fonts;
 pub mod input;
 pub mod random;
 pub mod trace;
