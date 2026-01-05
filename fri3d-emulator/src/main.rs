@@ -3,7 +3,7 @@ use fri3d_runtime::canvas::Canvas;
 use fri3d_runtime::input::{InputBackend, InputEvent, InputManager};
 use fri3d_runtime::random::Random;
 use fri3d_runtime::types::{InputKey, InputType};
-use minifb::{Key, Scale, Window, WindowOptions};
+use minifb::{Key, KeyRepeat, Scale, Window, WindowOptions};
 use png::{BitDepth, ColorType, Encoder};
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -313,6 +313,7 @@ fn main() {
     }
 
     let mut needs_render = false;
+    let mut screenshot_count: u32 = 0;
 
     while window.borrow().is_open() {
         let time_ms = start.elapsed().as_millis() as u32;
@@ -324,6 +325,19 @@ fn main() {
                 .borrow_mut()
                 .handle_input(event.key, event.kind);
             had_event = true;
+        }
+
+        if window
+            .borrow()
+            .is_key_pressed(Key::S, KeyRepeat::No)
+        {
+            let path = format!("screenshot_{}.png", screenshot_count);
+            screenshot_count = screenshot_count.saturating_add(1);
+            if let Err(err) = save_screenshot(&canvas.borrow(), Path::new(&path)) {
+                eprintln!("Failed to save screenshot: {err}");
+            } else {
+                println!("Screenshot saved to {path}");
+            }
         }
 
         let timer_due = app_manager.borrow_mut().poll_timer(time_ms);
