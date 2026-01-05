@@ -2,35 +2,34 @@
 
 This stage describes the host/platform layer that provides display, input, and timing.
 
-## Desktop emulator (SDL)
+## Desktop emulator (Rust minifb)
 
-Reference: `src/emulator/`
+Reference: `fri3d-emulator/src/main.rs`
 
-### Display backend (SDL + u8g2)
+### Display backend (minifb)
 
-- `display_sdl_t` owns SDL window/renderer/texture and a u8g2 framebuffer.
-- Buffer format: u8g2 SSD1306 128x64, full framebuffer.
-- `display_sdl_flush()` reads the u8g2 buffer and converts each bit into RGBA pixels for SDL.
-- Scaling: window uses 4x scaling (`DISPLAY_SDL_SCALE_FACTOR` in `src/emulator/display_sdl.c`).
-- Headless mode: skip SDL window/renderer; still uses u8g2 buffer.
-- Screenshots: `display_sdl_save_screenshot()` encodes 128x64 RGBA to PNG using `stb_image_write`.
+- Uses the Rust `Canvas` framebuffer (1bpp) from `fri3d-runtime`.
+- Framebuffer is expanded to RGBA and displayed in a minifb window.
+- Scaling: 4x scale (`Scale::X4`).
+- Headless mode: skip window creation; still renders to the framebuffer for screenshots.
+- Screenshots: writes 128x64 PNGs via the `png` crate.
 
-### Input backend (SDL)
+### Input backend
 
-- `input_sdl.c` maps keyboard input to logical keys:
+- Key mapping:
   - Arrow keys -> up/down/left/right
   - Z or Enter -> ok
   - X or Backspace -> back
-- `S` triggers screenshot (emulator only).
-- Key repeats are ignored at the SDL event layer; repeats are synthesized by the runtime input manager.
-- Time source: `SDL_GetTicks()`.
+- `S` triggers a screenshot saved as `screenshot_<n>.png` in the current working directory.
+- OS key repeats are ignored; repeats are synthesized by the runtime input manager.
+- Time source: `Instant::now()` (monotonic).
 
 ### Emulator main loop
 
-- `src/emulator/main.c` composes: display -> canvas -> random -> input -> runtime.
-- App registry is fixed at startup (launcher + 5 apps).
+- Composes: canvas -> random -> input -> runtime (wasmi).
+- App registry is fixed at startup (launcher + 6 apps, including WiFi Pet).
 - Options: `--test`, `--scene`, `--screenshot`, `--headless`.
-- Loop: poll input, synthesize events, deliver to app, render, flush, ~60fps delay.
+- Loop: poll input, synthesize events, deliver to app, render on demand, update window.
 
 ## Web emulator (Rust wasm host + JS runtime)
 

@@ -18,6 +18,7 @@ Reference: `src/apps/launcher/main.c`
 3. Test Drawing
 4. Test UI
 5. Snake
+6. WiFi Pet
 
 ## Porting expectations
 
