@@ -55,8 +55,9 @@ mod enabled {
 
     pub fn trace_call(fn_name: &str, args: &[TraceArg]) {
         let mut guard = state().lock().unwrap();
+        let frame = guard.current_frame;
         guard.events.push(TraceEvent {
-            frame: guard.current_frame,
+            frame,
             fn_name: fn_name.to_string(),
             args: args.to_vec(),
             ret: None,
@@ -70,7 +71,7 @@ mod enabled {
         }
     }
 
-    fn write_json_string(mut out: &mut String, value: &str) {
+    fn write_json_string(out: &mut String, value: &str) {
         out.push('"');
         for c in value.chars() {
             match c {

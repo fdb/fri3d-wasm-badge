@@ -452,7 +452,6 @@ fn run_event_mode(
     time_cell: &Cell<u32>,
 ) -> u32 {
     let mut frame_index = 0u32;
-    let mut current_time = 0u32;
     let mut next_event_index = 0usize;
 
     time_cell.set(0);
@@ -470,7 +469,7 @@ fn run_event_mode(
             .map(|event| event.time_ms)
             .unwrap_or(u32::MAX);
         let next_timer_time = runner.timer_next_ms().unwrap_or(u32::MAX);
-        let mut next_time = next_input_time.min(next_timer_time);
+        let next_time = next_input_time.min(next_timer_time);
 
         if next_time == u32::MAX {
             break;
@@ -478,23 +477,22 @@ fn run_event_mode(
         if duration_ms.is_some() && next_time > end_time {
             break;
         }
-        current_time = next_time;
-        time_cell.set(current_time);
+        time_cell.set(next_time);
 
         let mut had_input = false;
-        while next_event_index < events.len() && events[next_event_index].time_ms == current_time {
+        while next_event_index < events.len() && events[next_event_index].time_ms == next_time {
             let event = &events[next_event_index];
             runner.call_on_input(event.key as u32, event.kind as u32);
             had_input = true;
             next_event_index += 1;
         }
 
-        let timer_due = runner.timer_due(current_time);
+        let timer_due = runner.timer_due(next_time);
         if had_input || timer_due {
             render_with_request(runner, &mut frame_index, max_frames);
         }
 
-        if duration_ms.is_some() && current_time >= end_time {
+        if duration_ms.is_some() && next_time >= end_time {
             break;
         }
     }
@@ -543,8 +541,9 @@ fn main() {
     runner.set_canvas(Rc::clone(&canvas));
     runner.set_random(Rc::clone(&random));
 
-    let time_cell = Cell::new(0u32);
-    runner.set_time_provider(|| time_cell.get());
+    let time_cell = Rc::new(Cell::new(0u32));
+    let time_cell_for_runner = Rc::clone(&time_cell);
+    runner.set_time_provider(move || time_cell_for_runner.get());
 
     let exit_cb: ExitToLauncherCallback = Rc::new(|| {});
     let start_cb: StartAppCallback = Rc::new(|_| {});
@@ -562,8 +561,8 @@ fn main() {
     trace::trace_reset();
 
     let rendered_frames = match options.mode {
-        Mode::Fixed => run_fixed_mode(&mut runner, &timed_events, options.frames, options.frame_ms, &time_cell),
-        Mode::Event => run_event_mode(&mut runner, &timed_events, options.frames, options.duration_ms, &time_cell),
+        Mode::Fixed => run_fixed_mode(&mut runner, &timed_events, options.frames, options.frame_ms, time_cell.as_ref()),
+        Mode::Event => run_event_mode(&mut runner, &timed_events, options.frames, options.duration_ms, time_cell.as_ref()),
     };
 
     let app_id = resolve_app_id(options.app_id, &options.wasm_path);
