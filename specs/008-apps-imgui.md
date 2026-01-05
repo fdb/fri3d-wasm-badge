@@ -8,7 +8,7 @@ These apps require the IMGUI system described in `specs/007-imgui.md` and should
 
 ## Built-in apps (IMGUI)
 
-### Test UI (`src/apps/test_ui/main.c`)
+### Test UI (`fri3d-app-test-ui/src/lib.rs`)
 
 - Multi-scene IMGUI demo: counter, menu, layout, progress, checkbox, footer, keyboard.
 - Uses virtual keyboard with validation (min 3 chars, no spaces).
@@ -19,3 +19,4 @@ These apps require the IMGUI system described in `specs/007-imgui.md` and should
 
 - IMGUI behavior must match to keep this app's visuals and input flow consistent.
 - Run visual + trace tests after IMGUI and these apps are implemented.
+- Visual tests should include IMGUI/launcher apps now that Rust WASM binaries exist.

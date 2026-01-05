@@ -1,32 +1,26 @@
 # Fri3d WASM Badge
 
-A WebAssembly-based badge platform for the Fri3d camp badge, featuring a 128x64 OLED display. Includes a desktop emulator (SDL), web emulator (Emscripten), and ESP32-S3 firmware.
+A Rust-based WebAssembly badge platform for the Fri3d camp badge, featuring a 128x64 OLED display. Includes a desktop emulator, web emulator, and a growing set of WASM apps.
 
 ## Getting Started
 
-### Cloning the Repository
+### Prerequisites
 
-This project uses git submodules for dependencies. When cloning:
-
-```bash
-git clone --recursive https://github.com/fdb/fri3d-wasm-badge.git
-cd fri3d-wasm-badge
-```
-
-Or clone first, then initialize submodules:
+- Rust toolchain (via rustup)
+- wasm32 target:
 
 ```bash
-git clone https://github.com/fdb/fri3d-wasm-badge.git
-cd fri3d-wasm-badge
-git submodule update --init --recursive
+rustup target add wasm32-unknown-unknown
 ```
 
-## Prerequisites
+Optional (tests and web):
+- uv (for Python test runners)
+- Node.js (for web smoke tests)
 
-### macOS
+Linux desktop build dependencies (minifb):
 
-```
-brew install cmake zig sdl2
+```bash
+sudo apt-get install -y libx11-dev libxrandr-dev libxcursor-dev libxinerama-dev libxi-dev
 ```
 
 ## Building
@@ -37,41 +31,41 @@ brew install cmake zig sdl2
 ./build_all.sh
 ```
 
-This builds the desktop emulator and all WASM apps.
-
 ### Desktop Emulator Only
 
 ```bash
-cmake -B build/emulator
-cmake --build build/emulator
+./build_emulator.sh
 ```
 
 ### WASM Apps Only
 
-Requires [Zig](https://ziglang.org/) for the WASM toolchain:
-
 ```bash
-cmake -B build/apps/circles -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-wasm.cmake -S src/apps/circles
-cmake --build build/apps/circles
+./build_apps.sh
 ```
 
-### Running the Emulator
+### Web Emulator
+
+```bash
+./build_web.sh
+```
+
+## Running the Emulator
 
 ```bash
 # Run launcher.wasm
-./build/emulator/src/emulator/fri3d_emulator
+./target/release/fri3d-emulator
 
 # Run a specific app
-./build/emulator/src/emulator/fri3d_emulator build/apps/circles/circles.wasm
+./target/release/fri3d-emulator build/apps/circles/circles.wasm
 ```
 
-### Controls
+## Controls
 
 - Arrow keys: Navigate
 - Z / Enter: OK / Select
 - X / Backspace: Back
-- S: Screenshot
-- Left + X (hold 500ms): Return to launcher
+- S: Screenshot (writes screenshot_<n>.png)
+- Left + Back (hold 500ms): Return to launcher
 
 ## Running Tests
 
@@ -106,45 +100,22 @@ cp tests/trace/output/<app>/<spec>.json tests/trace/expected/<app>/<spec>.json
 ## Project Structure
 
 ```
-src/
-├── sdk/          # WASM SDK headers (API for apps)
-├── apps/         # WASM applications
-│   ├── circles/
-│   ├── mandelbrot/
-│   └── test_drawing/
-├── runtime/      # Shared runtime code (canvas, WASM runner, input handling)
-├── emulator/     # Desktop SDL emulator
-├── firmware/     # ESP32-S3 PlatformIO project
-└── web/          # Web/Emscripten build
-
-libs/             # Git submodules (WAMR, u8g2) + headers (stb)
-cmake/            # CMake toolchain files
-tests/            # Visual regression tests
+fri3d-runtime/        # Shared runtime (canvas, input, wasm runner, trace)
+fri3d-emulator/       # Desktop emulator (minifb)
+fri3d-web/            # Web host (wasm32 + JS shell)
+fri3d-wasm-api/        # WASM SDK for Rust apps
+fri3d-app-*/          # Rust WASM apps
+fri3d-trace-harness/  # Trace test harness
+specs/                # Specs for the Rust port
+tests/                # Visual, trace, and web tests
 ```
-
-### Platform Targets
-
-| Platform          | Directory       | Build System | Status   |
-| ----------------- | --------------- | ------------ | -------- |
-| Desktop Emulator  | `src/emulator/` | CMake + SDL2 | Working  |
-| Web Emulator      | `src/web/`      | Emscripten   | Skeleton |
-| ESP32-S3 Firmware | `src/firmware/` | PlatformIO   | Skeleton |
-| WASM Apps         | `src/apps/`     | CMake + Zig  | Working  |
 
 ## Dependencies
 
-- **CMake** 3.16+
-- **SDL2** (for desktop emulator)
-- **Zig** (for WASM compilation)
-- **PlatformIO** (for ESP32 firmware, optional)
-- **Emscripten** (for web build, optional)
-
-Git submodules:
-
-- WASM Micro Runtime (WAMR)
-- u8g2 graphics library
-- stb_image_write (PNG encoding header in `libs/stb`)
+- Rust toolchain (stable)
+- wasm32-unknown-unknown target
+- Optional: uv, Node.js (for tests)
 
 ## License
 
-See individual submodule licenses in `libs/` directory.
+See individual crate licenses where applicable.

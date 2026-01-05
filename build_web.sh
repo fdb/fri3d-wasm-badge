@@ -3,47 +3,33 @@ set -e
 
 cd "$(dirname "$0")"
 
-# Check for Emscripten
-if ! command -v emcmake &> /dev/null; then
-    echo "Error: Emscripten not found."
-    echo ""
-    echo "Install via Homebrew:"
-    echo "  brew install emscripten"
-    echo ""
-    echo "Or install the SDK:"
-    echo "  git clone https://github.com/emscripten-core/emsdk.git"
-    echo "  cd emsdk && ./emsdk install latest && ./emsdk activate latest"
-    echo "  source ./emsdk_env.sh"
+echo "=== Building Rust WASM apps ==="
+./build_apps.sh
+
+echo ""
+echo "=== Building Rust web host ==="
+cargo build -p fri3d-web --target wasm32-unknown-unknown --release
+
+OUTPUT_DIR="build/web"
+APP_OUTPUT_DIR="$OUTPUT_DIR/apps"
+
+mkdir -p "$APP_OUTPUT_DIR"
+
+HOST_WASM="target/wasm32-unknown-unknown/release/fri3d_web.wasm"
+if [ ! -f "$HOST_WASM" ]; then
+    echo "Error: expected wasm output at $HOST_WASM" >&2
     exit 1
 fi
 
-BUILD_DIR="build"
+cp "$HOST_WASM" "$OUTPUT_DIR/fri3d_web.wasm"
+cp "fri3d-web/shell.html" "$OUTPUT_DIR/index.html"
 
-# Build all WASM apps first (they get embedded in the web build)
-echo "=== Building WASM apps ==="
-TOOLCHAIN="$(pwd)/cmake/toolchain-wasm.cmake"
-APPS_BUILD_DIR="$BUILD_DIR/apps"
-
-for app_dir in src/apps/*/; do
-    if [ -d "$app_dir" ]; then
-        app_name=$(basename "$app_dir")
-        echo "Building app: $app_name"
-        cmake -B "$APPS_BUILD_DIR/$app_name" -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" -S "$app_dir" > /dev/null
-        cmake --build "$APPS_BUILD_DIR/$app_name" > /dev/null
-    fi
-done
-
-# Build web target with Emscripten (using root CMakeLists.txt)
-echo ""
-echo "=== Building web emulator ==="
-
-emcmake cmake -B "$BUILD_DIR/web" -S . -DBUILD_EMULATOR=OFF -DBUILD_WEB=ON
-cmake --build "$BUILD_DIR/web"
+cp -R build/apps/* "$APP_OUTPUT_DIR/"
 
 echo ""
 echo "=== Build complete! ==="
 echo ""
 echo "To run the web emulator:"
-echo "  cd build/web/src/web && python3 -m http.server 8080"
+echo "  cd build/web && python3 -m http.server 8080"
 echo ""
-echo "Then open: http://localhost:8080/fri3d_web.html"
+echo "Then open: http://localhost:8080/"

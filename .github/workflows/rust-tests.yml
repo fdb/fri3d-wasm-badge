@@ -1,0 +1,53 @@
+name: Rust Tests
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  rust-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          libx11-dev \
+          libxrandr-dev \
+          libxcursor-dev \
+          libxinerama-dev \
+          libxi-dev
+
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Add wasm32 target
+      run: rustup target add wasm32-unknown-unknown
+
+    - name: Run cargo tests
+      run: cargo test
+
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+
+    - name: Install web smoke test dependencies
+      run: |
+        cd tests/web
+        npm install
+        npx playwright install --with-deps chromium
+
+    - name: Build web emulator
+      run: ./build_web.sh
+
+    - name: Run web smoke tests
+      run: node tests/web/run_web_smoke_tests.js

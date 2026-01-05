@@ -4,6 +4,7 @@
   "frames": 1,
   "events": [
     {"frame": 0, "fn": "get_time_ms", "args": [], "ret": 0},
+    {"frame": 0, "fn": "start_timer_ms", "args": [250]},
     {"frame": 0, "fn": "get_time_ms", "args": [], "ret": 0},
     {"frame": 0, "fn": "canvas_set_color", "args": [1]},
     {"frame": 0, "fn": "canvas_draw_frame", "args": [0, 0, 128, 64]},

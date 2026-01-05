@@ -4,7 +4,7 @@ This stage defines the WASM app API and documents the built-in apps that do not 
 
 ## App API (WASM)
 
-References: `src/sdk/*.h`, `src/apps/*/main.c`
+References: `fri3d-wasm-api/src/lib.rs`, `fri3d-app-*/src/lib.rs`
 
 ### Required exports
 
@@ -23,23 +23,26 @@ References: `src/sdk/*.h`, `src/apps/*/main.c`
 
 ### Imports (module = `env`)
 
-- Canvas API: see `src/sdk/canvas.h` and `specs/004-canvas.md`.
-- Input enums: `input_key_t`, `input_type_t` in `src/sdk/input.h`.
-- Time: `get_time_ms()` in `src/sdk/frd.h`.
-- App control: `exit_to_launcher()`, `start_app(id)` in `src/sdk/app.h`.
-- Random: `random_seed/get/range` in `src/sdk/random.h`.
+- Canvas API: see `fri3d-wasm-api/src/lib.rs` and `specs/004-canvas.md`.
+- Input enums: `InputKey`, `InputType` in `fri3d-wasm-api`.
+- Time: `get_time_ms()` in `fri3d-wasm-api`.
+- Timer: `start_timer_ms(interval_ms)` and `stop_timer()` (periodic renders).
+- App control: `exit_to_launcher()`, `start_app(id)` in `fri3d-wasm-api`.
+- Random: `random_seed/get/range` in `fri3d-wasm-api`.
 
 ### Conventions
 
 - Apps usually map Back short press to exit via `exit_to_launcher()`.
 - Some apps use Back long press to exit when short press is repurposed.
 - Apps should be deterministic when used with visual tests (fixed RNG seeds or scenes).
+- Apps should only start timers when needed (animations/game loops) and stop them
+  when leaving animated scenes to conserve battery.
 
 ## Built-in apps (pre-IMGUI)
 
 These apps are used to validate canvas primitives and runtime behavior before IMGUI is implemented.
 
-### Circles (`src/apps/circles/main.c`)
+### Circles (`fri3d-app-circles/src/lib.rs`)
 
 - Draws 10 random circles each frame using `random_range`.
 - Seed fixed per frame (`g_seed`) for determinism.
@@ -47,14 +50,14 @@ These apps are used to validate canvas primitives and runtime behavior before IM
 - Back short press exits to launcher.
 - Scene API returns 1 scene.
 
-### Mandelbrot (`src/apps/mandelbrot/main.c`)
+### Mandelbrot (`fri3d-app-mandelbrot/src/lib.rs`)
 
 - Renders a 128x64 Mandelbrot set (50 iterations).
 - Arrow keys pan; `OK` zooms in; Back short press zooms out.
 - Back long press exits to launcher.
 - Scene API returns 1 scene.
 
-### Test Drawing (`src/apps/test_drawing/main.c`)
+### Test Drawing (`fri3d-app-test-drawing/src/lib.rs`)
 
 - Multi-scene app showcasing drawing primitives:
   - Lines, random pixels, circles, filled circles (XOR), rectangles, text, mixed, checkerboard.
@@ -63,12 +66,18 @@ These apps are used to validate canvas primitives and runtime behavior before IM
 - Back short press exits.
 - Scene API: `get_scene_count()` returns SCENE_COUNT.
 
-### Snake (`src/apps/snake/main.c`)
+### Snake (`fri3d-app-snake/src/lib.rs`)
 
 - Grid-based snake game with 4x4 pixel cells, board size 30x14.
 - Movement ticks every 250ms using `get_time_ms()`.
 - Uses `random_range()` to place fruit on even grid positions.
 - Back short/long press exits; `OK` restarts after game over.
+
+### WiFi Pet (`fri3d-app-wifi-pet`)
+
+- Simulated WiFi pet that wanders toward pseudo-APs and eats them to recharge.
+- Timer-driven updates (200ms) using the new `start_timer_ms` API.
+- `OK` spawns a new AP; arrow keys nudge the pet; Back short press exits.
 
 ## Porting expectations
 

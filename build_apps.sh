@@ -3,21 +3,40 @@ set -e
 
 cd "$(dirname "$0")"
 
-# Build all WASM apps
-TOOLCHAIN="$(pwd)/cmake/toolchain-wasm.cmake"
-APPS_BUILD_DIR="build/apps"
+echo "=== Building Rust WASM apps ==="
 
-echo "=== Building WASM apps ==="
+target_dir="target/wasm32-unknown-unknown/debug"
+output_root="build/apps"
 
-for app_dir in src/apps/*/; do
-    if [ -d "$app_dir" ]; then
-        app_name=$(basename "$app_dir")
-        echo ""
-        echo "=== Building app: $app_name ==="
-        cmake -B "$APPS_BUILD_DIR/$app_name" -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" -S "$app_dir"
-        cmake --build "$APPS_BUILD_DIR/$app_name"
+for app_dir in fri3d-app-*/; do
+    if [ ! -d "$app_dir" ]; then
+        continue
     fi
+
+    cargo_toml="$app_dir/Cargo.toml"
+    if [ ! -f "$cargo_toml" ]; then
+        continue
+    fi
+
+    app_name=$(basename "$app_dir")
+    echo ""
+    echo "=== Building app: $app_name ==="
+    cargo build -p "$app_name" --target wasm32-unknown-unknown
+
+    wasm_file="$target_dir/${app_name//-/_}.wasm"
+    if [ ! -f "$wasm_file" ]; then
+        echo "Error: expected wasm output at $wasm_file" >&2
+        exit 1
+    fi
+
+    app_id=${app_name#fri3d-app-}
+    app_id=${app_id//-/_}
+    output_dir="$output_root/$app_id"
+    mkdir -p "$output_dir"
+    cp "$wasm_file" "$output_dir/$app_id.wasm"
+    echo "Copied to $output_dir/$app_id.wasm"
+
 done
 
 echo ""
-echo "=== WASM app build complete! ==="
+echo "=== Rust WASM app build complete! ==="

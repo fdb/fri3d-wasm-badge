@@ -132,6 +132,8 @@ def run_spec(spec_path: Path) -> TestResult:
     frames = int(spec.get("frames", 1))
     seed = int(spec.get("seed", 42))
     frame_ms = int(spec.get("frame_ms", 16))
+    mode = spec.get("mode", "fixed")
+    duration_ms = spec.get("duration_ms")
     scene = spec.get("scene")
     expected_mode = spec.get("expected_mode", "contains")
     required = spec.get("required", [])
@@ -146,7 +148,7 @@ def run_spec(spec_path: Path) -> TestResult:
         return TestResult(
             spec_path,
             False,
-            f"Trace harness not found at {TRACE_HARNESS}. Build with: cmake -B build/trace -DBUILD_TRACE_TESTS=ON",
+            f"Trace harness not found at {TRACE_HARNESS}. Build with: ./build_trace_tests.sh",
         )
 
     output_dir = OUTPUT_DIR / app_id
@@ -170,6 +172,10 @@ def run_spec(spec_path: Path) -> TestResult:
         "--frame-ms", str(frame_ms),
         "--app-id", str(app_id),
     ]
+    if mode:
+        cmd += ["--mode", str(mode)]
+    if duration_ms is not None:
+        cmd += ["--duration-ms", str(duration_ms)]
     if input_path:
         cmd += ["--input", str(input_path)]
     if scene is not None:

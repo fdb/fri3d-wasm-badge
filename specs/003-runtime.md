@@ -4,7 +4,7 @@ This stage describes the shared runtime components used by emulator and intended
 
 ## App manager
 
-References: `src/runtime/app_manager.h`, `src/runtime/app_manager.c`
+References: `fri3d-runtime/src/app_manager.rs`
 
 Responsibilities:
 - Maintain a registry of apps: `(id, name, path)`.
@@ -12,6 +12,8 @@ Responsibilities:
 - Load/unload WASM modules via the wasm runner.
 - Forward `render()` and `on_input()` calls to the active module.
 - Handle app-initiated requests to switch apps (via callbacks from wasm runner).
+- Use event-driven rendering by default (input-driven + request_render), with
+  optional app-controlled timers for animations or game loops to conserve power.
 
 Behavior summary:
 - App IDs are 1-based in the registry. ID 0 maps to the launcher.
@@ -22,11 +24,11 @@ Behavior summary:
 
 ## WASM runner
 
-References: `src/runtime/wasm_runner.h`, `src/runtime/wasm_runner.c`
+References: `fri3d-runtime/src/wasm_runner.rs`
 
 Responsibilities:
-- Initialize WAMR with a fixed heap (default 10 MiB).
-- Load WASM module from file or memory, instantiate, create exec env.
+- Load WASM modules via `wasmi` (instantiate and link host imports).
+- Load WASM module from file or memory, instantiate.
 - Register host imports under module name `env`.
 - Look up optional exports: `on_input`, `get_scene`, `set_scene`, `get_scene_count`.
 - Require export: `render` (fail load if missing).
@@ -54,6 +56,11 @@ Imports registered (names + signatures):
   - `random_range(i32) -> i32`
 - Time:
   - `get_time_ms() -> i32`
+- Timer:
+  - `start_timer_ms(i32) -> void`
+  - `stop_timer() -> void`
+- Render:
+  - `request_render() -> void`
 - App control:
   - `exit_to_launcher() -> void`
   - `start_app(i32) -> void`
@@ -61,11 +68,15 @@ Imports registered (names + signatures):
 Runtime details:
 - `wasm_runner_call_render()` clears the canvas before invoking `render()`.
 - Input is delivered via `on_input(key, type)` if the export exists.
+- `request_render()` asks the host to perform one extra render pass after the
+  current frame to avoid one-frame-late UI updates.
+- `start_timer_ms()` schedules periodic renders at the requested interval until
+  `stop_timer()` is called or the app unloads.
 - Exceptions during WASM calls are printed to stderr and cleared.
 
 ## Input manager
 
-References: `src/runtime/input.h`, `src/runtime/input.c`, `docs/input_system.md`
+References: `fri3d-runtime/src/input.rs`, `docs/input_system.md`
 
 Input keys:
 - `up`, `down`, `left`, `right`, `ok`, `back`
@@ -88,7 +99,7 @@ Behavior:
 
 ## Random
 
-References: `src/runtime/random.h`, `src/runtime/random.c`
+References: `fri3d-runtime/src/random.rs`
 
 - Mersenne Twister MT19937-like implementation with 624 state size.
 - `random_seed(seed)` resets state; `random_get()` returns 32-bit.
@@ -96,7 +107,7 @@ References: `src/runtime/random.h`, `src/runtime/random.c`
 
 ## Trace instrumentation (tests)
 
-References: `src/runtime/trace.h`, `src/runtime/trace.c`
+References: `fri3d-runtime/src/trace.rs`
 
 - When compiled with `FRD_TRACE`, runtime records calls and results.
 - Used by trace tests to compare runtime behavior across platforms.

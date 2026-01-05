@@ -2,7 +2,7 @@
 
 The launcher is a WASM app that lists installed apps and starts them by ID.
 
-Reference: `src/apps/launcher/main.c`
+Reference: `fri3d-app-launcher/src/lib.rs`
 
 ## Behavior
 
@@ -18,6 +18,7 @@ Reference: `src/apps/launcher/main.c`
 3. Test Drawing
 4. Test UI
 5. Snake
+6. WiFi Pet
 
 ## Porting expectations
 

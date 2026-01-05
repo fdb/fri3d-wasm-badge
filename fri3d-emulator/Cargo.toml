@@ -1,0 +1,9 @@
+[package]
+name = "fri3d-emulator"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+fri3d-runtime = { path = "../fri3d-runtime" }
+minifb = "0.25"
+png = "0.17"

@@ -1,6 +1,0 @@
-[submodule "libs/wasm-micro-runtime"]
-	path = libs/wasm-micro-runtime
-	url = https://github.com/bytecodealliance/wasm-micro-runtime.git
-[submodule "libs/u8g2"]
-	path = libs/u8g2
-	url = https://github.com/olikraus/u8g2.git

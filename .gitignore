@@ -4,3 +4,4 @@ build-apps/
 tests/visual/output/
 tests/trace/output/
 tmp_src/
+target/

@@ -3,22 +3,16 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-ZIG_GLOBAL_CACHE_DIR="${ROOT_DIR}/build/zig-cache/global"
-ZIG_LOCAL_CACHE_DIR="${ROOT_DIR}/build/zig-cache/local"
+echo "=== Building Rust WASM apps ==="
+"${ROOT_DIR}/build_apps.sh"
 
-mkdir -p "${ZIG_GLOBAL_CACHE_DIR}" "${ZIG_LOCAL_CACHE_DIR}"
+echo ""
+echo "=== Building Rust trace harness ==="
+cargo build -p fri3d-trace-harness --release
 
-cmake -B "${ROOT_DIR}/build/trace" -DBUILD_TRACE_TESTS=ON -DBUILD_EMULATOR=OFF
-cmake --build "${ROOT_DIR}/build/trace"
+TRACE_BIN_DIR="${ROOT_DIR}/build/trace/bin"
+mkdir -p "${TRACE_BIN_DIR}"
+cp "${ROOT_DIR}/target/release/trace_harness" "${TRACE_BIN_DIR}/trace_harness"
 
-for app in circles test_drawing mandelbrot test_ui snake; do
-  echo "Building ${app}..."
-  ZIG_GLOBAL_CACHE_DIR="${ZIG_GLOBAL_CACHE_DIR}" ZIG_LOCAL_CACHE_DIR="${ZIG_LOCAL_CACHE_DIR}" \
-    cmake -B "${ROOT_DIR}/build/apps/${app}" \
-      -DCMAKE_TOOLCHAIN_FILE="${ROOT_DIR}/cmake/toolchain-wasm.cmake" \
-      -S "${ROOT_DIR}/src/apps/${app}"
-  ZIG_GLOBAL_CACHE_DIR="${ZIG_GLOBAL_CACHE_DIR}" ZIG_LOCAL_CACHE_DIR="${ZIG_LOCAL_CACHE_DIR}" \
-    cmake --build "${ROOT_DIR}/build/apps/${app}"
-done
-
+echo ""
 python3 "${ROOT_DIR}/tests/trace/run_trace_tests.py"

@@ -29,8 +29,8 @@ We introduce a trace layer that wraps host API calls and records them with times
     mandelbrot/zoom_out_long.json
   expected/
     circles/basic.json         # golden trace (exact)
-  harness/
-    trace_harness.c            # native CLI for traces
+/fri3d-trace-harness/
+  src/main.rs                 # native CLI for traces (Rust)
 ```
 
 ## Trace Format (JSON)
@@ -84,7 +84,7 @@ Example spec:
    - In the harness, call `trace_begin(frame)` once per frame.
 
 ### Phase 2 — Harness
-1. **Create `tests/trace/harness/trace_harness.c`**:
+1. **Create `fri3d-trace-harness/src/main.rs`**:
    - CLI: `trace_harness --app build/apps/circles/circles.wasm --frames 2 --input script.json --out trace.json`.
    - Load app with `wasm_runner`.
    - Apply scripted input events (press/release/short/long/repeat).

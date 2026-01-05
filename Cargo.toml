@@ -1,0 +1,36 @@
+[workspace]
+members = [
+    "fri3d-runtime",
+    "fri3d-emulator",
+    "fri3d-wasm-api",
+    "fri3d-web",
+    "fri3d-trace-harness",
+    "fri3d-app-circles",
+    "fri3d-app-dots",
+    "fri3d-app-launcher",
+    "fri3d-app-mandelbrot",
+    "fri3d-app-snake",
+    "fri3d-app-test-drawing",
+    "fri3d-app-test-ui",
+    "fri3d-app-wifi-pet",
+]
+default-members = [
+    "fri3d-runtime",
+    "fri3d-emulator",
+    "fri3d-wasm-api",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+
+[profile.production]
+inherits = "release"
+lto = "fat"
+codegen-units = 1

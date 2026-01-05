@@ -14,39 +14,32 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      with:
-        submodules: recursive
 
     - name: Install system dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y \
-          libsdl2-dev \
-          cmake \
-          build-essential
+          build-essential \
+          libx11-dev \
+          libxrandr-dev \
+          libxcursor-dev \
+          libxinerama-dev \
+          libxi-dev
 
-    - name: Setup Zig
-      uses: goto-bus-stop/setup-zig@v2
-      with:
-        version: 0.11.0
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Add wasm32 target
+      run: rustup target add wasm32-unknown-unknown
 
     - name: Install uv
       uses: astral-sh/setup-uv@v4
 
     - name: Build emulator
-      run: |
-        cmake -B build/emulator
-        cmake --build build/emulator
+      run: cargo build -p fri3d-emulator --release
 
     - name: Build WASM apps
-      run: |
-        for app in test_drawing circles mandelbrot test_ui launcher snake; do
-          echo "Building $app..."
-          cmake -B build/apps/$app \
-            -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/toolchain-wasm.cmake \
-            -S src/apps/$app
-          cmake --build build/apps/$app
-        done
+      run: ./build_apps.sh
 
     - name: Run visual regression tests
       run: uv run tests/visual/run_visual_tests.py

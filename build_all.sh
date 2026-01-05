@@ -3,16 +3,19 @@ set -e
 
 cd "$(dirname "$0")"
 
-echo "=== Building all targets ==="
+echo "=== Building all Rust targets ==="
 echo ""
 
-# Build emulator (native)
+echo "=== Building Rust WASM apps ==="
+./build_apps.sh
+
+echo ""
+echo "=== Building Rust emulator ==="
 ./build_emulator.sh
 
 echo ""
-
-# Build web target
+echo "=== Building Rust web emulator ==="
 ./build_web.sh
 
 echo ""
-echo "=== All builds complete! ==="
+echo "=== All Rust builds complete! ==="

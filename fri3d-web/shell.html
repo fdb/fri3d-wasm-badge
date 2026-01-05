@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fri3d Badge Emulator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+            font-size: 24px;
+            color: #fff;
+        }
+
+        .emulator-container {
+            background: #16213e;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        #canvas {
+            display: block;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            border: 4px solid #0f3460;
+            border-radius: 8px;
+        }
+
+        .controls {
+            margin-top: 20px;
+            text-align: center;
+            color: #aaa;
+            font-size: 14px;
+        }
+
+        .controls h3 {
+            margin-bottom: 10px;
+            color: #fff;
+        }
+
+        .key {
+            display: inline-block;
+            background: #0f3460;
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin: 2px;
+            font-family: monospace;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .loading .spinner {
+            border: 4px solid #0f3460;
+            border-top: 4px solid #e94560;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        #output {
+            margin-top: 20px;
+            padding: 10px;
+            background: #0f0f1a;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 150px;
+            overflow-y: auto;
+            width: 100%;
+            max-width: 512px;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <h1>Fri3d Badge Emulator</h1>
+
+    <div class="emulator-container">
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Loading emulator...</p>
+        </div>
+
+        <canvas id="canvas" class="hidden" width="512" height="256"></canvas>
+
+        <div id="controls" class="controls hidden">
+            <h3>Controls</h3>
+            <p>
+                <span class="key">Arrow Keys</span> Navigate
+            </p>
+            <p>
+                <span class="key">Z</span> / <span class="key">Enter</span> Select
+            </p>
+            <p>
+                <span class="key">X</span> / <span class="key">Backspace</span> Back
+            </p>
+        </div>
+    </div>
+
+    <div id="output"></div>
+
+    <script>
+
+const HOST_STRING_BUFFER_SIZE = 256;
+
+const Fri3dRuntime = {
+    host: null,
+    hostMemory: null,
+    hostStringPtr: 0,
+    screenCanvas: null,
+    screenCtx: null,
+    displayCanvas: null,
+    displayCtx: null,
+    imageData: null,
+    currentApp: null,
+    appMemory: null,
+    pendingRequest: null,
+    switchInProgress: false,
+    renderRequested: false,
+    timerIntervalMs: 0,
+    nextTimerMs: 0,
+    loopScheduled: false,
+    pressedKeys: null,
+    launcherPath: '/apps/launcher/launcher.wasm',
+    appRegistry: [
+        { id: 1, name: 'Circles', path: '/apps/circles/circles.wasm' },
+        { id: 2, name: 'Mandelbrot', path: '/apps/mandelbrot/mandelbrot.wasm' },
+        { id: 3, name: 'Test Drawing', path: '/apps/test_drawing/test_drawing.wasm' },
+        { id: 4, name: 'Test UI', path: '/apps/test_ui/test_ui.wasm' },
+        { id: 5, name: 'Snake', path: '/apps/snake/snake.wasm' },
+        { id: 6, name: 'WiFi Pet', path: '/apps/wifi_pet/wifi_pet.wasm' },
+    ],
+
+    async init() {
+        await this.loadHost();
+        this.setupCanvas();
+        this.setupInput();
+        await this.loadApp(this.launcherPath);
+        this.renderRequested = true;
+        this.showUI();
+        this.scheduleLoop();
+    },
+
+    async loadHost() {
+        const response = await fetch('fri3d_web.wasm');
+        const { instance } = await WebAssembly.instantiateStreaming(response, {});
+        this.host = instance.exports;
+        this.hostMemory = this.host.memory;
+        this.hostStringPtr = this.host.frd_string_buffer_ptr();
+    },
+
+    setupCanvas() {
+        this.displayCanvas = document.getElementById('canvas');
+        this.displayCtx = this.displayCanvas.getContext('2d');
+        this.displayCtx.imageSmoothingEnabled = false;
+
+        this.screenCanvas = document.createElement('canvas');
+        const width = this.host.frd_canvas_width();
+        const height = this.host.frd_canvas_height();
+        this.screenCanvas.width = width;
+        this.screenCanvas.height = height;
+        this.screenCtx = this.screenCanvas.getContext('2d');
+        this.imageData = this.screenCtx.createImageData(width, height);
+    },
+
+    setupInput() {
+        this.pressedKeys = new Set();
+        const handleKey = (event, isDown) => {
+            const key = this.mapKey(event.key);
+            if (key === null) {
+                return;
+            }
+            event.preventDefault();
+            const keyId = `${key}`;
+            if (isDown) {
+                if (event.repeat || this.pressedKeys.has(keyId)) {
+                    return;
+                }
+                this.pressedKeys.add(keyId);
+                this.host.frd_input_push_event(key, 0);
+            } else {
+                if (!this.pressedKeys.has(keyId)) {
+                    return;
+                }
+                this.pressedKeys.delete(keyId);
+                this.host.frd_input_push_event(key, 1);
+            }
+            this.scheduleLoop();
+        };
+
+        window.addEventListener('keydown', (event) => handleKey(event, true));
+        window.addEventListener('keyup', (event) => handleKey(event, false));
+    },
+
+    mapKey(key) {
+        switch (key) {
+            case 'ArrowUp':
+                return 0;
+            case 'ArrowDown':
+                return 1;
+            case 'ArrowLeft':
+                return 2;
+            case 'ArrowRight':
+                return 3;
+            case 'z':
+            case 'Z':
+            case 'Enter':
+                return 4;
+            case 'x':
+            case 'X':
+            case 'Backspace':
+                return 5;
+            default:
+                return null;
+        }
+    },
+
+    writeHostString(text) {
+        const encoder = new TextEncoder();
+        const bytes = encoder.encode(text);
+        const maxLen = HOST_STRING_BUFFER_SIZE - 1;
+        const len = Math.min(bytes.length, maxLen);
+        const view = new Uint8Array(this.hostMemory.buffer);
+        view.set(bytes.subarray(0, len), this.hostStringPtr);
+        view[this.hostStringPtr + len] = 0;
+        return this.hostStringPtr;
+    },
+
+    readAppString(ptr) {
+        if (!this.appMemory || ptr === 0) {
+            return '';
+        }
+        const bytes = new Uint8Array(this.appMemory.buffer);
+        let out = '';
+        let idx = ptr;
+        while (idx < bytes.length) {
+            const value = bytes[idx];
+            if (value === 0) {
+                break;
+            }
+            out += String.fromCharCode(value);
+            idx += 1;
+        }
+        return out;
+    },
+
+    createImports() {
+        return {
+            env: {
+                canvas_clear: () => this.host.frd_canvas_clear(),
+                canvas_width: () => this.host.frd_canvas_width(),
+                canvas_height: () => this.host.frd_canvas_height(),
+                canvas_set_color: (color) => this.host.frd_canvas_set_color(color),
+                canvas_set_font: (font) => this.host.frd_canvas_set_font(font),
+                canvas_draw_dot: (x, y) => this.host.frd_canvas_draw_dot(x, y),
+                canvas_draw_line: (x1, y1, x2, y2) => this.host.frd_canvas_draw_line(x1, y1, x2, y2),
+                canvas_draw_frame: (x, y, w, h) => this.host.frd_canvas_draw_frame(x, y, w, h),
+                canvas_draw_box: (x, y, w, h) => this.host.frd_canvas_draw_box(x, y, w, h),
+                canvas_draw_rframe: (x, y, w, h, r) => this.host.frd_canvas_draw_rframe(x, y, w, h, r),
+                canvas_draw_rbox: (x, y, w, h, r) => this.host.frd_canvas_draw_rbox(x, y, w, h, r),
+                canvas_draw_circle: (x, y, r) => this.host.frd_canvas_draw_circle(x, y, r),
+                canvas_draw_disc: (x, y, r) => this.host.frd_canvas_draw_disc(x, y, r),
+                canvas_draw_str: (x, y, ptr) => {
+                    const text = this.readAppString(ptr);
+                    const hostPtr = this.writeHostString(text);
+                    this.host.frd_canvas_draw_str(x, y, hostPtr);
+                },
+                canvas_string_width: (ptr) => {
+                    const text = this.readAppString(ptr);
+                    const hostPtr = this.writeHostString(text);
+                    return this.host.frd_canvas_string_width(hostPtr);
+                },
+                random_seed: (seed) => this.host.frd_random_seed(seed),
+                random_get: () => this.host.frd_random_get(),
+                random_range: (max) => this.host.frd_random_range(max),
+                get_time_ms: () => Math.floor(performance.now()),
+                request_render: () => {
+                    this.renderRequested = true;
+                    this.scheduleLoop();
+                },
+                start_timer_ms: (interval) => {
+                    const intervalMs = Math.max(0, interval | 0);
+                    if (intervalMs === 0) {
+                        this.timerIntervalMs = 0;
+                        this.nextTimerMs = 0;
+                        return;
+                    }
+                    const now = Math.floor(performance.now());
+                    this.timerIntervalMs = intervalMs;
+                    this.nextTimerMs = now + intervalMs;
+                    this.scheduleLoop();
+                },
+                stop_timer: () => {
+                    this.timerIntervalMs = 0;
+                    this.nextTimerMs = 0;
+                },
+                exit_to_launcher: () => {
+                    this.pendingRequest = { type: 'launcher' };
+                    this.scheduleLoop();
+                },
+                start_app: (id) => {
+                    this.pendingRequest = { type: 'app', id };
+                    this.scheduleLoop();
+                },
+            },
+        };
+    },
+
+    async loadApp(path) {
+        const response = await fetch(path);
+        const bytes = await response.arrayBuffer();
+        const { instance } = await WebAssembly.instantiate(bytes, this.createImports());
+        this.currentApp = instance;
+        this.appMemory = instance.exports.memory || null;
+    },
+
+    async processPendingRequest() {
+        if (!this.pendingRequest || this.switchInProgress) {
+            return false;
+        }
+        this.switchInProgress = true;
+        const request = this.pendingRequest;
+        this.pendingRequest = null;
+        this.timerIntervalMs = 0;
+        this.nextTimerMs = 0;
+
+        if (request.type === 'launcher') {
+            await this.loadApp(this.launcherPath);
+        } else if (request.type === 'app') {
+            const entry = this.appRegistry.find((app) => app.id === request.id);
+            if (entry) {
+                await this.loadApp(entry.path);
+            }
+        }
+
+        this.switchInProgress = false;
+        this.renderRequested = true;
+        return true;
+    },
+
+    drawFrame() {
+        const width = this.screenCanvas.width;
+        const height = this.screenCanvas.height;
+        const bufferPtr = this.host.frd_framebuffer_ptr();
+        const bufferLen = this.host.frd_framebuffer_len();
+        const buffer = new Uint8Array(this.hostMemory.buffer, bufferPtr, bufferLen);
+        const data = this.imageData.data;
+
+        for (let idx = 0; idx < bufferLen; idx += 1) {
+            const value = buffer[idx] === 0 ? 255 : 0;
+            const base = idx * 4;
+            data[base] = value;
+            data[base + 1] = value;
+            data[base + 2] = value;
+            data[base + 3] = 255;
+        }
+
+        this.screenCtx.putImageData(this.imageData, 0, 0);
+        this.displayCtx.clearRect(0, 0, this.displayCanvas.width, this.displayCanvas.height);
+        this.displayCtx.drawImage(
+            this.screenCanvas,
+            0,
+            0,
+            this.displayCanvas.width,
+            this.displayCanvas.height,
+        );
+    },
+
+    async loop() {
+        this.loopScheduled = false;
+        const now = Math.floor(performance.now());
+        this.host.frd_input_update(now);
+        const hasHeldKeys = this.pressedKeys && this.pressedKeys.size > 0;
+
+        let hadEvent = false;
+        while (this.host.frd_input_has_event()) {
+            const packed = this.host.frd_input_next_event();
+            if (packed < 0) {
+                break;
+            }
+            const key = (packed >> 8) & 0xff;
+            const type = packed & 0xff;
+            if (this.currentApp && this.currentApp.exports.on_input) {
+                this.currentApp.exports.on_input(key, type);
+            }
+            hadEvent = true;
+        }
+
+        if (this.host.frd_input_take_reset_request()) {
+            this.pendingRequest = { type: 'launcher' };
+        }
+
+        const switched = await this.processPendingRequest();
+        let timerDue = false;
+        if (this.timerIntervalMs > 0 && now >= this.nextTimerMs) {
+            timerDue = true;
+            while (this.nextTimerMs <= now) {
+                this.nextTimerMs += this.timerIntervalMs;
+            }
+        }
+
+        const needsRender = hadEvent || timerDue || this.renderRequested || switched;
+        if (needsRender && this.currentApp && this.currentApp.exports.render) {
+            this.renderRequested = false;
+            this.host.frd_canvas_clear();
+            this.currentApp.exports.render();
+            this.drawFrame();
+        }
+
+        if (this.timerIntervalMs > 0 || this.renderRequested || this.pendingRequest || hasHeldKeys) {
+            let delayMs = 0;
+            if (!this.renderRequested && !this.pendingRequest) {
+                if (hasHeldKeys) {
+                    delayMs = 16;
+                } else if (this.timerIntervalMs > 0) {
+                    delayMs = Math.max(0, this.nextTimerMs - now);
+                }
+            }
+            this.scheduleLoop(delayMs);
+        }
+    },
+
+    scheduleLoop(delayMs = 0) {
+        if (this.loopScheduled) {
+            return;
+        }
+        this.loopScheduled = true;
+        setTimeout(() => {
+            this.loop().catch((err) => console.error(err));
+        }, 0);
+    },
+
+    showUI() {
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('canvas').classList.remove('hidden');
+        document.getElementById('controls').classList.remove('hidden');
+    },
+};
+
+window.addEventListener('load', () => {
+    Fri3dRuntime.init().catch((err) => console.error(err));
+});
+</script>
+</body>
+</html>

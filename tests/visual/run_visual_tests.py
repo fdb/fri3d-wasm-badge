@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import os
 import shutil
 import subprocess
 import sys
@@ -40,7 +41,13 @@ from PIL import Image
 
 SCRIPT_DIR = Path(__file__).parent.absolute()
 PROJECT_ROOT = SCRIPT_DIR.parent.parent
-HOST_EMULATOR = PROJECT_ROOT / "build" / "emulator" / "src" / "emulator" / "fri3d_emulator"
+DEFAULT_EMULATOR_DEBUG = PROJECT_ROOT / "target" / "debug" / "fri3d-emulator"
+DEFAULT_EMULATOR_RELEASE = PROJECT_ROOT / "target" / "release" / "fri3d-emulator"
+HOST_EMULATOR = Path(
+    os.environ.get("FRI3D_EMULATOR", DEFAULT_EMULATOR_DEBUG)
+)
+if not HOST_EMULATOR.exists() and DEFAULT_EMULATOR_RELEASE.exists():
+    HOST_EMULATOR = DEFAULT_EMULATOR_RELEASE
 APPS_DIR = SCRIPT_DIR / "apps"
 OUTPUT_DIR = SCRIPT_DIR / "output"
 REPORTS_DIR = SCRIPT_DIR / "reports"
@@ -115,6 +122,12 @@ def discover_apps() -> list[App]:
 
 def find_wasm_binary(app_id: str) -> Optional[Path]:
     """Find the compiled WASM binary for an app."""
+    rust_name = f"fri3d_app_{app_id.replace('-', '_')}"
+    for profile in ["debug", "release"]:
+        candidate = PROJECT_ROOT / "target" / "wasm32-unknown-unknown" / profile / f"{rust_name}.wasm"
+        if candidate.exists():
+            return candidate
+
     build_dir = PROJECT_ROOT / "build" / "apps" / app_id
 
     if not build_dir.exists():
@@ -417,28 +430,27 @@ def generate_html_report(results: list[TestResult], output_path: Path):
 # Prerequisites Check
 # =============================================================================
 
-def check_prerequisites(apps: list[App]) -> bool:
-    """Verify host emulator and app binaries exist."""
+def check_prerequisites() -> bool:
+    """Verify host emulator exists."""
     if not HOST_EMULATOR.exists():
         print(f"Error: Emulator not found at {HOST_EMULATOR}")
-        print("Build with: ./build_all.sh or:")
-        print("  cmake -B build/emulator && cmake --build build/emulator")
-        return False
-
-    missing = []
-    for app in apps:
-        if not find_wasm_binary(app.id):
-            missing.append(app.id)
-
-    if missing:
-        print(f"Error: WASM binaries not found for: {', '.join(missing)}")
-        print("Build apps with: ./build_all.sh or:")
-        for app_id in missing:
-            print(f"  cmake -B build/apps/{app_id} -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-wasm.cmake -S src/apps/{app_id}")
-            print(f"  cmake --build build/apps/{app_id}")
+        print("Build with: cargo build -p fri3d-emulator")
+        print("Or set FRI3D_EMULATOR to the emulator path")
         return False
 
     return True
+
+
+def filter_apps_with_wasm(apps: list[App]) -> tuple[list[App], list[str]]:
+    """Return apps with WASM binaries and a list of missing app ids."""
+    available = []
+    missing = []
+    for app in apps:
+        if find_wasm_binary(app.id):
+            available.append(app)
+        else:
+            missing.append(app.id)
+    return available, missing
 
 
 def has_golden_images(app: App) -> bool:
@@ -491,8 +503,16 @@ def main():
         apps = all_apps
 
     # Check prerequisites
-    if not check_prerequisites(apps):
+    if not check_prerequisites():
         sys.exit(1)
+
+    # Filter apps based on available WASM binaries
+    apps, missing_apps = filter_apps_with_wasm(apps)
+    if args.app and missing_apps:
+        print(f"Error: WASM binary not found for {missing_apps[0]}")
+        sys.exit(1)
+    if missing_apps and not args.app:
+        print(f"Skipping apps without WASM binaries: {', '.join(missing_apps)}")
 
     # Warn if no golden images (unless updating)
     if not args.update_golden and not has_any_golden_images(apps):

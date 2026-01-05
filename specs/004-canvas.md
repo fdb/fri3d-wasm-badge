@@ -4,20 +4,15 @@ This stage defines the drawing API exposed to apps and how the host renders pixe
 
 ## Display interface
 
-Reference: `src/runtime/display.h`
-
-- `display_api_t` provides platform-specific hooks:
-  - `init(display, headless)`
-  - `get_u8g2(display)`
-  - `flush(display)`
-  - `should_quit(display)`
-- Screen dimensions: `FRI3D_SCREEN_WIDTH = 128`, `FRI3D_SCREEN_HEIGHT = 64`.
+- Platform backends consume the `Canvas` framebuffer and render it to the target
+  (minifb window, web canvas, or hardware display).
+- Screen dimensions: `SCREEN_WIDTH = 128`, `SCREEN_HEIGHT = 64`.
 
 ## Canvas API (host side)
 
-References: `src/runtime/canvas.h`, `src/runtime/canvas.c`
+References: `fri3d-runtime/src/canvas.rs`
 
-- Canvas wraps a `u8g2_t` framebuffer and tracks current color.
+- Canvas owns a 1bpp framebuffer and tracks current color.
 - Screen size is fixed; `canvas_width()` and `canvas_height()` return constants.
 
 ### Colors
@@ -37,7 +32,7 @@ Enum `Font` (matches SDK values):
 - `FontKeyboard` -> `u8g2_font_profont11_mr`
 - `FontBigNumbers` -> `u8g2_font_profont22_tn`
 
-`canvas_set_font()` sets `u8g2_SetFontMode(..., 1)` and selects the font.
+`canvas_set_font()` selects embedded u8g2 font data.
 
 ### Drawing primitives
 
@@ -56,18 +51,18 @@ Enum `Font` (matches SDK values):
   - `canvas_string_width(text)`
 
 Notes:
-- `canvas_draw_str` uses UTF-8 width from u8g2 (`u8g2_DrawUTF8` / `u8g2_GetUTF8Width`).
+- `canvas_draw_str` uses UTF-8 width derived from u8g2 font data.
 - Many apps assume y passed to `canvas_draw_str` is the baseline (u8g2 behavior).
 
 ## Canvas API (WASM SDK)
 
-Reference: `src/sdk/canvas.h`
+Reference: `fri3d-wasm-api/src/lib.rs`
 
-- The WASM SDK mirrors the host API exactly, with imports declared using `WASM_IMPORT` from module `env`.
+- The WASM SDK mirrors the host API exactly, with imports declared from module `env`.
 - Ensure the same enum numeric values for colors, fonts, and alignment.
 
 ## Porting expectations
 
 - Maintain visual parity with u8g2 output for fonts and primitives.
-- Preserve XOR behavior for circles/discs; the reference algorithm is in `src/runtime/canvas.c`.
+- Preserve XOR behavior for circles/discs; the reference algorithm is in `fri3d-runtime/src/canvas.rs`.
 - Preserve text baseline behavior and string width calculations for IMGUI layout.
