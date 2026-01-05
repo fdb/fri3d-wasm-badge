@@ -47,12 +47,16 @@ scenes:
   - name: Another Scene
 ```
 
-2. Add scene control exports to your app's C code:
+2. Add scene control exports to your app's Rust code:
 
-```c
-uint32_t get_scene(void) { return current_scene; }
-void set_scene(uint32_t scene) { current_scene = scene; }
-uint32_t get_scene_count(void) { return SCENE_COUNT; }
+```rust
+fn get_scene_impl() -> u32 { current_scene() }
+fn set_scene_impl(scene: u32) { set_scene(scene) }
+fn get_scene_count_impl() -> u32 { SCENE_COUNT }
+
+fri3d_wasm_api::export_get_scene!(get_scene_impl);
+fri3d_wasm_api::export_set_scene!(set_scene_impl);
+fri3d_wasm_api::export_get_scene_count!(get_scene_count_impl);
 ```
 
 3. Generate golden images:
@@ -70,9 +74,9 @@ name: Human Readable Name
 description: Brief description of what this app tests
 
 scenes:
-  - name: Scene Zero    # Index 0 → golden/0.png
-  - name: Scene One     # Index 1 → golden/1.png
-  - name: Scene Two     # Index 2 → golden/2.png
+  - name: Scene Zero    # Index 0 -> golden/0.png
+  - name: Scene One     # Index 1 -> golden/1.png
+  - name: Scene Two     # Index 2 -> golden/2.png
 ```
 
 Scene indices are implicit based on position in the list.
@@ -83,15 +87,10 @@ Build the host emulator and apps before running tests:
 
 ```bash
 # Host emulator
-cmake -B build && cmake --build build
+./build_emulator.sh
 
 # All apps
-for app in test_drawing circles mandelbrot; do
-  cmake -B build-apps/$app \
-    -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-wasm.cmake \
-    -S src/apps/$app
-  cmake --build build-apps/$app
-done
+./build_apps.sh
 ```
 
 ## Diff Legend

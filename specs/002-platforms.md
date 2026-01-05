@@ -33,7 +33,7 @@ Reference: `fri3d-emulator/src/main.rs`
 
 ## Web emulator (Rust wasm host + JS runtime)
 
-References: `src/web/main.c`, `src/web/shell.html`
+References: `fri3d-web/src/lib.rs`, `fri3d-web/shell.html`
 
 ### Rust wasm host
 
@@ -63,8 +63,6 @@ References: `src/web/main.c`, `src/web/shell.html`
 
 ## ESP32-S3 firmware (hardware target)
 
-References: `src/firmware/README.md`, `src/firmware/src/*.c`
-
 ### Hardware assumptions
 
 - MCU: ESP32-S3-WROOM-1
@@ -74,19 +72,16 @@ References: `src/firmware/README.md`, `src/firmware/src/*.c`
   - SPI: MOSI=6, MISO=8, SCK=7, CS=5, DC=4, RST=48
   - Buttons: Up=9, Down=10, Left=11, Right=12, Ok=13, Back=14
 
-### Current firmware skeleton
+### Current status
 
-- `display_spi.c` uses u8g2 over ESP32 SPI to render into the SSD1306.
-- `input_gpio.c` debounces GPIO and queues press/release events only.
-- `main.c` initializes display + input and polls inputs in a loop.
-- WAMR + shared runtime not integrated yet (noted in `src/firmware/README.md`).
+- Rust firmware crate is not yet implemented.
+- No on-device runtime integration is present in this repo.
 
 ### Porting expectation
 
-- The firmware should eventually reuse the same runtime modules (canvas, input manager, app manager, wasm runner) as the emulator.
+- The firmware should reuse the same runtime modules (canvas, input manager, app manager, wasm runner) as the emulator.
 - Input GPIO should feed the runtime input manager so long/short/repeat behavior matches other platforms.
 - Rust porting plan:
-  - Create a `fri3d-firmware` crate (ESP-IDF/PlatformIO) that provides display,
-    input, and time backends for the shared runtime.
+  - Create a `fri3d-firmware` crate (ESP-IDF) that provides display, input, and time backends for the shared runtime.
   - Keep rendering event-driven with optional app timers to conserve battery.
-  - Integrate the WASM runner (Wasmi) once platform memory limits are validated.
+  - Integrate the WASM runner (`wasmi`) once platform memory limits are validated.

@@ -14,8 +14,8 @@ Purpose: describe the Fri3d WASM Badge system in a language-agnostic way so it c
 ## High-level architecture
 
 - Host platform layer (per target):
-  - Display backend (SDL/web canvas/ESP32 SPI).
-  - Input backend (SDL events/web events/ESP32 GPIO).
+  - Display backend (desktop window/web canvas/ESP32 SPI).
+  - Input backend (desktop key events/web events/ESP32 GPIO).
   - Time source (millisecond ticks).
 - Shared runtime layer:
   - `app_manager`: loads and switches apps, handles launcher, forwards input/render.
@@ -41,16 +41,16 @@ Purpose: describe the Fri3d WASM Badge system in a language-agnostic way so it c
 - Platform overview + build layout: `README.md`
 - Input model: `docs/input_system.md`
 - IMGUI high-level API: `docs/imgui.md`
-- Runtime modules: `src/runtime/`
-- SDK headers used by apps: `src/sdk/`
-- Emulator implementation: `src/emulator/`
-- Web emulator implementation: `src/web/` and `src/web/shell.html`
-- Firmware skeleton: `src/firmware/`
+- Runtime modules: `fri3d-runtime/src/`
+- WASM SDK for apps: `fri3d-wasm-api/src/`
+- Emulator implementation: `fri3d-emulator/src/`
+- Web emulator implementation: `fri3d-web/src/` and `fri3d-web/shell.html`
+- Firmware: not yet implemented in this repo
 
 ## Porting note
 
 Keep the following invariants across a reimplementation:
 - Screen dimensions and coordinate system.
-- Input timings for short/long/repeat and reset combo (see `src/runtime/input.h`).
-- WASM import module name `env` and function signatures (see `src/sdk/*.h` and `src/runtime/wasm_runner.c`).
-- App IDs and launcher behavior (see `src/apps/launcher/main.c`).
+- Input timings for short/long/repeat and reset combo (see `fri3d-runtime/src/input.rs`).
+- WASM import module name `env` and function signatures (see `fri3d-wasm-api/src/lib.rs` and `fri3d-runtime/src/wasm_runner.rs`).
+- App IDs and launcher behavior (see `fri3d-app-launcher/src/lib.rs`).

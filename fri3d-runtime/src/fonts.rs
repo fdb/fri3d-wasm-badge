@@ -1,5 +1,5 @@
 // Font data copied from u8g2 (https://github.com/olikraus/u8g2)
-// Original font files: libs/u8g2/tools/font/build/single_font_files/*.c
+// Original font files: u8g2/tools/font/build/single_font_files/*.c
 // See u8g2 LICENSE for usage terms.
 
 pub const U8G2_FONT_HELVB08_TR: &[u8] = &[

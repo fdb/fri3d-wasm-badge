@@ -148,7 +148,7 @@ def run_spec(spec_path: Path) -> TestResult:
         return TestResult(
             spec_path,
             False,
-            f"Trace harness not found at {TRACE_HARNESS}. Build with: cmake -B build/trace -DBUILD_TRACE_TESTS=ON",
+            f"Trace harness not found at {TRACE_HARNESS}. Build with: ./build_trace_tests.sh",
         )
 
     output_dir = OUTPUT_DIR / app_id

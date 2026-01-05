@@ -22,7 +22,7 @@ if [ ! -f "$HOST_WASM" ]; then
 fi
 
 cp "$HOST_WASM" "$OUTPUT_DIR/fri3d_web.wasm"
-cp "src/web/shell.html" "$OUTPUT_DIR/index.html"
+cp "fri3d-web/shell.html" "$OUTPUT_DIR/index.html"
 
 cp -R build/apps/* "$APP_OUTPUT_DIR/"
 

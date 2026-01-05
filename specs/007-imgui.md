@@ -2,7 +2,7 @@
 
 This stage specifies the immediate-mode UI library used by apps.
 
-References: `docs/imgui.md`, `src/sdk/imgui.h`, `src/sdk/imgui.c`
+References: `docs/imgui.md`, `fri3d-wasm-api/src/imgui.rs`
 
 ## Core principles
 

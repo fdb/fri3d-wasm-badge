@@ -26,7 +26,7 @@ Purpose: guide a staged Rust reimplementation while keeping the current C/C++ co
 
 - Desktop emulator:
   - Rust windowing via `minifb` (or similar), 4x scale, framebuffer-to-RGBA conversion.
-  - Input mapping identical to SDL emulator: arrows/OK/Back, no OS key repeats.
+  - Input mapping identical to the desktop emulator: arrows/OK/Back, no OS key repeats.
   - Screenshot support for tests (PNG encoding in Rust).
 - Web emulator:
   - Plan to use wasm32 target and JS glue later; keep parity with runtime behavior.
