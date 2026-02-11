@@ -4,6 +4,8 @@ A Rust-based WebAssembly badge platform for the Fri3d camp badge, featuring a 12
 
 ![Fri3d Badge UI Teaser](fri3d-badge-teaser.gif)
 
+### **[Try the Live Demo](https://fdb.github.io/fri3d-wasm-badge/)**
+
 ## Getting Started
 
 ### Prerequisites
