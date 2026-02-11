@@ -2,6 +2,8 @@
 
 A Rust-based WebAssembly badge platform for the Fri3d camp badge, featuring a 128x64 OLED display. Includes a desktop emulator, web emulator, and a growing set of WASM apps.
 
+![Fri3d Badge UI Teaser](fri3d-badge-teaser.gif)
+
 ## Getting Started
 
 ### Prerequisites
