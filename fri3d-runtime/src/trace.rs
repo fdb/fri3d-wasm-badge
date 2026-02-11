@@ -4,15 +4,6 @@ pub enum TraceArg {
     Str(String),
 }
 
-impl TraceArg {
-    pub fn int(value: i64) -> Self {
-        TraceArg::Int(value)
-    }
-
-    pub fn str(value: &str) -> Self {
-        TraceArg::Str(value.to_string())
-    }
-}
 
 #[cfg(feature = "trace")]
 mod enabled {

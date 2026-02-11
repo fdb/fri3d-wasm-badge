@@ -5,11 +5,9 @@ use crate::wasm_runner::{StartAppCallback, WasmRunner};
 use std::cell::RefCell;
 use std::rc::Rc;
 
-#[allow(dead_code)]
 #[derive(Clone, Debug)]
 struct AppEntry {
     id: u32,
-    name: String,
     path: String,
 }
 
@@ -32,8 +30,7 @@ pub struct AppManager {
     in_launcher: bool,
     last_error: String,
     canvas: Rc<RefCell<Canvas>>,
-    #[allow(dead_code)]
-    random: Rc<RefCell<Random>>,
+    _random: Rc<RefCell<Random>>,
     wasm_runner: WasmRunner,
     pending: Rc<RefCell<PendingRequest>>,
 }
@@ -73,24 +70,19 @@ impl AppManager {
             in_launcher: true,
             last_error: String::new(),
             canvas,
-            random,
+            _random: random,
             wasm_runner,
             pending,
         })
     }
 
-    pub fn add_app(&mut self, name: &str, path: &str) -> bool {
+    pub fn add_app(&mut self, _name: &str, path: &str) -> bool {
         let id = (self.apps.len() + 1) as u32;
         self.apps.push(AppEntry {
             id,
-            name: name.to_string(),
             path: path.to_string(),
         });
         true
-    }
-
-    pub fn clear_apps(&mut self) {
-        self.apps.clear();
     }
 
     pub fn set_launcher_path(&mut self, path: &str) {
@@ -227,7 +219,6 @@ impl AppManager {
     }
 
     fn set_error(&mut self, message: &str) {
-        self.last_error.clear();
-        self.last_error.push_str(message);
+        self.last_error = message.to_string();
     }
 }

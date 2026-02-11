@@ -255,14 +255,6 @@ impl WasmRunner {
         }
     }
 
-    pub fn has_render_function(&self) -> bool {
-        self.func_render.is_some()
-    }
-
-    pub fn has_on_input_function(&self) -> bool {
-        self.func_on_input.is_some()
-    }
-
     pub fn take_render_request(&mut self) -> bool {
         let state = self.store.data_mut();
         let requested = state.render_requested;
@@ -284,8 +276,7 @@ impl WasmRunner {
     }
 
     fn set_error(&mut self, message: &str) {
-        self.last_error.clear();
-        self.last_error.push_str(message);
+        self.last_error = message.to_string();
     }
 }
 

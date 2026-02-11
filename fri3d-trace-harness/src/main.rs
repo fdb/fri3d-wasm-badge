@@ -34,13 +34,6 @@ struct Options {
 }
 
 #[derive(Clone, Debug)]
-struct RawEvent {
-    time_ms: u32,
-    key: InputKey,
-    kind: InputType,
-}
-
-#[derive(Clone, Debug)]
 struct TimedEvent {
     time_ms: u32,
     key: InputKey,
@@ -180,34 +173,12 @@ fn parse_script_events(path: &Path) -> Result<Vec<ScriptEvent>, String> {
     Ok(events)
 }
 
-fn raw_event_weight(kind: InputType) -> i32 {
-    match kind {
-        InputType::Press => 0,
-        InputType::Release => 1,
-        _ => 2,
-    }
-}
-
 fn timed_event_weight(kind: InputType) -> i32 {
     match kind {
         InputType::Press => 0,
         InputType::LongPress | InputType::ShortPress | InputType::Repeat => 1,
         InputType::Release => 2,
     }
-}
-
-fn sort_raw_events(events: &mut [RawEvent]) {
-    events.sort_by(|a, b| {
-        if a.time_ms != b.time_ms {
-            return a.time_ms.cmp(&b.time_ms);
-        }
-        let wa = raw_event_weight(a.kind);
-        let wb = raw_event_weight(b.kind);
-        if wa != wb {
-            return wa.cmp(&wb);
-        }
-        (a.key as u8).cmp(&(b.key as u8))
-    });
 }
 
 fn sort_timed_events(events: &mut [TimedEvent]) {
@@ -224,7 +195,7 @@ fn sort_timed_events(events: &mut [TimedEvent]) {
     });
 }
 
-fn expand_script_events(script: &[ScriptEvent]) -> Result<Vec<RawEvent>, String> {
+fn expand_script_events(script: &[ScriptEvent]) -> Result<Vec<TimedEvent>, String> {
     let mut raw_events = Vec::new();
 
     for event in script {
@@ -233,12 +204,12 @@ fn expand_script_events(script: &[ScriptEvent]) -> Result<Vec<RawEvent>, String>
         let mut duration = event.duration_ms.unwrap_or(0);
 
         match event.kind.as_str() {
-            "press" => raw_events.push(RawEvent {
+            "press" => raw_events.push(TimedEvent {
                 time_ms: event.time_ms,
                 key,
                 kind: InputType::Press,
             }),
-            "release" => raw_events.push(RawEvent {
+            "release" => raw_events.push(TimedEvent {
                 time_ms: event.time_ms,
                 key,
                 kind: InputType::Release,
@@ -247,12 +218,12 @@ fn expand_script_events(script: &[ScriptEvent]) -> Result<Vec<RawEvent>, String>
                 if duration == 0 {
                     duration = DEFAULT_SHORT_PRESS_MS;
                 }
-                raw_events.push(RawEvent {
+                raw_events.push(TimedEvent {
                     time_ms: event.time_ms,
                     key,
                     kind: InputType::Press,
                 });
-                raw_events.push(RawEvent {
+                raw_events.push(TimedEvent {
                     time_ms: event.time_ms + duration,
                     key,
                     kind: InputType::Release,
@@ -262,12 +233,12 @@ fn expand_script_events(script: &[ScriptEvent]) -> Result<Vec<RawEvent>, String>
                 if duration < INPUT_LONG_PRESS_MS {
                     duration = INPUT_LONG_PRESS_MS;
                 }
-                raw_events.push(RawEvent {
+                raw_events.push(TimedEvent {
                     time_ms: event.time_ms,
                     key,
                     kind: InputType::Press,
                 });
-                raw_events.push(RawEvent {
+                raw_events.push(TimedEvent {
                     time_ms: event.time_ms + duration,
                     key,
                     kind: InputType::Release,
@@ -278,12 +249,12 @@ fn expand_script_events(script: &[ScriptEvent]) -> Result<Vec<RawEvent>, String>
                 if duration < min_duration {
                     duration = min_duration;
                 }
-                raw_events.push(RawEvent {
+                raw_events.push(TimedEvent {
                     time_ms: event.time_ms,
                     key,
                     kind: InputType::Press,
                 });
-                raw_events.push(RawEvent {
+                raw_events.push(TimedEvent {
                     time_ms: event.time_ms + duration,
                     key,
                     kind: InputType::Release,
@@ -294,13 +265,13 @@ fn expand_script_events(script: &[ScriptEvent]) -> Result<Vec<RawEvent>, String>
     }
 
     if raw_events.len() > 1 {
-        sort_raw_events(&mut raw_events);
+        sort_timed_events(&mut raw_events);
     }
 
     Ok(raw_events)
 }
 
-fn build_timed_events(raw_events: &[RawEvent]) -> Vec<TimedEvent> {
+fn build_timed_events(raw_events: &[TimedEvent]) -> Vec<TimedEvent> {
     let mut events = Vec::new();
     let mut press_times = [0u32; InputKey::COUNT];
     let mut pressed = [false; InputKey::COUNT];
