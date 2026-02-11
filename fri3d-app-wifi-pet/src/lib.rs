@@ -89,7 +89,9 @@ fn on_input_impl(key: u32, kind: u32) {
     let width = api::canvas_width() as i16;
     let height = api::canvas_height() as i16;
 
-    if key == api::input::KEY_BACK && kind == api::input::TYPE_SHORT_PRESS {
+    if key == api::input::KEY_BACK
+        && (kind == api::input::TYPE_SHORT_PRESS || kind == api::input::TYPE_LONG_PRESS)
+    {
         api::stop_timer();
         api::exit_to_launcher();
         return;

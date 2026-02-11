@@ -36,6 +36,13 @@ api::export_on_input!(on_input_impl);
 api::wasm_panic_handler!();
 
 fn on_input_impl(key: u32, kind: u32) {
+    if key == api::input::KEY_BACK
+        && (kind == api::input::TYPE_SHORT_PRESS || kind == api::input::TYPE_LONG_PRESS)
+    {
+        api::exit_to_launcher();
+        return;
+    }
+
     if key == api::input::KEY_OK && kind == api::input::TYPE_PRESS {
         let mut seed = api::random_range(SEED_MAX);
         if seed == 0 {
