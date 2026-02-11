@@ -65,6 +65,13 @@
             font-family: monospace;
         }
 
+        .hint {
+            margin-top: 12px;
+            font-size: 13px;
+            color: #777;
+            font-style: italic;
+        }
+
         .loading {
             text-align: center;
             padding: 40px;
@@ -125,6 +132,7 @@
             <p>
                 <span class="key">X</span> / <span class="key">Backspace</span> Back
             </p>
+            <p class="hint">Long-press Back to return to the app menu.</p>
         </div>
     </div>
 
@@ -152,14 +160,14 @@ const Fri3dRuntime = {
     nextTimerMs: 0,
     loopScheduled: false,
     pressedKeys: null,
-    launcherPath: '/apps/launcher/launcher.wasm',
+    launcherPath: 'apps/launcher/launcher.wasm',
     appRegistry: [
-        { id: 1, name: 'Circles', path: '/apps/circles/circles.wasm' },
-        { id: 2, name: 'Mandelbrot', path: '/apps/mandelbrot/mandelbrot.wasm' },
-        { id: 3, name: 'Test Drawing', path: '/apps/test_drawing/test_drawing.wasm' },
-        { id: 4, name: 'Test UI', path: '/apps/test_ui/test_ui.wasm' },
-        { id: 5, name: 'Snake', path: '/apps/snake/snake.wasm' },
-        { id: 6, name: 'WiFi Pet', path: '/apps/wifi_pet/wifi_pet.wasm' },
+        { id: 1, name: 'Circles', path: 'apps/circles/circles.wasm' },
+        { id: 2, name: 'Mandelbrot', path: 'apps/mandelbrot/mandelbrot.wasm' },
+        { id: 3, name: 'Test Drawing', path: 'apps/test_drawing/test_drawing.wasm' },
+        { id: 4, name: 'Test UI', path: 'apps/test_ui/test_ui.wasm' },
+        { id: 5, name: 'Snake', path: 'apps/snake/snake.wasm' },
+        { id: 6, name: 'WiFi Pet', path: 'apps/wifi_pet/wifi_pet.wasm' },
     ],
 
     async init() {
