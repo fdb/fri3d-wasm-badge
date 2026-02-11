@@ -13,6 +13,7 @@ cargo build -p fri3d-web --target wasm32-unknown-unknown --release
 OUTPUT_DIR="build/web"
 APP_OUTPUT_DIR="$OUTPUT_DIR/apps"
 
+rm -rf "$OUTPUT_DIR"
 mkdir -p "$APP_OUTPUT_DIR"
 
 HOST_WASM="target/wasm32-unknown-unknown/release/fri3d_web.wasm"

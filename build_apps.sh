@@ -8,6 +8,8 @@ echo "=== Building Rust WASM apps ==="
 target_dir="target/wasm32-unknown-unknown/debug"
 output_root="build/apps"
 
+rm -rf "$output_root"
+
 for app_dir in fri3d-app-*/; do
     if [ ! -d "$app_dir" ]; then
         continue
