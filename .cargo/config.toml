@@ -1,0 +1,9 @@
+# Shrink the WASM-level stack from the default 1 MB to 16 KB for Rust apps
+# compiled to wasm32-unknown-unknown. The stack is reserved inside the
+# module's linear memory, so a 1 MB default means `malloc(1MB)` on the real
+# badge — enough to make wasm3 choke on the ESP32's memory layout. 16 KB
+# is plenty for these apps (no deep recursion, no huge stack arrays).
+#
+# This only affects wasm32 builds — native emulator builds are unaffected.
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "link-arg=-zstack-size=16384"]

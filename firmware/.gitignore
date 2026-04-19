@@ -2,3 +2,6 @@
 .vscode/
 .pioenvs/
 .piolibdeps/
+build/
+src/embedded_app.h
+tools/hosttest/hosttest
