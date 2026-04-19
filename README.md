@@ -32,6 +32,23 @@ Canvas primitives are kept **byte-exact** with the Rust reference
 implementation in `fri3d-runtime/src/canvas.rs` via a parity test harness —
 see [CLAUDE.md](CLAUDE.md) for details.
 
+## Display dimensions
+
+Apps draw into a **128×64 monochrome** framebuffer. That's the virtual
+canvas size the WASM API and every primitive operate on — independent of
+the physical target.
+
+| Target | Physical screen | What we show |
+| --- | --- | --- |
+| ESP32-S3 badge | 240 × 296 colour IPS LCD (landscape: 296 × 240) | 128×64 canvas upscaled 2× to 256×128, centred, green-on-black |
+| Browser | 256 × 128 `<canvas>` (CSS-scaled 2×) | same 128×64 canvas, nearest-neighbour 2× |
+| Native `app-runner` | 128 × 64 PNG | raw canvas, 1 output pixel per canvas pixel |
+
+The WASM app never sees the 240×296 physical pixels — it draws against
+a fixed 128×64 grid, and the C++ host in `firmware/src/main.cpp` handles
+the upscale + centering to the hardware LCD. This keeps apps portable
+across targets and keeps the SDK surface tiny.
+
 ## Prerequisites
 
 - Rust toolchain (via rustup) with `wasm32-unknown-unknown` target
