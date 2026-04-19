@@ -31,6 +31,7 @@ c++ -std=c++17 -O2 \
     firmware/src/canvas.cpp \
     firmware/src/font.cpp \
     firmware/src/random.cpp \
+    firmware/src/screen.cpp \
     firmware/src/wasm_host.cpp \
     firmware/tools/app-runner/app_runner.cpp \
     -o firmware/tools/app-runner/app_runner

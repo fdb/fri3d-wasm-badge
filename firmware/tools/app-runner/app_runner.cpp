@@ -35,10 +35,12 @@ extern "C" {
 
 #include "canvas.h"
 #include "random.h"
+#include "screen.h"
 #include "wasm_host.h"
 
 using fri3d::Canvas;
 using fri3d::Random;
+using fri3d::Screen;
 
 static std::vector<uint8_t> read_file(const char* path) {
     std::ifstream f(path, std::ios::binary);
@@ -129,8 +131,13 @@ int main(int argc, char** argv) {
 
     Canvas canvas;
     Random rng(a.seed);
+    // Allocate the new 296x240 RGB565 buffer on the heap; the Screen view
+    // is what wasm_host needs. The CLI tool only inspects the legacy 128x64
+    // canvas afterwards, but the new init signature requires a Screen.
+    std::vector<uint16_t> screen_pixels(fri3d::SCREEN_PIXELS, 0);
+    Screen screen(screen_pixels.data());
 
-    const char* err = wasm_host::init(canvas, rng, bytes.data(), (uint32_t)bytes.size());
+    const char* err = wasm_host::init(canvas, screen, rng, bytes.data(), (uint32_t)bytes.size());
     if (err) { std::fprintf(stderr, "wasm init: %s\n", err); return 1; }
 
     for (uint32_t f = 0; f < a.frames; ++f) {
