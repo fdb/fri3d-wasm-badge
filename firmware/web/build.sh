@@ -49,12 +49,13 @@ emcc \
   firmware/src/app_switcher.cpp \
   firmware/src/canvas.cpp \
   firmware/src/font.cpp \
+  firmware/src/input_queue.cpp \
   firmware/src/random.cpp \
   firmware/src/wasm_host.cpp \
   firmware/web/main_web.cpp \
   -s ENVIRONMENT=web \
   -s ALLOW_MEMORY_GROWTH=1 \
-  -s EXPORTED_FUNCTIONS='["_main","_web_init","_web_render","_web_on_input","_web_fb","_web_fb_width","_web_fb_height","_web_rng_get","_web_rng_seed","_malloc","_free"]' \
+  -s EXPORTED_FUNCTIONS='["_main","_web_init","_web_render","_web_on_input","_web_push_input","_web_fb","_web_fb_width","_web_fb_height","_web_rng_get","_web_rng_seed","_malloc","_free"]' \
   -s EXPORTED_RUNTIME_METHODS='["ccall","cwrap","HEAPU8"]' \
   -o "$DIST/firmware.js"
 

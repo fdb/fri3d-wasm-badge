@@ -18,6 +18,7 @@
 
 #include "../src/app_switcher.h"
 #include "../src/canvas.h"
+#include "../src/input_queue.h"
 #include "../src/random.h"
 #include "../src/wasm_host.h"
 #include "../src/embedded_apps.h"
@@ -27,6 +28,7 @@ using fri3d::Random;
 
 static Canvas g_canvas;
 static Random g_rng(42);
+static fri3d::InputQueue g_input;
 
 extern "C" {
 
@@ -44,10 +46,26 @@ int web_init() {
 
 EMSCRIPTEN_KEEPALIVE
 void web_render() {
+    // Drain anything pushed by JS between the last render and this one.
+    fri3d::InputEvent ev;
+    while (g_input.pop(ev)) {
+        wasm_host::on_input(ev.key, ev.type);
+    }
+    app_switcher::dispatch();
     wasm_host::render();
     app_switcher::dispatch();
 }
 
+// JS DOM handlers push here instead of dispatching synchronously — mirrors
+// the hardware architecture exactly so behaviour is consistent across
+// platforms and a slow render can't swallow a quick tap.
+EMSCRIPTEN_KEEPALIVE
+void web_push_input(int key, int event) {
+    g_input.push({(uint32_t)key, (uint32_t)event});
+}
+
+// Kept for backwards compatibility with any callers that want immediate
+// synchronous delivery (e.g. Playwright tests that bypass the queue).
 EMSCRIPTEN_KEEPALIVE
 void web_on_input(int key, int event) {
     wasm_host::on_input((uint32_t)key, (uint32_t)event);

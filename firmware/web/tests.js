@@ -67,6 +67,29 @@
     assertEq(JSON.stringify(a), JSON.stringify(b), 'replayable from same seed');
   });
 
+  test('input queue: taps pushed before render are all delivered next render', () => {
+    // Models the Mandelbrot-bug scenario: while a slow render is running,
+    // the user does a complete A-press cycle. The queue must hold all
+    // events (PRESS + RELEASE + SHORT_PRESS) until render drains them.
+    // Without the queue, the events would need to arrive synchronously
+    // with a button poll inside render, which on hardware means being
+    // lost if the press fits entirely between polls.
+    window.fri3d.rngSeed(42);
+    window.fri3d.render();
+    const hashAtLaunch = fbHash();
+
+    // Queue a full OK press cycle (3 events) — no render yet.
+    window.fri3d.queueTap(window.fri3d.KEY.OK);
+
+    // Still on the same frame, queue should be drained on next render.
+    window.fri3d.render();
+    const hashAfter = fbHash();
+    if (hashAfter === hashAtLaunch) {
+      throw new Error('queued OK tap did not change the frame — ' +
+        'either queue did not drain or OK did not trigger start_app');
+    }
+  });
+
   test('app-switching: OK on launcher swaps to circles, Back returns', () => {
     // Baseline: the launcher frame contains distinctive pixels (e.g. text).
     window.fri3d.render();

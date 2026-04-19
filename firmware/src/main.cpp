@@ -17,6 +17,7 @@
 #include "Fri3dBadge_Button.h"
 #include "app_switcher.h"
 #include "canvas.h"
+#include "input_queue.h"
 #include "random.h"
 #include "wasm_host.h"
 #include "embedded_apps.h"
@@ -63,9 +64,19 @@ enum : uint8_t {
 
 static Fri3d_Button* buttons[BID_COUNT];
 
-// Press-time tracking so we can emit SHORT_PRESS / LONG_PRESS on release.
+// Press-time tracking lives with the polling task (which is the only
+// consumer of it), not main loop state.
 static constexpr uint32_t LONG_PRESS_MS = 300;
-static uint32_t press_start_ms[BID_COUNT] = {0};
+
+// Events produced by the polling task, drained by the main loop before
+// render. Decouples input latency from render cadence.
+static fri3d::InputQueue g_input;
+
+// Button-polling task: runs at 200 Hz on core 0 independent of the render
+// loop on core 1. Catches press + release transitions that fit entirely
+// inside a slow render frame (Mandelbrot is ~500 ms on ESP32-S3, which
+// would otherwise swallow any tap shorter than that).
+static void button_task(void* /*arg*/);
 
 // Map each button ID to the emulator's input key.
 // Note: fully qualify — ESP-IDF's esp32s3/rom/ets_sys.h defines an unscoped
@@ -192,27 +203,49 @@ void setup() {
     }
     log_heap("post-wasm-init");
     Serial.println("[fri3d] wasm ready");
+
+    // Spawn the button-polling task on the other core (Arduino's loop runs
+    // on core 1 by default). Core 0 is mostly idle outside Wi-Fi workloads,
+    // so giving it a 200 Hz polling task doesn't contend with anything.
+    xTaskCreatePinnedToCore(button_task, "btn_poll", 4096, nullptr, 2, nullptr, 0);
+}
+
+static void button_task(void* /*arg*/) {
+    // Per-button press-start timestamps; only this task touches them.
+    uint32_t press_start_ms[BID_COUNT] = {0};
+
+    for (;;) {
+        for (uint8_t i = 0; i < BID_COUNT; ++i) buttons[i]->read();
+
+        for (uint8_t i = 0; i < BID_COUNT; ++i) {
+            const uint32_t k = key_for(i);
+            if (k == 0xFFFFFFFFu) continue;
+
+            if (buttons[i]->wasPressed()) {
+                press_start_ms[i] = millis();
+                g_input.push({k, wasm_host::event::PRESS});
+            }
+            if (buttons[i]->wasReleased()) {
+                const uint32_t held = millis() - press_start_ms[i];
+                g_input.push({k, wasm_host::event::RELEASE});
+                g_input.push({k,
+                    held >= LONG_PRESS_MS ? wasm_host::event::LONG_PRESS
+                                          : wasm_host::event::SHORT_PRESS});
+            }
+        }
+
+        // 5ms = 200 Hz. Human presses are ≥50ms so every transition is
+        // seen at least twice, and the queue has plenty of capacity even
+        // if the main loop drains it rarely.
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
 }
 
 void loop() {
-    for (uint8_t i = 0; i < BID_COUNT; ++i) buttons[i]->read();
-
-    // Emit PRESS immediately, and RELEASE + SHORT/LONG_PRESS on lift.
-    for (uint8_t i = 0; i < BID_COUNT; ++i) {
-        uint32_t k = key_for(i);
-        if (k == 0xFFFFFFFFu) continue;
-
-        if (buttons[i]->wasPressed()) {
-            press_start_ms[i] = millis();
-            wasm_host::on_input(k, wasm_host::event::PRESS);
-        }
-        if (buttons[i]->wasReleased()) {
-            wasm_host::on_input(k, wasm_host::event::RELEASE);
-            uint32_t held = millis() - press_start_ms[i];
-            wasm_host::on_input(k,
-                held >= LONG_PRESS_MS ? wasm_host::event::LONG_PRESS
-                                      : wasm_host::event::SHORT_PRESS);
-        }
+    // Drain everything the polling task produced since the last iteration.
+    fri3d::InputEvent ev;
+    while (g_input.pop(ev)) {
+        wasm_host::on_input(ev.key, ev.type);
     }
 
     app_switcher::dispatch();

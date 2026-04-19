@@ -33,6 +33,7 @@ var Module = {
     api.init       = Module.cwrap('web_init', 'number', []);
     api.render     = Module.cwrap('web_render', null, []);
     api.onInput    = Module.cwrap('web_on_input', null, ['number', 'number']);
+    api.pushInput  = Module.cwrap('web_push_input', null, ['number', 'number']);
     api.fbPtr      = Module.cwrap('web_fb', 'number', []);
     api.fbWidth    = Module.cwrap('web_fb_width', 'number', []);
     api.fbHeight   = Module.cwrap('web_fb_height', 'number', []);
@@ -41,12 +42,24 @@ var Module = {
     if (api.init() !== 0) { log('init failed'); return; }
 
     window.fri3d = {
+      // Synchronous dispatch — skips the queue entirely, useful for tests
+      // that want deterministic "event seen immediately" semantics.
       press(key)           { api.onInput(key, 0); },
       release(key, ms)     {
         api.onInput(key, 1);
         api.onInput(key, ms >= 300 ? 3 : 2);
       },
       tap(key, ms = 50)    { this.press(key); this.release(key, ms); },
+
+      // Queued dispatch — mirrors real keyboard / hardware input flow.
+      // Events sit in the C++ ring buffer until the next render drains it.
+      queuePress(key)          { api.pushInput(key, 0); },
+      queueRelease(key, ms)    {
+        api.pushInput(key, 1);
+        api.pushInput(key, ms >= 300 ? 3 : 2);
+      },
+      queueTap(key, ms = 50)   { this.queuePress(key); this.queueRelease(key, ms); },
+
       render()             { api.render(); },
       rngGet()             { return api.rngGet() >>> 0; },
       rngSeed(s)           { api.rngSeed(s >>> 0); },

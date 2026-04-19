@@ -98,6 +98,7 @@ var Module = {
     api.init         = Module.cwrap('web_init', 'number', []);
     api.render       = Module.cwrap('web_render', null, []);
     api.onInput      = Module.cwrap('web_on_input', null, ['number', 'number']);
+    api.pushInput    = Module.cwrap('web_push_input', null, ['number', 'number']);
     api.fbPtr        = Module.cwrap('web_fb', 'number', []);
     api.fbWidth      = Module.cwrap('web_fb_width', 'number', []);
     api.fbHeight     = Module.cwrap('web_fb_height', 'number', []);
@@ -135,13 +136,16 @@ var Module = {
 };
 
 function setupInput() {
+  // Events go through the queue, not directly to wasm_host::on_input.
+  // Same architecture the hardware uses so a slow render frame can't
+  // swallow a quick press+release.
   document.addEventListener('keydown', (e) => {
     if (e.repeat) return;
     const k = KEYMAP[e.key];
     if (k === undefined) return;
     e.preventDefault();
     pressStart.set(k, performance.now());
-    api.onInput(k, EVENT_PRESS);
+    api.pushInput(k, EVENT_PRESS);
   });
   document.addEventListener('keyup', (e) => {
     const k = KEYMAP[e.key];
@@ -149,8 +153,8 @@ function setupInput() {
     e.preventDefault();
     const held = performance.now() - (pressStart.get(k) ?? performance.now());
     pressStart.delete(k);
-    api.onInput(k, EVENT_RELEASE);
-    api.onInput(k, held >= LONG_PRESS_MS ? EVENT_LONG : EVENT_SHORT);
+    api.pushInput(k, EVENT_RELEASE);
+    api.pushInput(k, held >= LONG_PRESS_MS ? EVENT_LONG : EVENT_SHORT);
   });
 }
 
