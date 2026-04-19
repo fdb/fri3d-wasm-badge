@@ -1,7 +1,15 @@
 #![no_std]
 #![deny(unsafe_code)]
 
+// Snake — vector port to the new 296x240 color screen + ui kit.
+// Game logic is unchanged from the original 128x64 mono version (board
+// dimensions, fruit-spawn rules, "turn only at even cells" timing). Only
+// the renderer + score/game-over UI was rewritten to use screen::* and
+// ui::* — keeps the game's tuning intact while landing it in the new
+// design system.
+
 use fri3d_wasm_api as api;
+use api::{screen, theme, ui};
 
 const MAX_SNAKE_LEN: usize = 253;
 const BOARD_MAX_X: u8 = 30;
@@ -246,67 +254,122 @@ fn update_state(state: &mut SnakeState) {
     }
 }
 
-fn write_score(score: u16, buffer: &mut [u8; 16]) -> usize {
-    let prefix = b"Score: ";
-    buffer[..prefix.len()].copy_from_slice(prefix);
+// Format the score as ASCII digits into `buffer`, returning bytes written.
+// Used both in the status bar and the game-over modal — kept allocation-
+// free so this stays no_std-friendly without relying on `format!`.
+fn write_number(value: u16, buffer: &mut [u8]) -> usize {
+    if buffer.is_empty() { return 0; }
+    if value == 0 { buffer[0] = b'0'; return 1; }
 
     let mut digits = [0u8; 5];
     let mut count = 0usize;
-    let mut value = score as u32;
-
-    if value == 0 {
-        digits[0] = b'0';
-        count = 1;
-    } else {
-        while value > 0 {
-            digits[count] = b'0' + (value % 10) as u8;
-            value /= 10;
-            count += 1;
-        }
+    let mut v = value as u32;
+    while v > 0 && count < digits.len() {
+        digits[count] = b'0' + (v % 10) as u8;
+        v /= 10;
+        count += 1;
     }
-
-    for idx in 0..count {
-        buffer[prefix.len() + idx] = digits[count - 1 - idx];
-    }
-
-    prefix.len() + count
+    let n = count.min(buffer.len());
+    for i in 0..n { buffer[i] = digits[n - 1 - i]; }
+    n
 }
 
+// ---- Vector renderer -------------------------------------------------------
+// Original 128x64 mono board (BOARD_MAX_X=30, BOARD_MAX_Y=14 → 31×15 cells)
+// scaled up to 8 px per cell on the 296×240 color screen. The board is
+// 248×120 px, centred horizontally and parked under the status bar.
+
+const CELL: i32 = 8;
+const COLS: i32 = (BOARD_MAX_X as i32) + 1;       // 31
+const ROWS: i32 = (BOARD_MAX_Y as i32) + 1;       // 15
+const BOARD_W: i32 = COLS * CELL;                 // 248
+const BOARD_H: i32 = ROWS * CELL;                 // 120
+const BOARD_X: i32 = (296 - BOARD_W) / 2;         // 24
+const BOARD_Y: i32 = 14 + (240 - 14 - 14 - BOARD_H) / 2; // 70 — centred in the body area
+
 fn render_state(state: &SnakeState) {
-    api::canvas_set_color(api::color::BLACK);
+    screen::clear(theme::BG);
 
-    api::canvas_draw_frame(0, 0, 128, 64);
+    // Status bar shows the score in the time slot — repurposes the slot
+    // since the gameplay doesn't care about wall-clock.
+    let score = state.len.saturating_sub(7);
+    let mut score_buf = [0u8; 8];
+    let score_n = write_number(score, &mut score_buf);
+    let score_str = core::str::from_utf8(&score_buf[..score_n]).unwrap_or("0");
+    ui::status_bar("SNAKE", score_str);
 
-    let fruit_x = state.fruit.x as i32 * 4 + 1;
-    let fruit_y = state.fruit.y as i32 * 4 + 1;
-    api::canvas_draw_rframe(fruit_x, fruit_y, 6, 6, 2);
-
-    for idx in 0..state.len as usize {
-        let point = state.points[idx];
-        let px = point.x as i32 * 4 + 2;
-        let py = point.y as i32 * 4 + 2;
-        api::canvas_draw_box(px, py, 4, 4);
+    // Subtle dot-grid background for that vector-field feel — tiny dots
+    // at every cell centre give the play field structure without noise.
+    for r in 0..ROWS {
+        for c in 0..COLS {
+            screen::pixel(
+                BOARD_X + c * CELL + CELL / 2,
+                BOARD_Y + r * CELL + CELL / 2,
+                theme::INK_DEEP,
+            );
+        }
     }
 
-    if state.state == GameState::GameOver {
-        api::canvas_set_color(api::color::WHITE);
-        api::canvas_draw_box(34, 20, 62, 24);
+    // Board frame — 1 px outside the cells, in INK so it pops against BG.
+    screen::stroke_rect(BOARD_X - 2, BOARD_Y - 2, BOARD_W + 4, BOARD_H + 4, theme::INK);
 
-        api::canvas_set_color(api::color::BLACK);
-        api::canvas_draw_frame(34, 20, 62, 24);
+    // Fruit — 2-cell-wide pink/warn square (matches the original's "fruit
+    // is bigger than a body cell" affordance, but in WARN color now).
+    let fx = BOARD_X + state.fruit.x as i32 * CELL;
+    let fy = BOARD_Y + state.fruit.y as i32 * CELL;
+    screen::fill_rect(fx + 1, fy + 1, CELL * 2 - 2, CELL * 2 - 2, theme::WARN);
 
-        api::canvas_set_font(api::font::PRIMARY);
-        api::canvas_draw_str(37, 31, "Game Over");
-
-        api::canvas_set_font(api::font::SECONDARY);
-        let score = state.len.saturating_sub(7);
-        let mut buffer = [0u8; 16];
-        let len = write_score(score, &mut buffer);
-        if let Ok(text) = core::str::from_utf8(&buffer[..len]) {
-            let width = api::canvas_string_width(text) as i32;
-            let x = (128 - width) / 2;
-            api::canvas_draw_str(x, 41, text);
+    // Snake body. Head is ACCENT (cyan), body is INK (violet) with an
+    // INK_DIM inner square for segment definition.
+    for idx in 0..state.len as usize {
+        let p = state.points[idx];
+        let px = BOARD_X + p.x as i32 * CELL;
+        let py = BOARD_Y + p.y as i32 * CELL;
+        if idx == 0 {
+            screen::fill_rect(px, py, CELL, CELL, theme::ACCENT);
+            // Tiny "eye" dot toward the direction of travel
+            let (dx, dy) = match state.current_movement {
+                Direction::Up    => (CELL / 2, 1),
+                Direction::Down  => (CELL / 2, CELL - 2),
+                Direction::Left  => (1,        CELL / 2),
+                Direction::Right => (CELL - 2, CELL / 2),
+            };
+            screen::pixel(px + dx, py + dy, theme::BG);
+        } else {
+            screen::fill_rect(px, py, CELL, CELL, theme::INK);
+            screen::fill_rect(px + 2, py + 2, CELL - 4, CELL - 4, theme::INK_DIM);
         }
+    }
+
+    // Hint bar (below the play field).
+    if state.state == GameState::GameOver {
+        ui::hint_bar("OK: RESTART  B: BACK");
+    } else {
+        ui::hint_bar("ARROWS: TURN  B: BACK");
+    }
+
+    // Game-over modal — re-uses ui::card's "selected" treatment for the
+    // accent corner brackets, so it visually reads as "the focused thing".
+    if state.state == GameState::GameOver {
+        const MW: i32 = 200;
+        const MH: i32 = 76;
+        let mx = (296 - MW) / 2;
+        let my = (240 - MH) / 2;
+        screen::fill_rect(mx, my, MW, MH, theme::BG_PANEL);
+        ui::card(mx, my, MW, MH, /*selected=*/ true);
+
+        ui::text_centered(mx, mx + MW, my + 22, "GAME OVER", theme::WHITE, api::font::PRIMARY);
+
+        // "SCORE: 42" line in accent.
+        let mut buf = [0u8; 24];
+        let prefix = b"SCORE: ";
+        buf[..prefix.len()].copy_from_slice(prefix);
+        let n = write_number(score, &mut buf[prefix.len()..]);
+        if let Ok(text) = core::str::from_utf8(&buf[..prefix.len() + n]) {
+            ui::text_centered(mx, mx + MW, my + 42, text, theme::ACCENT, api::font::PRIMARY);
+        }
+
+        ui::text_centered(mx, mx + MW, my + 62, "PRESS A TO RESTART", theme::INK_DIM, api::font::PRIMARY);
     }
 }
 
