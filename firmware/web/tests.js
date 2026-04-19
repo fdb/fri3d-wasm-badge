@@ -67,6 +67,29 @@
     assertEq(JSON.stringify(a), JSON.stringify(b), 'replayable from same seed');
   });
 
+  test('app-switching: OK on launcher swaps to circles, Back returns', () => {
+    // Baseline: the launcher frame contains distinctive pixels (e.g. text).
+    window.fri3d.render();
+    const launcherHash = fbHash();
+
+    // Tap OK while "Circles" is highlighted — which it is on boot, since the
+    // launcher's MENU_SCROLL static starts at 0.
+    window.fri3d.tap(window.fri3d.KEY.OK);
+    window.fri3d.render();
+    const circlesHash = fbHash();
+    if (circlesHash === launcherHash) {
+      throw new Error('start_app(1) did not change the frame — module swap failed');
+    }
+
+    // Long-press Back to return to launcher.
+    window.fri3d.tap(window.fri3d.KEY.BACK, 500);
+    window.fri3d.render();
+    const backHash = fbHash();
+    if (backHash === circlesHash) {
+      throw new Error('exit_to_launcher did not change the frame — back-swap failed');
+    }
+  });
+
   // ---- Runner -------------------------------------------------------------
 
   window.runTests = function runTests() {
