@@ -29,6 +29,7 @@ c++ -std=c++17 -O2 \
     "$WASM3"/m3_optimize.c \
     "$WASM3"/m3_parse.c \
     firmware/src/canvas.cpp \
+    firmware/src/font.cpp \
     firmware/src/random.cpp \
     firmware/src/wasm_host.cpp \
     firmware/tools/app-runner/app_runner.cpp \

@@ -111,6 +111,33 @@ static std::vector<Case> make_cases() {
         c.set_color(Color::Xor);   c.draw_circle(50, 30, 12);
     }});
 
+    cs.push_back({"text_hello_primary", [](Canvas& c) {
+        c.set_color(Color::Black); c.set_font(fri3d::FontId::Primary);
+        c.draw_str(5, 20, "Hello");
+    }});
+    cs.push_back({"text_ascii_primary", [](Canvas& c) {
+        c.set_color(Color::Black); c.set_font(fri3d::FontId::Primary);
+        c.draw_str(2, 20, "The quick brown fox");
+    }});
+    cs.push_back({"text_digits_bignumbers", [](Canvas& c) {
+        c.set_color(Color::Black); c.set_font(fri3d::FontId::BigNumbers);
+        c.draw_str(10, 40, "01234");
+    }});
+    cs.push_back({"text_secondary_line", [](Canvas& c) {
+        c.set_color(Color::Black); c.set_font(fri3d::FontId::Secondary);
+        c.draw_str(0, 10, "ABCabc 0-9");
+    }});
+    cs.push_back({"text_keyboard_row", [](Canvas& c) {
+        c.set_color(Color::Black); c.set_font(fri3d::FontId::Keyboard);
+        c.draw_str(0, 10, "qwertyuiop");
+    }});
+    cs.push_back({"text_multiline", [](Canvas& c) {
+        c.set_color(Color::Black); c.set_font(fri3d::FontId::Primary);
+        c.draw_str(2, 12, "Fri3d");
+        c.draw_str(2, 28, "WASM");
+        c.draw_str(2, 44, "Badge");
+    }});
+
     return cs;
 }
 

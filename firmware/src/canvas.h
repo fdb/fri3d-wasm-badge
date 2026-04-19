@@ -18,6 +18,13 @@ enum class Color : uint8_t {
     Xor   = 2,
 };
 
+enum class FontId : uint32_t {
+    Primary    = 0,
+    Secondary  = 1,
+    Keyboard   = 2,
+    BigNumbers = 3,
+};
+
 class Canvas {
 public:
     Canvas();
@@ -30,6 +37,9 @@ public:
     void set_color(Color c) { m_color = c; }
     Color color() const { return m_color; }
 
+    void set_font(FontId id) { m_font = id; }
+    FontId font() const { return m_font; }
+
     void draw_dot(int32_t x, int32_t y);
     void draw_line(int32_t x1, int32_t y1, int32_t x2, int32_t y2);
     void draw_hline(int32_t x, int32_t y, uint32_t length);
@@ -40,6 +50,18 @@ public:
     void draw_rbox  (int32_t x, int32_t y, uint32_t w, uint32_t h, uint32_t radius);
     void draw_circle(int32_t x0, int32_t y0, uint32_t radius);
     void draw_disc  (int32_t x0, int32_t y0, uint32_t radius);
+
+    // Text. Uses the currently-selected font (default Primary). Matches the
+    // emulator's baseline convention: (x, y) is the glyph *baseline* — y - ascent
+    // of the font is the top.
+    void draw_str(int32_t x, int32_t y, const char* text);
+    uint32_t string_width(const char* text) const;
+
+    // Called by Font during glyph rendering. Internal detail but must be
+    // accessible across translation units.
+    void draw_hline_with_color(int32_t x, int32_t y, uint32_t length, Color c) {
+        draw_hline_c(x, y, length, c);
+    }
 
 private:
     // Quadrant bits for rounded-corner helpers. Matches canvas.rs.
@@ -66,6 +88,7 @@ private:
 
     uint8_t m_buffer[SCREEN_WIDTH * SCREEN_HEIGHT];
     Color   m_color = Color::Black;
+    FontId  m_font  = FontId::Primary;
 };
 
 } // namespace fri3d

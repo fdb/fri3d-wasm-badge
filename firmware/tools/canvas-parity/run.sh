@@ -18,6 +18,7 @@ echo "[parity] building C++ test..."
 c++ -std=c++17 -O2 \
     -I firmware/src \
     firmware/src/canvas.cpp \
+    firmware/src/font.cpp \
     firmware/tools/canvas-parity/canvas_parity.cpp \
     -o firmware/tools/canvas-parity/canvas_parity
 

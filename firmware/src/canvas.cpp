@@ -2,10 +2,24 @@
 // Rust reference via tools/canvas-parity-gen + firmware/tools/canvas-parity.
 
 #include "canvas.h"
+#include "font.h"
 
 #include <string.h>
 
 namespace fri3d {
+
+// Tiny adapter that lets Font's draw_str render into a Canvas without making
+// Canvas itself inherit from FontDrawTarget (which would require virtual
+// dispatch in a hot path, and a full font.h dependency in canvas.h).
+class CanvasFontTarget final : public FontDrawTarget {
+public:
+    explicit CanvasFontTarget(Canvas& c) : m_canvas(c) {}
+    void draw_hline_with_color(int32_t x, int32_t y, uint32_t length, Color c) override {
+        m_canvas.draw_hline_with_color(x, y, length, c);
+    }
+private:
+    Canvas& m_canvas;
+};
 
 Canvas::Canvas() { clear(); }
 
@@ -308,6 +322,19 @@ void Canvas::draw_rbox(int32_t x, int32_t y, uint32_t width, uint32_t height, ui
         hh -= 2;
         draw_box(x, yu, (uint32_t)w, (uint32_t)hh);
     }
+}
+
+// ---- Text ------------------------------------------------------------------
+
+void Canvas::draw_str(int32_t x, int32_t y, const char* text) {
+    Font font = Font::from_id(m_font);
+    CanvasFontTarget target(*this);
+    font.draw_str(target, x, y, text, m_color);
+}
+
+uint32_t Canvas::string_width(const char* text) const {
+    Font font = Font::from_id(m_font);
+    return font.string_width(text);
 }
 
 } // namespace fri3d

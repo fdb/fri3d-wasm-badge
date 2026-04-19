@@ -10,7 +10,7 @@
 //! buffer so C++ can mmap-compare in O(n) without decoding.
 
 use fri3d_runtime::canvas::Canvas;
-use fri3d_runtime::types::Color;
+use fri3d_runtime::types::{Color, Font};
 use std::fs;
 use std::path::Path;
 
@@ -135,6 +135,42 @@ fn main() {
         c.draw_box(20, 10, 60, 40);
         c.set_color(Color::Xor);
         c.draw_circle(50, 30, 12);
+    });
+
+    // ---- Text rendering ------------------------------------------------
+    // Guards the u8g2 decoder port: bit-stream reader, UTF-8 decoder, glyph
+    // blit. If any of these drift, every app that renders text will regress.
+    run("text_hello_primary", |c| {
+        c.set_color(Color::Black);
+        c.set_font(Font::Primary);
+        c.draw_str(5, 20, "Hello");
+    });
+    run("text_ascii_primary", |c| {
+        c.set_color(Color::Black);
+        c.set_font(Font::Primary);
+        c.draw_str(2, 20, "The quick brown fox");
+    });
+    run("text_digits_bignumbers", |c| {
+        c.set_color(Color::Black);
+        c.set_font(Font::BigNumbers);
+        c.draw_str(10, 40, "01234");
+    });
+    run("text_secondary_line", |c| {
+        c.set_color(Color::Black);
+        c.set_font(Font::Secondary);
+        c.draw_str(0, 10, "ABCabc 0-9");
+    });
+    run("text_keyboard_row", |c| {
+        c.set_color(Color::Black);
+        c.set_font(Font::Keyboard);
+        c.draw_str(0, 10, "qwertyuiop");
+    });
+    run("text_multiline", |c| {
+        c.set_color(Color::Black);
+        c.set_font(Font::Primary);
+        c.draw_str(2, 12, "Fri3d");
+        c.draw_str(2, 28, "WASM");
+        c.draw_str(2, 44, "Badge");
     });
 
     println!("done.");

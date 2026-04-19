@@ -68,7 +68,7 @@ m3ApiRawFunction(h_canvas_set_color) {
 
 m3ApiRawFunction(h_canvas_set_font) {
     m3ApiGetArg(int32_t, font);
-    (void)font; // fonts not implemented yet
+    if (g_canvas) g_canvas->set_font((fri3d::FontId)(uint32_t)font);
     m3ApiSuccess();
 }
 
@@ -148,18 +148,15 @@ m3ApiRawFunction(h_canvas_draw_str) {
     m3ApiGetArg(int32_t, x);
     m3ApiGetArg(int32_t, y);
     m3ApiGetArgMem(const char*, text);
-    // Font rendering not yet ported. Log the text once per call; the WASM
-    // app will otherwise see no output for draw_str but keep running.
-    (void)x; (void)y; (void)text;
+    if (g_canvas && text) g_canvas->draw_str(x, y, text);
     m3ApiSuccess();
 }
 
 m3ApiRawFunction(h_canvas_string_width) {
     m3ApiReturnType(int32_t);
     m3ApiGetArgMem(const char*, text);
-    // Without a font, report a best-effort estimate: 6 px per char.
-    int32_t w = text ? (int32_t)strlen(text) * 6 : 0;
-    m3ApiReturn(w);
+    uint32_t w = g_canvas && text ? g_canvas->string_width(text) : 0;
+    m3ApiReturn((int32_t)w);
 }
 
 m3ApiRawFunction(h_random_seed) {
