@@ -113,9 +113,8 @@ m3ApiRawFunction(h_canvas_draw_rframe) {
     m3ApiGetArg(int32_t, w);
     m3ApiGetArg(int32_t, h);
     m3ApiGetArg(int32_t, r);
-    // rounded variant not yet ported — degrade to a plain frame.
-    (void)r;
-    if (g_canvas && w > 0 && h > 0) g_canvas->draw_frame(x, y, (uint32_t)w, (uint32_t)h);
+    if (g_canvas && w > 0 && h > 0 && r >= 0)
+        g_canvas->draw_rframe(x, y, (uint32_t)w, (uint32_t)h, (uint32_t)r);
     m3ApiSuccess();
 }
 
@@ -125,8 +124,8 @@ m3ApiRawFunction(h_canvas_draw_rbox) {
     m3ApiGetArg(int32_t, w);
     m3ApiGetArg(int32_t, h);
     m3ApiGetArg(int32_t, r);
-    (void)r;
-    if (g_canvas && w > 0 && h > 0) g_canvas->draw_box(x, y, (uint32_t)w, (uint32_t)h);
+    if (g_canvas && w > 0 && h > 0 && r >= 0)
+        g_canvas->draw_rbox(x, y, (uint32_t)w, (uint32_t)h, (uint32_t)r);
     m3ApiSuccess();
 }
 

@@ -1,0 +1,12 @@
+[package]
+name = "canvas-parity-gen"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "canvas-parity-gen"
+path = "src/main.rs"
+
+[dependencies]
+fri3d-runtime = { path = "../../fri3d-runtime" }

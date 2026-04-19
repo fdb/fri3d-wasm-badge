@@ -54,6 +54,29 @@ the logic so the portable parts land in `canvas/random/wasm_host` and only a
 thin shim lives in `main.cpp`. Never add hardware-only logic to files shared
 with the web build.
 
+## Canvas parity: keep C++ bit-exact with the Rust reference
+
+The C++ `firmware/src/canvas.cpp` must produce byte-identical framebuffers
+to `fri3d-runtime/src/canvas.rs` for every drawing primitive. This is
+essential for apps like the keyboard that depend on pixel-perfect rendering.
+
+**Workflow for adding or modifying a canvas primitive:**
+
+1. Add a test case in [tools/canvas-parity-gen/src/main.rs](tools/canvas-parity-gen/src/main.rs)
+   that calls the primitive on a fresh Rust Canvas and dumps the resulting
+   framebuffer as a golden `.bin`.
+2. Mirror the same case in [firmware/tools/canvas-parity/canvas_parity.cpp](firmware/tools/canvas-parity/canvas_parity.cpp).
+3. Run:
+   ```bash
+   firmware/tools/canvas-parity/run.sh
+   ```
+   — regenerates goldens, rebuilds the C++ tester, diffs byte-for-byte.
+   Any mismatch = a primitive that's drifted. Report shows first differing
+   pixel coordinate.
+
+Run this script after any `canvas.cpp` or `canvas.rs` change. CI will
+eventually gate on it.
+
 ## Hardware gotchas (earned the hard way)
 
 - **Don't call `Serial.flush()` anywhere near boot.** On the ESP32-S3 native
