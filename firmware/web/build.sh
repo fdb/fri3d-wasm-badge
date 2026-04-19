@@ -6,9 +6,9 @@
 #   cd firmware/web/dist && python3 -m http.server 8080
 # Then open http://localhost:8080/.
 #
-# Also regenerates src/embedded_app.h from the latest release build of the
-# Rust app (same one the ESP32 firmware embeds), so the browser runs the
-# exact same .wasm bytes the badge does.
+# Also regenerates src/embedded_apps.h from the latest release builds of
+# the Rust apps, so the browser runs the exact same .wasm bytes the badge
+# does.
 
 set -euo pipefail
 
@@ -16,7 +16,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
 # Regenerate the embedded app bytes.
-firmware/scripts/embed_app.sh
+firmware/scripts/embed_apps.sh
 
 DIST="firmware/web/dist"
 mkdir -p "$DIST"

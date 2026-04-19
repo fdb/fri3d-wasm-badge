@@ -4,4 +4,5 @@
 .piolibdeps/
 build/
 src/embedded_app.h
+src/embedded_apps.h
 tools/hosttest/hosttest

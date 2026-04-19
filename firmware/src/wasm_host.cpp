@@ -33,7 +33,9 @@ static IM3Function    g_fn_on_input = nullptr;
 static fri3d::Canvas* g_canvas = nullptr;
 static fri3d::Random* g_random = nullptr;
 
-static bool g_exit_requested = false;
+static bool     g_exit_requested = false;
+static bool     g_start_app_requested = false;
+static uint32_t g_start_app_id = 0;
 
 // Runtime stack size for the wasm interpreter. 8 KB is enough for all
 // circles-class apps; bump if deeper recursion is seen.
@@ -206,8 +208,8 @@ m3ApiRawFunction(h_exit_to_launcher) {
 
 m3ApiRawFunction(h_start_app) {
     m3ApiGetArg(int32_t, app_id);
-    (void)app_id;
-    // Only one app is embedded right now.
+    g_start_app_requested = true;
+    g_start_app_id = (uint32_t)app_id;
     m3ApiSuccess();
 }
 
@@ -323,3 +325,28 @@ void wasm_host::on_input(uint32_t key, uint32_t kind) {
 
 bool wasm_host::exit_requested()      { return g_exit_requested; }
 void wasm_host::clear_exit_request()  { g_exit_requested = false; }
+
+bool     wasm_host::start_app_requested()   { return g_start_app_requested; }
+uint32_t wasm_host::requested_app_id()      { return g_start_app_id; }
+void     wasm_host::clear_start_app_request() {
+    g_start_app_requested = false;
+    g_start_app_id = 0;
+}
+
+static void teardown() {
+    if (g_runtime) { m3_FreeRuntime(g_runtime); g_runtime = nullptr; }
+    if (g_env)     { m3_FreeEnvironment(g_env); g_env = nullptr; }
+    g_module       = nullptr;   // owned by runtime, freed above
+    g_fn_render    = nullptr;
+    g_fn_on_input  = nullptr;
+    g_exit_requested = false;
+    g_start_app_requested = false;
+    g_start_app_id = 0;
+}
+
+const char* wasm_host::reload(const uint8_t* wasm_bytes, uint32_t wasm_len) {
+    if (!g_canvas || !g_random) return "reload before init";
+    teardown();
+    // Re-enter the same init flow with the previously-registered canvas/rng.
+    return init(*g_canvas, *g_random, wasm_bytes, wasm_len);
+}

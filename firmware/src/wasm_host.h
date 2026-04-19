@@ -18,6 +18,11 @@ const char* init(fri3d::Canvas& canvas,
                  const uint8_t* wasm_bytes,
                  uint32_t wasm_len);
 
+// Tear down the current runtime (if any) and load a new module. Call this
+// when the app requests start_app() or exit_to_launcher() to swap modules.
+// Canvas and Random references are preserved from the previous init.
+const char* reload(const uint8_t* wasm_bytes, uint32_t wasm_len);
+
 // Call the app's render() export. No-op if init() hasn't succeeded.
 void render();
 
@@ -28,6 +33,12 @@ void on_input(uint32_t key, uint32_t kind);
 // on_input or render call. Consumers should poll + clear this flag.
 bool exit_requested();
 void clear_exit_request();
+
+// True when start_app(id) was invoked. Paired with requested_app_id(), and
+// cleared by clear_start_app_request().
+bool start_app_requested();
+uint32_t requested_app_id();
+void clear_start_app_request();
 
 // Input key/kind constants — duplicated here so main.cpp doesn't need to
 // import wasm3 internals.

@@ -18,7 +18,7 @@
 #include "canvas.h"
 #include "random.h"
 #include "wasm_host.h"
-#include "embedded_app.h"
+#include "embedded_apps.h"
 
 // wasm3's interpreter dispatches op-by-op through nested C calls and needs
 // far more stack than Arduino's default 8 KB loop task. This is the
@@ -179,8 +179,11 @@ void setup() {
     for (uint8_t i = 0; i < BID_COUNT; ++i) buttons[i]->begin();
     log_heap("post-buttons");
 
-    Serial.printf("[fri3d] initializing wasm3 (%u bytes)\n", embedded_app_wasm_len);
-    const char* err = wasm_host::init(canvas, rng, embedded_app_wasm, embedded_app_wasm_len);
+    // Boot into the launcher (app_id = 0). The launcher's start_app() call
+    // will trigger a module reload, dispatched in loop().
+    const EmbeddedApp& launcher = EMBEDDED_APPS[0];
+    Serial.printf("[fri3d] initializing wasm3 (%s, %u bytes)\n", launcher.name, launcher.wasm_len);
+    const char* err = wasm_host::init(canvas, rng, launcher.wasm, launcher.wasm_len);
     if (err) {
         Serial.printf("[fri3d] wasm init failed: %s\n", err);
         show_fatal(err);
@@ -212,9 +215,27 @@ void loop() {
     }
 
     if (wasm_host::exit_requested()) {
-        Serial.println("[fri3d] app requested exit_to_launcher()");
         wasm_host::clear_exit_request();
-        // No launcher yet — just log and continue running the same app.
+        const EmbeddedApp& launcher = EMBEDDED_APPS[0];
+        Serial.printf("[fri3d] exit_to_launcher -> %s\n", launcher.name);
+        const char* err = wasm_host::reload(launcher.wasm, launcher.wasm_len);
+        if (err) Serial.printf("[fri3d] launcher reload failed: %s\n", err);
+    }
+
+    if (wasm_host::start_app_requested()) {
+        uint32_t req = wasm_host::requested_app_id();
+        wasm_host::clear_start_app_request();
+        const EmbeddedApp* target = nullptr;
+        for (uint32_t i = 0; i < EMBEDDED_APPS_COUNT; ++i) {
+            if (EMBEDDED_APPS[i].app_id == req) { target = &EMBEDDED_APPS[i]; break; }
+        }
+        if (!target) {
+            Serial.printf("[fri3d] start_app(%u): no such app\n", req);
+        } else {
+            Serial.printf("[fri3d] start_app(%u) -> %s\n", req, target->name);
+            const char* err = wasm_host::reload(target->wasm, target->wasm_len);
+            if (err) Serial.printf("[fri3d] %s reload failed: %s\n", target->name, err);
+        }
     }
 
     wasm_host::render();

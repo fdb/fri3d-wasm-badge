@@ -19,7 +19,7 @@
 #include "../src/canvas.h"
 #include "../src/random.h"
 #include "../src/wasm_host.h"
-#include "../src/embedded_app.h"
+#include "../src/embedded_apps.h"
 
 using fri3d::Canvas;
 using fri3d::Random;
@@ -29,25 +29,53 @@ static Random g_rng(42);
 
 extern "C" {
 
+static void dispatch_pending_switches() {
+    if (wasm_host::exit_requested()) {
+        wasm_host::clear_exit_request();
+        const EmbeddedApp& launcher = EMBEDDED_APPS[0];
+        std::printf("[web] exit_to_launcher -> %s\n", launcher.name);
+        const char* err = wasm_host::reload(launcher.wasm, launcher.wasm_len);
+        if (err) std::printf("[web] launcher reload failed: %s\n", err);
+    }
+    if (wasm_host::start_app_requested()) {
+        uint32_t req = wasm_host::requested_app_id();
+        wasm_host::clear_start_app_request();
+        const EmbeddedApp* target = nullptr;
+        for (uint32_t i = 0; i < EMBEDDED_APPS_COUNT; ++i) {
+            if (EMBEDDED_APPS[i].app_id == req) { target = &EMBEDDED_APPS[i]; break; }
+        }
+        if (!target) {
+            std::printf("[web] start_app(%u): no such app\n", req);
+        } else {
+            std::printf("[web] start_app(%u) -> %s\n", req, target->name);
+            const char* err = wasm_host::reload(target->wasm, target->wasm_len);
+            if (err) std::printf("[web] %s reload failed: %s\n", target->name, err);
+        }
+    }
+}
+
 EMSCRIPTEN_KEEPALIVE
 int web_init() {
-    const char* err = wasm_host::init(g_canvas, g_rng, embedded_app_wasm, embedded_app_wasm_len);
+    const EmbeddedApp& launcher = EMBEDDED_APPS[0];
+    const char* err = wasm_host::init(g_canvas, g_rng, launcher.wasm, launcher.wasm_len);
     if (err) {
         std::printf("[web] wasm init failed: %s\n", err);
         return 1;
     }
-    std::printf("[web] wasm ready\n");
+    std::printf("[web] wasm ready (%s)\n", launcher.name);
     return 0;
 }
 
 EMSCRIPTEN_KEEPALIVE
 void web_render() {
     wasm_host::render();
+    dispatch_pending_switches();
 }
 
 EMSCRIPTEN_KEEPALIVE
 void web_on_input(int key, int event) {
     wasm_host::on_input((uint32_t)key, (uint32_t)event);
+    dispatch_pending_switches();
 }
 
 EMSCRIPTEN_KEEPALIVE
