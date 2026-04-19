@@ -31,7 +31,7 @@ extern "C" {
 
 EMSCRIPTEN_KEEPALIVE
 int web_init() {
-    const char* err = wasm_host::init(g_canvas, g_rng);
+    const char* err = wasm_host::init(g_canvas, g_rng, embedded_app_wasm, embedded_app_wasm_len);
     if (err) {
         std::printf("[web] wasm init failed: %s\n", err);
         return 1;

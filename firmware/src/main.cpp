@@ -180,7 +180,7 @@ void setup() {
     log_heap("post-buttons");
 
     Serial.printf("[fri3d] initializing wasm3 (%u bytes)\n", embedded_app_wasm_len);
-    const char* err = wasm_host::init(canvas, rng);
+    const char* err = wasm_host::init(canvas, rng, embedded_app_wasm, embedded_app_wasm_len);
     if (err) {
         Serial.printf("[fri3d] wasm init failed: %s\n", err);
         show_fatal(err);

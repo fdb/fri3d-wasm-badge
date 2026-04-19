@@ -20,7 +20,6 @@ extern "C" {
 
 #include "canvas.h"
 #include "random.h"
-#include "embedded_app.h"
 
 // ---------------------------------------------------------------------------
 // Module-level state.
@@ -263,7 +262,10 @@ static const char* link_host_functions() {
     return nullptr;
 }
 
-const char* wasm_host::init(fri3d::Canvas& canvas, fri3d::Random& random) {
+const char* wasm_host::init(fri3d::Canvas& canvas,
+                            fri3d::Random& random,
+                            const uint8_t* wasm_bytes,
+                            uint32_t wasm_len) {
     g_canvas = &canvas;
     g_random = &random;
 
@@ -276,7 +278,7 @@ const char* wasm_host::init(fri3d::Canvas& canvas, fri3d::Random& random) {
     if (!g_runtime) return "m3_NewRuntime failed";
 
     host_log("%s\n","[wasm] m3_ParseModule");
-    M3Result r = m3_ParseModule(g_env, &g_module, embedded_app_wasm, embedded_app_wasm_len);
+    M3Result r = m3_ParseModule(g_env, &g_module, wasm_bytes, wasm_len);
     if (r) return r;
 
     host_log("%s\n","[wasm] m3_LoadModule");

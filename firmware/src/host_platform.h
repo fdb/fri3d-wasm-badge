@@ -20,7 +20,7 @@ static inline uint32_t host_millis() {
     return (uint32_t)emscripten_get_now();
 }
 
-#else
+#elif defined(ARDUINO)
 
 #include <Arduino.h>
 
@@ -28,6 +28,21 @@ static inline uint32_t host_millis() {
 
 static inline uint32_t host_millis() {
     return millis();
+}
+
+#else
+// Native (desktop) target: used by firmware/tools/app-runner and other
+// offline tooling. Uses printf for logging and a monotonic clock for time.
+
+#include <cstdio>
+#include <chrono>
+
+#define host_log(...) std::printf(__VA_ARGS__)
+
+static inline uint32_t host_millis() {
+    using namespace std::chrono;
+    static auto start = steady_clock::now();
+    return (uint32_t)duration_cast<milliseconds>(steady_clock::now() - start).count();
 }
 
 #endif
