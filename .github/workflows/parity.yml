@@ -23,6 +23,38 @@ jobs:
       - name: Run canvas parity tester
         run: firmware/tools/canvas-parity/run.sh
 
+  regen-check:
+    name: Golden regeneration is idempotent
+    # Proves that committed goldens still match what tools/visual-golden-gen
+    # would produce right now. Catches accidental drift in the Rust reference
+    # (fri3d-runtime) or in the tool itself.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add wasm32 target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Install binaryen (wasm-opt)
+        run: sudo apt-get update && sudo apt-get install -y binaryen
+
+      - name: Build optimized app WASMs
+        run: firmware/scripts/embed_apps.sh
+
+      - name: Regenerate goldens in-place
+        run: tools/visual-golden-gen/regen.sh
+
+      - name: Fail if any golden changed
+        run: |
+          if [[ -n "$(git status --porcelain tests/visual/apps/)" ]]; then
+            echo "::error::Goldens drifted. Commit the regenerated PNGs or investigate why fri3d-runtime changed."
+            git diff --stat tests/visual/apps/
+            exit 1
+          fi
+
   visual-parity:
     name: Visual parity (per-app pixel diff)
     runs-on: ubuntu-latest

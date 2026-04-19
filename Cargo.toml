@@ -16,6 +16,9 @@ members = [
     "fri3d-app-wifi-pet",
     # Golden-image generator for canvas primitives.
     "tools/canvas-parity-gen",
+    # Per-app golden PNG generator — the Rust-side ground truth for the
+    # C++ visual parity sweep.
+    "tools/visual-golden-gen",
 ]
 default-members = [
     "fri3d-runtime",

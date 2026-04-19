@@ -1,0 +1,5 @@
+name: Dots
+description: Random dot scatter (initial board)
+
+scenes:
+  - name: Default

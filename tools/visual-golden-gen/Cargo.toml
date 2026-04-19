@@ -1,0 +1,13 @@
+[package]
+name = "visual-golden-gen"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "visual-golden-gen"
+path = "src/main.rs"
+
+[dependencies]
+fri3d-runtime = { path = "../../fri3d-runtime" }
+png = "0.17"
