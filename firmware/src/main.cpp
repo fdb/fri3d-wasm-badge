@@ -15,6 +15,7 @@
 
 #include "Fri3dBadge_pins.h"
 #include "Fri3dBadge_Button.h"
+#include "app_switcher.h"
 #include "canvas.h"
 #include "random.h"
 #include "wasm_host.h"
@@ -214,32 +215,20 @@ void loop() {
         }
     }
 
-    if (wasm_host::exit_requested()) {
-        wasm_host::clear_exit_request();
-        const EmbeddedApp& launcher = EMBEDDED_APPS[0];
-        Serial.printf("[fri3d] exit_to_launcher -> %s\n", launcher.name);
-        const char* err = wasm_host::reload(launcher.wasm, launcher.wasm_len);
-        if (err) Serial.printf("[fri3d] launcher reload failed: %s\n", err);
-    }
-
-    if (wasm_host::start_app_requested()) {
-        uint32_t req = wasm_host::requested_app_id();
-        wasm_host::clear_start_app_request();
-        const EmbeddedApp* target = nullptr;
-        for (uint32_t i = 0; i < EMBEDDED_APPS_COUNT; ++i) {
-            if (EMBEDDED_APPS[i].app_id == req) { target = &EMBEDDED_APPS[i]; break; }
-        }
-        if (!target) {
-            Serial.printf("[fri3d] start_app(%u): no such app\n", req);
-        } else {
-            Serial.printf("[fri3d] start_app(%u) -> %s\n", req, target->name);
-            const char* err = wasm_host::reload(target->wasm, target->wasm_len);
-            if (err) Serial.printf("[fri3d] %s reload failed: %s\n", target->name, err);
-        }
-    }
+    app_switcher::dispatch();
 
     wasm_host::render();
-    blit_to_screen();
+
+    // Skip the 64 KB SPI blit when the framebuffer is byte-identical to
+    // the last one pushed. Common on idle screens (launcher menu at rest,
+    // a paused game), and saves both power and CPU — memcmp over 8 KB is
+    // roughly two orders of magnitude cheaper than the SPI write.
+    static uint8_t last_fb[FB_W * FB_H];
+    const uint8_t* fb = canvas.buffer();
+    if (memcmp(fb, last_fb, sizeof(last_fb)) != 0) {
+        memcpy(last_fb, fb, sizeof(last_fb));
+        blit_to_screen();
+    }
 
     delay(33); // ~30 fps
 }

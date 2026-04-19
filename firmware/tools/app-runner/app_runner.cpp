@@ -10,7 +10,6 @@
 //   app_runner <wasm_path>
 //              [--frames N]     number of render() calls (default 1)
 //              [--seed S]       MT19937 seed (default 42)
-//              [--scene K]      set_scene(K) before rendering if supported
 //              [--out out.png]  framebuffer output (default fb.png)
 //              [--out-bin bin]  also dump raw 128x64 bytes (0/1) to file
 //              [--bg hex]       hex RGB for "0" pixels (default 000000)
@@ -67,7 +66,6 @@ struct Args {
     const char* wasm_path = nullptr;
     uint32_t frames = 1;
     uint32_t seed = 42;
-    int32_t  scene = -1;
     const char* out_png = "fb.png";
     const char* out_bin = nullptr;
     uint8_t bg[3] = {0, 0, 0};
@@ -88,7 +86,6 @@ static Args parse_args(int argc, char** argv) {
         };
         if      (std::strcmp(arg, "--frames")  == 0) a.frames  = (uint32_t)std::atoi(need("--frames"));
         else if (std::strcmp(arg, "--seed")    == 0) a.seed    = (uint32_t)std::atoi(need("--seed"));
-        else if (std::strcmp(arg, "--scene")   == 0) a.scene   = std::atoi(need("--scene"));
         else if (std::strcmp(arg, "--out")     == 0) a.out_png = need("--out");
         else if (std::strcmp(arg, "--out-bin") == 0) a.out_bin = need("--out-bin");
         else if (std::strcmp(arg, "--bg")      == 0) parse_hex_color(need("--bg"), a.bg);
@@ -124,15 +121,6 @@ static std::vector<uint8_t> expand(const uint8_t* fb, const Args& a) {
     return rgb;
 }
 
-// Optional: call set_scene(K) if the app exports it. Silently no-op otherwise.
-static void maybe_set_scene(int32_t scene) {
-    // Peek inside wasm_host's runtime. wasm_host doesn't export a helper for
-    // this yet, so we rebuild the lookup here — it's just a wasm3 FindFunction
-    // via the module cache. Harmless if not present.
-    // (Omitted for now: circles doesn't use scenes.)
-    (void)scene;
-}
-
 int main(int argc, char** argv) {
     Args a = parse_args(argc, argv);
 
@@ -144,8 +132,6 @@ int main(int argc, char** argv) {
 
     const char* err = wasm_host::init(canvas, rng, bytes.data(), (uint32_t)bytes.size());
     if (err) { std::fprintf(stderr, "wasm init: %s\n", err); return 1; }
-
-    if (a.scene >= 0) maybe_set_scene(a.scene);
 
     for (uint32_t f = 0; f < a.frames; ++f) {
         wasm_host::render();

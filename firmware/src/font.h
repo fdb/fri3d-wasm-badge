@@ -31,8 +31,10 @@ public:
     // Construct from a u8g2-format byte array in fonts.h.
     explicit Font(const uint8_t* data, size_t len);
 
-    // Convenience: resolve one of the four built-in FontIds.
-    static Font from_id(FontId id);
+    // Resolve one of the four built-in FontIds to a statically-cached Font.
+    // Header parsing happens once per FontId per process — hot text paths
+    // like Canvas::draw_str can call this every frame without reparsing.
+    static const Font& from_id(FontId id);
 
     void draw_str(FontDrawTarget& target, int32_t x, int32_t y,
                   const char* text, Color color) const;

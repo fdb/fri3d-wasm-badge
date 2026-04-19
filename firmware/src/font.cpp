@@ -39,7 +39,7 @@ struct FontDecoder {
         uint16_t bit_pos_plus_cnt = (uint16_t)bit_pos + cnt;
         if (bit_pos_plus_cnt >= 8) {
             uint8_t shift = 8 - bit_pos;
-            if (ptr < SIZE_MAX) ptr++;
+            ptr++;
             val |= ((uint16_t)byte_at(ptr)) << shift;
             bit_pos_plus_cnt -= 8;
         }
@@ -153,14 +153,19 @@ Font::Info Font::info_from_data(const uint8_t* data, size_t len) {
 Font::Font(const uint8_t* data, size_t len)
     : m_data(data), m_len(len), m_info(info_from_data(data, len)) {}
 
-Font Font::from_id(FontId id) {
-    switch (id) {
-        case FontId::Primary:    return Font(U8G2_FONT_HELVB08_TR,      sizeof(U8G2_FONT_HELVB08_TR));
-        case FontId::Secondary:  return Font(U8G2_FONT_HAXRCORP4089_TR, sizeof(U8G2_FONT_HAXRCORP4089_TR));
-        case FontId::Keyboard:   return Font(U8G2_FONT_PROFONT11_MR,    sizeof(U8G2_FONT_PROFONT11_MR));
-        case FontId::BigNumbers: return Font(U8G2_FONT_PROFONT22_TN,    sizeof(U8G2_FONT_PROFONT22_TN));
-    }
-    return Font(U8G2_FONT_HELVB08_TR, sizeof(U8G2_FONT_HELVB08_TR));
+const Font& Font::from_id(FontId id) {
+    // Parsed once at first access, reused forever. 4 × sizeof(Font) is small
+    // and avoids the 23-byte header parse that would otherwise run on every
+    // Canvas::draw_str call.
+    static const Font FONTS[4] = {
+        Font(U8G2_FONT_HELVB08_TR,      sizeof(U8G2_FONT_HELVB08_TR)),
+        Font(U8G2_FONT_HAXRCORP4089_TR, sizeof(U8G2_FONT_HAXRCORP4089_TR)),
+        Font(U8G2_FONT_PROFONT11_MR,    sizeof(U8G2_FONT_PROFONT11_MR)),
+        Font(U8G2_FONT_PROFONT22_TN,    sizeof(U8G2_FONT_PROFONT22_TN)),
+    };
+    uint32_t idx = (uint32_t)id;
+    if (idx > 3) idx = 0;
+    return FONTS[idx];
 }
 
 uint8_t Font::byte_at(size_t idx) const {

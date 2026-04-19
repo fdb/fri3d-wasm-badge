@@ -100,7 +100,7 @@ fn main() {
         c.draw_disc(64, 32, 0);
     });
 
-    // ---- Rounded variants (to be ported) -------------------------------
+    // ---- Rounded variants ----------------------------------------------
     run("rframe_5r", |c| {
         c.set_color(Color::Black);
         c.draw_rframe(10, 10, 60, 40, 5);

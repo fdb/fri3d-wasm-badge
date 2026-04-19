@@ -46,6 +46,7 @@ emcc \
   "$WASM3"/m3_module.c \
   "$WASM3"/m3_optimize.c \
   "$WASM3"/m3_parse.c \
+  firmware/src/app_switcher.cpp \
   firmware/src/canvas.cpp \
   firmware/src/font.cpp \
   firmware/src/random.cpp \

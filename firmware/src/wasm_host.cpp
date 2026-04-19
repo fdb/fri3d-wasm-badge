@@ -1,11 +1,8 @@
 // wasm3 integration: hosts the .wasm apps defined under fri3d-app-*/ on the
-// real badge by exposing the same "env" module of 24 host functions that the
-// desktop emulator exposes via wasmi.
-//
-// Scope: host functions that matter for rendering (canvas_*, random_*,
-// get_time_ms) are fully implemented. Functions we don't yet need
-// (timers, start_app, fonts, draw_str) are wired as no-op stubs so any
-// app that references them still links cleanly.
+// real badge and the browser by exposing the same 24-function "env" module
+// the Rust SDK (fri3d-wasm-api) expects. All canvas / random / font /
+// start_app / exit_to_launcher imports are live; timer-related imports are
+// no-ops since the main loop already renders every frame.
 
 #include "wasm_host.h"
 
@@ -268,29 +265,29 @@ const char* wasm_host::init(fri3d::Canvas& canvas,
     g_canvas = &canvas;
     g_random = &random;
 
-    host_log("%s\n","[wasm] m3_NewEnvironment");
+    host_log("[wasm] m3_NewEnvironment\n");
     g_env = m3_NewEnvironment();
     if (!g_env) return "m3_NewEnvironment failed";
 
-    host_log("%s\n","[wasm] m3_NewRuntime");
+    host_log("[wasm] m3_NewRuntime\n");
     g_runtime = m3_NewRuntime(g_env, WASM_STACK_BYTES, nullptr);
     if (!g_runtime) return "m3_NewRuntime failed";
 
-    host_log("%s\n","[wasm] m3_ParseModule");
+    host_log("[wasm] m3_ParseModule\n");
     M3Result r = m3_ParseModule(g_env, &g_module, wasm_bytes, wasm_len);
     if (r) return r;
 
-    host_log("%s\n","[wasm] m3_LoadModule");
+    host_log("[wasm] m3_LoadModule\n");
     r = m3_LoadModule(g_runtime, g_module);
     if (r) return r;
     // m3_LoadModule transfers ownership of the module to the runtime;
     // don't free g_module ourselves.
 
-    host_log("%s\n","[wasm] link_host_functions");
+    host_log("[wasm] link_host_functions\n");
     r = link_host_functions();
     if (r) return r;
 
-    host_log("%s\n","[wasm] find render");
+    host_log("[wasm] find render\n");
     r = m3_FindFunction(&g_fn_render, g_runtime, "render");
     if (r) return r;
 

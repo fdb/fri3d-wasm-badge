@@ -327,14 +327,12 @@ void Canvas::draw_rbox(int32_t x, int32_t y, uint32_t width, uint32_t height, ui
 // ---- Text ------------------------------------------------------------------
 
 void Canvas::draw_str(int32_t x, int32_t y, const char* text) {
-    Font font = Font::from_id(m_font);
     CanvasFontTarget target(*this);
-    font.draw_str(target, x, y, text, m_color);
+    Font::from_id(m_font).draw_str(target, x, y, text, m_color);
 }
 
 uint32_t Canvas::string_width(const char* text) const {
-    Font font = Font::from_id(m_font);
-    return font.string_width(text);
+    return Font::from_id(m_font).string_width(text);
 }
 
 } // namespace fri3d
