@@ -69,6 +69,16 @@ var Module = {
         const h = api.fbHeight();
         return new Uint8Array(Module.HEAPU8.buffer, ptr, w * h).slice();
       },
+
+      // Bench helper: run N render() calls and return total + per-frame ms.
+      // Useful for A/B-ing app-side perf changes (mandelbrot, etc).
+      bench(frames = 5) {
+        const t0 = performance.now();
+        for (let i = 0; i < frames; i++) api.render();
+        const total = performance.now() - t0;
+        return { frames, total_ms: total, per_frame_ms: total / frames };
+      },
+
       KEY: { UP: 0, DOWN: 1, LEFT: 2, RIGHT: 3, OK: 4, BACK: 5 },
     };
 

@@ -250,7 +250,15 @@ void loop() {
 
     app_switcher::dispatch();
 
+    const uint32_t t_render0 = millis();
     wasm_host::render();
+    const uint32_t dt_render = millis() - t_render0;
+    // Only log renders that took real work — avoids spamming on idle
+    // screens like the launcher. Compute-heavy apps (Mandelbrot, snake AI)
+    // will print per-frame.
+    if (dt_render > 30) {
+        Serial.printf("[perf] render %u ms\n", dt_render);
+    }
 
     // Skip the 64 KB SPI blit when the framebuffer is byte-identical to
     // the last one pushed. Common on idle screens (launcher menu at rest,
