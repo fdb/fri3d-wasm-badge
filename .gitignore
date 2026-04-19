@@ -5,3 +5,6 @@ tests/visual/output/
 tests/trace/output/
 tmp_src/
 target/
+# Playwright / agent debugging artifacts
+.playwright-mcp/
+/*.png

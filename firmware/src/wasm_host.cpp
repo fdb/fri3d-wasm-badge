@@ -9,8 +9,8 @@
 
 #include "wasm_host.h"
 
-#include <Arduino.h>
 #include <string.h>
+#include "host_platform.h"
 
 // wasm3 headers expose a C API. Wrap the include to avoid name leakage.
 extern "C" {
@@ -185,7 +185,7 @@ m3ApiRawFunction(h_random_range) {
 
 m3ApiRawFunction(h_get_time_ms) {
     m3ApiReturnType(int32_t);
-    m3ApiReturn((int32_t)millis());
+    m3ApiReturn((int32_t)host_millis());
 }
 
 m3ApiRawFunction(h_start_timer_ms) {
@@ -268,36 +268,36 @@ const char* wasm_host::init(fri3d::Canvas& canvas, fri3d::Random& random) {
     g_canvas = &canvas;
     g_random = &random;
 
-    Serial.println("[wasm] m3_NewEnvironment");
+    host_log("%s\n","[wasm] m3_NewEnvironment");
     g_env = m3_NewEnvironment();
     if (!g_env) return "m3_NewEnvironment failed";
 
-    Serial.println("[wasm] m3_NewRuntime");
+    host_log("%s\n","[wasm] m3_NewRuntime");
     g_runtime = m3_NewRuntime(g_env, WASM_STACK_BYTES, nullptr);
     if (!g_runtime) return "m3_NewRuntime failed";
 
-    Serial.println("[wasm] m3_ParseModule");
+    host_log("%s\n","[wasm] m3_ParseModule");
     M3Result r = m3_ParseModule(g_env, &g_module, embedded_app_wasm, embedded_app_wasm_len);
     if (r) return r;
 
-    Serial.println("[wasm] m3_LoadModule");
+    host_log("%s\n","[wasm] m3_LoadModule");
     r = m3_LoadModule(g_runtime, g_module);
     if (r) return r;
     // m3_LoadModule transfers ownership of the module to the runtime;
     // don't free g_module ourselves.
 
-    Serial.println("[wasm] link_host_functions");
+    host_log("%s\n","[wasm] link_host_functions");
     r = link_host_functions();
     if (r) return r;
 
-    Serial.println("[wasm] find render");
+    host_log("%s\n","[wasm] find render");
     r = m3_FindFunction(&g_fn_render, g_runtime, "render");
     if (r) return r;
 
     // on_input is optional (test apps that don't take input still work).
     M3Result ri = m3_FindFunction(&g_fn_on_input, g_runtime, "on_input");
     if (ri && ri != m3Err_functionLookupFailed) {
-        Serial.printf("[wasm] warn: on_input lookup: %s\n", ri);
+        host_log("[wasm] warn: on_input lookup: %s\n", ri);
     }
 
     return nullptr;
@@ -311,7 +311,7 @@ void wasm_host::render() {
     if (g_canvas) g_canvas->clear();
     M3Result r = m3_CallV(g_fn_render);
     if (r) {
-        Serial.printf("[wasm] render trap: %s\n", r);
+        host_log("[wasm] render trap: %s\n", r);
     }
 }
 
@@ -319,7 +319,7 @@ void wasm_host::on_input(uint32_t key, uint32_t kind) {
     if (!g_fn_on_input) return;
     M3Result r = m3_CallV(g_fn_on_input, (int32_t)key, (int32_t)kind);
     if (r) {
-        Serial.printf("[wasm] on_input trap: %s\n", r);
+        host_log("[wasm] on_input trap: %s\n", r);
     }
 }
 

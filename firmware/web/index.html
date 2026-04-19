@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fri3d WASM Badge — Web Harness</title>
+<style>
+  html, body {
+    background: #111;
+    color: #ddd;
+    font-family: ui-monospace, Menlo, monospace;
+    margin: 0;
+    padding: 1rem;
+  }
+  h1 { font-size: 1rem; color: #aaa; margin: 0 0 0.75rem; }
+  .frame {
+    display: inline-block;
+    padding: 28px 10px;
+    background: #18C3;   /* same dark-blue/grey chrome as the hardware */
+    background: rgb(24, 27, 34);
+    border: 1px solid #333;
+    border-radius: 4px;
+  }
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+    border: 1px solid #444;
+    background: #000;
+  }
+  .label {
+    color: #fff;
+    font-size: 0.875rem;
+    text-align: center;
+    margin-bottom: 0.75rem;
+  }
+  .hint {
+    color: #aaa;
+    font-size: 0.75rem;
+    text-align: center;
+    margin-top: 0.5rem;
+  }
+  #log {
+    margin-top: 1rem;
+    font-size: 0.75rem;
+    color: #888;
+    white-space: pre;
+    height: 8rem;
+    overflow-y: auto;
+    background: #000;
+    border: 1px solid #333;
+    padding: 0.5rem;
+    width: 560px;
+  }
+</style>
+</head>
+<body>
+  <h1>Fri3d WASM Badge — Web Harness</h1>
+  <div class="frame">
+    <div class="label">Fri3d WASM Badge</div>
+    <canvas id="screen" width="256" height="128"></canvas>
+    <div class="hint">A: OK &nbsp; B: Back &nbsp; Joystick: D-pad</div>
+  </div>
+  <div id="log"></div>
+
+<script>
+// Key bindings match the hardware's input mapping in main.cpp:
+//   0=UP 1=DOWN 2=LEFT 3=RIGHT 4=OK 5=BACK
+const KEYMAP = {
+  ArrowUp: 0, w: 0, W: 0,
+  ArrowDown: 1, s: 1, S: 1,
+  ArrowLeft: 2, a: 2, A: 2,
+  ArrowRight: 3, d: 3, D: 3,
+  z: 4, Z: 4, Enter: 4,
+  x: 5, X: 5, Backspace: 5,
+};
+// Event kinds match wasm_host::event: PRESS=0, RELEASE=1, SHORT_PRESS=2, LONG_PRESS=3.
+const EVENT_PRESS = 0, EVENT_RELEASE = 1, EVENT_SHORT = 2, EVENT_LONG = 3;
+const LONG_PRESS_MS = 300;
+
+// Foreground/background mirror the hardware's green-on-black look.
+const FG = [0, 255, 0], BG = [0, 0, 0];
+
+const logEl = document.getElementById('log');
+function log(...args) {
+  logEl.textContent += args.join(' ') + '\n';
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+// The module exposes web_* entry points; we keep cwrap'd references here.
+const api = {};
+const pressStart = new Map();
+
+var Module = {
+  noInitialRun: true,
+  print: (txt) => log(txt),
+  printErr: (txt) => log('[err]', txt),
+  onRuntimeInitialized() {
+    // Grab typed references to the C symbols we care about.
+    api.init         = Module.cwrap('web_init', 'number', []);
+    api.render       = Module.cwrap('web_render', null, []);
+    api.onInput      = Module.cwrap('web_on_input', null, ['number', 'number']);
+    api.fbPtr        = Module.cwrap('web_fb', 'number', []);
+    api.fbWidth      = Module.cwrap('web_fb_width', 'number', []);
+    api.fbHeight     = Module.cwrap('web_fb_height', 'number', []);
+    api.rngGet       = Module.cwrap('web_rng_get', 'number', []);
+    api.rngSeed      = Module.cwrap('web_rng_seed', null, ['number']);
+    if (api.init() !== 0) { log('init failed'); return; }
+
+    setupInput();
+    loop();
+
+    // Expose a tiny test surface so Playwright can drive the harness.
+    window.fri3d = {
+      press(key)           { api.onInput(key, EVENT_PRESS); },
+      release(key, heldMs) {
+        api.onInput(key, EVENT_RELEASE);
+        api.onInput(key, heldMs >= LONG_PRESS_MS ? EVENT_LONG : EVENT_SHORT);
+      },
+      tap(key, heldMs = 50) {
+        this.press(key);
+        this.release(key, heldMs);
+      },
+      render() { api.render(); blit(); },
+      rngGet()         { return api.rngGet(); },
+      rngSeed(s)       { api.rngSeed(s >>> 0); },
+      readFb() {
+        const ptr = api.fbPtr();
+        const w = api.fbWidth();
+        const h = api.fbHeight();
+        return new Uint8Array(Module.HEAPU8.buffer, ptr, w * h).slice();
+      },
+      KEY: { UP: 0, DOWN: 1, LEFT: 2, RIGHT: 3, OK: 4, BACK: 5 },
+    };
+    log('[web] fri3d test surface ready on window.fri3d');
+  }
+};
+
+function setupInput() {
+  document.addEventListener('keydown', (e) => {
+    if (e.repeat) return;
+    const k = KEYMAP[e.key];
+    if (k === undefined) return;
+    e.preventDefault();
+    pressStart.set(k, performance.now());
+    api.onInput(k, EVENT_PRESS);
+  });
+  document.addEventListener('keyup', (e) => {
+    const k = KEYMAP[e.key];
+    if (k === undefined) return;
+    e.preventDefault();
+    const held = performance.now() - (pressStart.get(k) ?? performance.now());
+    pressStart.delete(k);
+    api.onInput(k, EVENT_RELEASE);
+    api.onInput(k, held >= LONG_PRESS_MS ? EVENT_LONG : EVENT_SHORT);
+  });
+}
+
+// Backing store for one render: 128*64 RGBA (later drawImage'd 2x into the
+// visible 256x128 canvas, matching the hardware's nearest-neighbour upscale).
+const small = document.createElement('canvas');
+small.width = 128; small.height = 64;
+const sctx = small.getContext('2d', { willReadFrequently: true });
+const sctxImg = sctx.createImageData(128, 64);
+const screen = document.getElementById('screen');
+const sx = screen.getContext('2d');
+sx.imageSmoothingEnabled = false;
+
+function blit() {
+  const ptr = api.fbPtr();
+  const fb = new Uint8Array(Module.HEAPU8.buffer, ptr, 128 * 64);
+  const d = sctxImg.data;
+  for (let i = 0; i < 128 * 64; i++) {
+    const c = fb[i] ? FG : BG;
+    d[i*4+0] = c[0]; d[i*4+1] = c[1]; d[i*4+2] = c[2]; d[i*4+3] = 255;
+  }
+  sctx.putImageData(sctxImg, 0, 0);
+  sx.drawImage(small, 0, 0, 256, 128);
+}
+
+function loop() {
+  api.render();
+  blit();
+  requestAnimationFrame(loop);
+}
+</script>
+<script src="firmware.js"></script>
+</body>
+</html>

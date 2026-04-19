@@ -288,13 +288,16 @@ pub fn random_seed(seed: u32) {
 }
 
 pub fn random_get() -> u32 {
+    // Reinterpret the 32 bits as unsigned — MT19937's full range includes
+    // values with the top bit set, which appear negative in i32. Clamping
+    // with .max(0) would collapse ~half of the output space to zero.
     #[cfg(target_arch = "wasm32")]
     unsafe {
-        return bindings::random_get().max(0) as u32;
+        return bindings::random_get() as u32;
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
-        bindings::random_get().max(0) as u32
+        bindings::random_get() as u32
     }
 }
 

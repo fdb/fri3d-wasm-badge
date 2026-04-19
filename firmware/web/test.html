@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fri3d WASM Badge — Tests</title>
+<style>
+  body { background: #111; color: #ddd; font-family: ui-monospace, Menlo, monospace; padding: 1rem; }
+  h1 { font-size: 1rem; color: #aaa; }
+  pre { background: #000; color: #ddd; padding: 0.5rem; border: 1px solid #333; }
+  .pass { color: #8f8; }
+  .fail { color: #f88; }
+</style>
+</head>
+<body>
+  <h1>Fri3d WASM Badge — Tests</h1>
+  <canvas id="screen" width="256" height="128" style="display:none"></canvas>
+  <pre id="log"></pre>
+  <pre id="summary"></pre>
+
+<script>
+// Minimal init — we don't draw to screen, just provide the same window.fri3d
+// surface as the main harness so tests can poke the firmware.
+const KEYMAP = {};
+const logEl = document.getElementById('log');
+const summaryEl = document.getElementById('summary');
+function log(...a) { logEl.textContent += a.join(' ') + '\n'; }
+
+const api = {};
+var Module = {
+  noInitialRun: true,
+  print: (txt) => log(txt),
+  printErr: (txt) => log('[err]', txt),
+  onRuntimeInitialized() {
+    api.init       = Module.cwrap('web_init', 'number', []);
+    api.render     = Module.cwrap('web_render', null, []);
+    api.onInput    = Module.cwrap('web_on_input', null, ['number', 'number']);
+    api.fbPtr      = Module.cwrap('web_fb', 'number', []);
+    api.fbWidth    = Module.cwrap('web_fb_width', 'number', []);
+    api.fbHeight   = Module.cwrap('web_fb_height', 'number', []);
+    api.rngGet     = Module.cwrap('web_rng_get', 'number', []);
+    api.rngSeed    = Module.cwrap('web_rng_seed', null, ['number']);
+    if (api.init() !== 0) { log('init failed'); return; }
+
+    window.fri3d = {
+      press(key)           { api.onInput(key, 0); },
+      release(key, ms)     {
+        api.onInput(key, 1);
+        api.onInput(key, ms >= 300 ? 3 : 2);
+      },
+      tap(key, ms = 50)    { this.press(key); this.release(key, ms); },
+      render()             { api.render(); },
+      rngGet()             { return api.rngGet() >>> 0; },
+      rngSeed(s)           { api.rngSeed(s >>> 0); },
+      readFb() {
+        const ptr = api.fbPtr();
+        const w = api.fbWidth();
+        const h = api.fbHeight();
+        return new Uint8Array(Module.HEAPU8.buffer, ptr, w * h).slice();
+      },
+      KEY: { UP: 0, DOWN: 1, LEFT: 2, RIGHT: 3, OK: 4, BACK: 5 },
+    };
+
+    // Auto-run once the suite is loaded — Playwright can still call
+    // runTests() again to re-run after hot-reloading fixtures.
+    const r = window.runTests();
+    for (const row of r.results) {
+      log(row.ok ? '[pass] ' + row.name : '[FAIL] ' + row.name + ' — ' + row.error);
+    }
+    summaryEl.className = r.failed === 0 ? 'pass' : 'fail';
+    summaryEl.textContent = `${r.passed}/${r.passed + r.failed} passed`;
+    window.testResults = r;
+  }
+};
+</script>
+<script src="tests.js"></script>
+<script src="firmware.js"></script>
+</body>
+</html>
