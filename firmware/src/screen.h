@@ -61,6 +61,12 @@ public:
     void circle(int32_t x, int32_t y, int32_t radius, uint32_t rgb);
     void disc  (int32_t x, int32_t y, int32_t radius, uint32_t rgb);
 
+    // Polygon primitives. Points are interleaved x0,y0,x1,y1,...,xN-1,yN-1.
+    // polyline doesn't close; polygon and polygon_fill do.
+    void polyline    (const int32_t* pts, int32_t n_points, uint32_t rgb);
+    void polygon     (const int32_t* pts, int32_t n_points, uint32_t rgb);
+    void polygon_fill(const int32_t* pts, int32_t n_points, uint32_t rgb);
+
     // Render text with one of the legacy fonts in `rgb`, baseline at (x, y).
     void text(int32_t x, int32_t y, const char* str, uint32_t rgb, FontId font);
 

@@ -310,6 +310,38 @@ m3ApiRawFunction(h_screen_text) {
     m3ApiSuccess();
 }
 
+// Polygon family — pts is a packed [x0,y0,x1,y1,...] i32 array of length
+// 2*n_points in the wasm linear memory.
+m3ApiRawFunction(h_screen_polyline) {
+    m3ApiGetArgMem(const int32_t*, pts);
+    m3ApiGetArg(int32_t, n_points);
+    m3ApiGetArg(int32_t, rgb);
+    if (g_screen && pts && n_points >= 2) {
+        g_screen->polyline(pts, n_points, (uint32_t)rgb);
+    }
+    m3ApiSuccess();
+}
+
+m3ApiRawFunction(h_screen_polygon) {
+    m3ApiGetArgMem(const int32_t*, pts);
+    m3ApiGetArg(int32_t, n_points);
+    m3ApiGetArg(int32_t, rgb);
+    if (g_screen && pts && n_points >= 2) {
+        g_screen->polygon(pts, n_points, (uint32_t)rgb);
+    }
+    m3ApiSuccess();
+}
+
+m3ApiRawFunction(h_screen_polygon_fill) {
+    m3ApiGetArgMem(const int32_t*, pts);
+    m3ApiGetArg(int32_t, n_points);
+    m3ApiGetArg(int32_t, rgb);
+    if (g_screen && pts && n_points >= 3) {
+        g_screen->polygon_fill(pts, n_points, (uint32_t)rgb);
+    }
+    m3ApiSuccess();
+}
+
 // ---------------------------------------------------------------------------
 // Lifecycle.
 
@@ -367,6 +399,9 @@ static const char* link_host_functions() {
     LINK("v(iiii)",   screen_circle);
     LINK("v(iiii)",   screen_disc);
     LINK("v(iiiii)",  screen_text);
+    LINK("v(iii)",    screen_polyline);
+    LINK("v(iii)",    screen_polygon);
+    LINK("v(iii)",    screen_polygon_fill);
 
 #undef LINK
     return nullptr;

@@ -12,7 +12,7 @@
 // new color pipeline.
 
 use fri3d_wasm_api as api;
-use api::{screen, theme};
+use api::{screen, theme, ui};
 use api::input as kbd;
 
 const W: i32 = 296;
@@ -101,7 +101,7 @@ fn on_input_impl(key: u32, kind: u32) {
 
 // ---- Idle scene ------------------------------------------------------------
 fn draw_idle(phase: i16) {
-    draw_status_bar("IDLE", "03:14");
+    ui::status_bar("IDLE", "03:14");
 
     match phase {
         0 => scene_sleep(),
@@ -148,7 +148,7 @@ fn scene_sleep() {
     screen::line(fx,      fy + 20, fx + 85, fy + 28, theme::INK);
     screen::line(fx + 85, fy + 15, fx + 85, fy + 28, theme::INK);
     // Head — diamond tucked in
-    fox_head(fx + 60, fy, theme::INK, /*sleeping=*/ true);
+    ui::fox_mark(fx + 74, fy - 8, theme::INK, ui::FoxState::Sleep);
     // Tail curl
     screen::line(fx,      fy + 20, fx - 8, fy + 10, theme::INK);
     screen::line(fx - 8,  fy + 10, fx - 4, fy - 2,  theme::INK);
@@ -199,7 +199,7 @@ fn scene_stars() {
     screen::line(fx,      fy + 25, fx + 40, fy + 25, theme::INK);
     screen::line(fx + 40, fy + 20, fx + 40, fy + 25, theme::INK);
     screen::line(fx,      fy + 20, fx,      fy + 25, theme::INK);
-    fox_head(fx + 10, fy - 5, theme::INK, false);
+    ui::fox_mark(fx + 24, fy - 13, theme::INK, ui::FoxState::Idle);
     // Tail
     screen::line(fx + 40, fy + 20, fx + 55, fy + 10, theme::INK);
     screen::line(fx + 55, fy + 10, fx + 58, fy - 5,  theme::INK);
@@ -224,7 +224,7 @@ fn scene_hack() {
     // Fox at keyboard at (180, 105)
     let fx = 180;
     let fy = 105;
-    fox_head(fx, fy, theme::INK, false);
+    ui::fox_mark(fx + 14, fy - 8, theme::INK, ui::FoxState::Alert);
     // Body
     screen::stroke_rect(fx - 10, fy + 30, 48, 25, theme::INK);
     // Paws on keyboard
@@ -235,39 +235,10 @@ fn scene_hack() {
     screen::line(170, 162, 250, 162, theme::INK_DEEP);
 }
 
-// Geometric Fox head (matches design's FoxMark): inverted diamond face
-// with two triangular ears. `sleeping` swaps eyes for closed lids.
-fn fox_head(x: i32, y: i32, color: u32, sleeping: bool) {
-    // Face: inverted diamond
-    screen::line(x,      y,      x + 28, y,      color);
-    screen::line(x,      y,      x + 14, y + 22, color);
-    screen::line(x + 28, y,      x + 14, y + 22, color);
-    // Snout detail
-    screen::line(x,      y,      x + 14, y + 10, color);
-    screen::line(x + 28, y,      x + 14, y + 10, color);
-    screen::line(x + 14, y + 10, x + 14, y + 22, color);
-    // Ears
-    screen::line(x,      y,      x + 4,  y - 8,  color);
-    screen::line(x + 4,  y - 8,  x + 10, y,      color);
-    screen::line(x + 28, y,      x + 24, y - 8,  color);
-    screen::line(x + 24, y - 8,  x + 18, y,      color);
-    // Eyes
-    if sleeping {
-        screen::line(x + 5,  y + 6, x + 9,  y + 6, theme::WHITE);
-        screen::line(x + 19, y + 6, x + 23, y + 6, theme::WHITE);
-    } else {
-        screen::pixel(x + 7,  y + 6, theme::WHITE);
-        screen::pixel(x + 21, y + 6, theme::WHITE);
-        screen::pixel(x + 7,  y + 7, theme::WHITE);
-        screen::pixel(x + 21, y + 7, theme::WHITE);
-    }
-}
-
 // ---- App grid scene --------------------------------------------------------
 fn draw_app_grid() {
-    draw_status_bar("APPS", "14:32");
-
-    screen::text(W / 2 - 25, 22, "SELECT APP", theme::WHITE, api::font::PRIMARY);
+    ui::status_bar("APPS", "14:32");
+    ui::text_centered(0, W, 22, "SELECT APP", theme::WHITE, api::font::PRIMARY);
 
     let cols: i32 = 3;
     let cell_w: i32 = (W - 20) / cols;     // ~92
@@ -286,28 +257,7 @@ fn draw_app_grid() {
         let inner_h = cell_h - 8;
         let is_sel = i == sel;
 
-        let border = if is_sel { theme::ACCENT } else { theme::INK_DEEP };
-        screen::stroke_rect(cx, cy, inner_w, inner_h, border);
-
-        // Selection: dashed outer accent ring (we draw four small ticks
-        // at each side rather than full dashes — keeps it cheap and
-        // visually distinct).
-        if is_sel {
-            let oc = cx - 3;
-            let oy = cy - 3;
-            let ow = inner_w + 6;
-            let oh = inner_h + 6;
-            // Corner brackets
-            let l = 6;
-            screen::line(oc,         oy,         oc + l,     oy,         theme::ACCENT);
-            screen::line(oc,         oy,         oc,         oy + l,     theme::ACCENT);
-            screen::line(oc + ow,    oy,         oc + ow - l, oy,        theme::ACCENT);
-            screen::line(oc + ow,    oy,         oc + ow,    oy + l,     theme::ACCENT);
-            screen::line(oc,         oy + oh,    oc + l,     oy + oh,    theme::ACCENT);
-            screen::line(oc,         oy + oh,    oc,         oy + oh - l, theme::ACCENT);
-            screen::line(oc + ow,    oy + oh,    oc + ow - l, oy + oh,   theme::ACCENT);
-            screen::line(oc + ow,    oy + oh,    oc + ow,    oy + oh - l, theme::ACCENT);
-        }
+        ui::card(cx, cy, inner_w, inner_h, is_sel);
 
         // Icon centred in upper portion of the cell
         let icon_color = if is_sel { theme::ACCENT } else { theme::INK };
@@ -315,40 +265,12 @@ fn draw_app_grid() {
 
         // Name centred near bottom
         let label = APPS[i as usize].name;
-        let label_w = (label.len() as i32) * 6;  // approximate
-        let lx = cx + (inner_w - label_w) / 2;
         let ly = cy + inner_h - 12;
         let label_color = if is_sel { theme::ACCENT } else { theme::WHITE };
-        screen::text(lx, ly, label, label_color, api::font::PRIMARY);
+        ui::text_centered(cx, cx + inner_w, ly, label, label_color, api::font::PRIMARY);
     }
 
-    // Bottom hint bar
-    let y_strip = H - 14;
-    screen::line(0, y_strip, W, y_strip, theme::INK_DEEP);
-    screen::text(6, H - 5, "NAV: ARROWS  A: LAUNCH  B: BACK", theme::INK_DIM, api::font::PRIMARY);
-}
-
-// ---- Status bar ------------------------------------------------------------
-fn draw_status_bar(label: &str, time: &str) {
-    screen::line(0, 14, W, 14, theme::INK_DEEP);
-    screen::text(6, 10, label, theme::WHITE, api::font::PRIMARY);
-    let tx = W - 30;
-    screen::text(tx, 10, time, theme::INK, api::font::PRIMARY);
-    // Battery icon
-    let bx = W - 60;
-    screen::stroke_rect(bx, 4, 18, 8, theme::INK);
-    screen::fill_rect(bx + 18, 6, 1, 4, theme::INK);
-    screen::fill_rect(bx + 2, 6, 11, 4, theme::INK);
-    // Wifi icon (3 arcs as concentric small circles cut to top half)
-    let wx = W - 78;
-    screen::pixel(wx + 4, 10, theme::INK);
-    screen::pixel(wx + 3, 10, theme::INK);
-    screen::pixel(wx + 5, 10, theme::INK);
-    screen::pixel(wx + 4, 9,  theme::INK);
-    screen::pixel(wx + 3, 8,  theme::INK);
-    screen::pixel(wx + 5, 8,  theme::INK);
-    screen::pixel(wx + 2, 7,  theme::INK);
-    screen::pixel(wx + 6, 7,  theme::INK);
+    ui::hint_bar("NAV: ARROWS  A: LAUNCH  B: BACK");
 }
 
 // ---- App icons (vector glyphs in ~20x20 box centred on cx,cy) --------------

@@ -48,6 +48,12 @@ mod bindings {
         pub fn screen_circle(x: i32, y: i32, radius: i32, rgb: i32);
         pub fn screen_disc(x: i32, y: i32, radius: i32, rgb: i32);
         pub fn screen_text(x: i32, y: i32, text: *const u8, rgb: i32, font: i32);
+        // Polygon family — `pts` is a packed [x0,y0,x1,y1,...] array of
+        // length 2*n_points. Polyline is open; polygon and polygon_fill
+        // close to the first point.
+        pub fn screen_polyline    (pts: *const i32, n_points: i32, rgb: i32);
+        pub fn screen_polygon     (pts: *const i32, n_points: i32, rgb: i32);
+        pub fn screen_polygon_fill(pts: *const i32, n_points: i32, rgb: i32);
     }
 }
 
@@ -125,6 +131,9 @@ mod bindings {
     pub fn screen_circle(_x: i32, _y: i32, _radius: i32, _rgb: i32) {}
     pub fn screen_disc(_x: i32, _y: i32, _radius: i32, _rgb: i32) {}
     pub fn screen_text(_x: i32, _y: i32, _text: *const u8, _rgb: i32, _font: i32) {}
+    pub fn screen_polyline    (_pts: *const i32, _n: i32, _rgb: i32) {}
+    pub fn screen_polygon     (_pts: *const i32, _n: i32, _rgb: i32) {}
+    pub fn screen_polygon_fill(_pts: *const i32, _n: i32, _rgb: i32) {}
 }
 
 const STR_BUFFER_SIZE: usize = 256;
@@ -497,6 +506,12 @@ pub mod align {
 
 pub mod imgui;
 
+/// Vector UI kit — reusable drawing patterns from the Fri3d badge OS
+/// design system (status bars, cards, hint bars, fox glyphs). Apps that
+/// use these helpers get visual consistency for free instead of every
+/// author re-deriving the look. See [`ui`] for what's available.
+pub mod ui;
+
 /// Full-screen 296x240 RGB color drawing API. Used by the new launcher and
 /// any app written against the design-system aesthetic. Apps that only use
 /// the legacy `canvas_*` functions still work — the host blits the 128x64
@@ -559,6 +574,32 @@ pub mod screen {
                 bindings::screen_text(x, y, ptr, rgb as i32, font as i32);
             }
         });
+    }
+
+    /// Draw a connected line through `pts` (interleaved x,y pairs). Open;
+    /// last point doesn't connect back to first.
+    pub fn polyline(pts: &[i32], rgb: u32) {
+        let n = (pts.len() / 2) as i32;
+        if n < 2 { return; }
+        let ptr = pts.as_ptr();
+        #[cfg(target_arch = "wasm32")] unsafe { bindings::screen_polyline(ptr, n, rgb as i32); }
+        #[cfg(not(target_arch = "wasm32"))] { bindings::screen_polyline(ptr, n, rgb as i32); }
+    }
+    /// Closed outline through `pts`.
+    pub fn polygon(pts: &[i32], rgb: u32) {
+        let n = (pts.len() / 2) as i32;
+        if n < 2 { return; }
+        let ptr = pts.as_ptr();
+        #[cfg(target_arch = "wasm32")] unsafe { bindings::screen_polygon(ptr, n, rgb as i32); }
+        #[cfg(not(target_arch = "wasm32"))] { bindings::screen_polygon(ptr, n, rgb as i32); }
+    }
+    /// Filled polygon (even-odd rule). Up to 32 vertices per scanline.
+    pub fn polygon_fill(pts: &[i32], rgb: u32) {
+        let n = (pts.len() / 2) as i32;
+        if n < 3 { return; }
+        let ptr = pts.as_ptr();
+        #[cfg(target_arch = "wasm32")] unsafe { bindings::screen_polygon_fill(ptr, n, rgb as i32); }
+        #[cfg(not(target_arch = "wasm32"))] { bindings::screen_polygon_fill(ptr, n, rgb as i32); }
     }
 }
 
