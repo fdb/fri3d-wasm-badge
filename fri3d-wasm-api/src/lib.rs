@@ -19,6 +19,11 @@ mod bindings {
         pub fn canvas_draw_disc(x: i32, y: i32, radius: i32);
         pub fn canvas_draw_str(x: i32, y: i32, text: *const u8);
         pub fn canvas_string_width(text: *const u8) -> i32;
+        // Overwrites the entire 128*64 framebuffer in one host call.
+        // `ptr` points to exactly width*height bytes (0 = white, 1 = black).
+        // Use for apps that render whole frames at once (Mandelbrot etc) —
+        // saves the per-pixel wasm3 boundary crossing.
+        pub fn canvas_draw_buffer(ptr: *const u8, len: i32);
         pub fn random_seed(seed: i32);
         pub fn random_get() -> i32;
         pub fn random_range(max: i32) -> i32;
@@ -68,6 +73,8 @@ mod bindings {
     pub fn canvas_string_width(_text: *const u8) -> i32 {
         0
     }
+
+    pub fn canvas_draw_buffer(_ptr: *const u8, _len: i32) {}
 
     pub fn random_seed(_seed: i32) {}
 
@@ -252,6 +259,24 @@ pub fn canvas_draw_str(x: i32, y: i32, text: &str) {
             bindings::canvas_draw_str(x, y, ptr);
         }
     });
+}
+
+/// Overwrite the entire 128x64 framebuffer in one host call. `buffer` must
+/// be exactly canvas_width() * canvas_height() bytes (8192 for the badge),
+/// where 0 = white (background) and 1 = black (foreground). Faster than
+/// per-pixel canvas_draw_dot for apps that render a full frame every time
+/// (Mandelbrot, procedural textures, etc).
+pub fn canvas_draw_buffer(buffer: &[u8]) {
+    let ptr = buffer.as_ptr();
+    let len = buffer.len() as i32;
+    #[cfg(target_arch = "wasm32")]
+    unsafe {
+        bindings::canvas_draw_buffer(ptr, len);
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        bindings::canvas_draw_buffer(ptr, len);
+    }
 }
 
 pub fn canvas_string_width(text: &str) -> u32 {

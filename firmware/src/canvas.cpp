@@ -25,6 +25,13 @@ Canvas::Canvas() { clear(); }
 
 void Canvas::clear() { memset(m_buffer, 0, sizeof(m_buffer)); }
 
+void Canvas::fill_from(const uint8_t* src, size_t len) {
+    if (!src) return;
+    const size_t fb_size = sizeof(m_buffer);
+    const size_t n = len < fb_size ? len : fb_size;
+    memcpy(m_buffer, src, n);
+}
+
 void Canvas::set_pixel(int32_t x, int32_t y, Color c) {
     if (x < 0 || y < 0) return;
     if ((uint32_t)x >= SCREEN_WIDTH || (uint32_t)y >= SCREEN_HEIGHT) return;

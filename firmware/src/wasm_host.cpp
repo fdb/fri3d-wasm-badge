@@ -158,6 +158,15 @@ m3ApiRawFunction(h_canvas_string_width) {
     m3ApiReturn((int32_t)w);
 }
 
+m3ApiRawFunction(h_canvas_draw_buffer) {
+    m3ApiGetArgMem(const uint8_t*, src);
+    m3ApiGetArg(int32_t, len);
+    if (g_canvas && src && len > 0) {
+        g_canvas->fill_from(src, (size_t)len);
+    }
+    m3ApiSuccess();
+}
+
 m3ApiRawFunction(h_random_seed) {
     m3ApiGetArg(int32_t, seed);
     if (g_random) g_random->seed((uint32_t)seed);
@@ -244,6 +253,7 @@ static const char* link_host_functions() {
     LINK("v(iii)",    canvas_draw_disc);
     LINK("v(iii)",    canvas_draw_str);
     LINK("i(i)",      canvas_string_width);
+    LINK("v(ii)",     canvas_draw_buffer);
     LINK("v(i)",      random_seed);
     LINK("i()",       random_get);
     LINK("i(i)",      random_range);

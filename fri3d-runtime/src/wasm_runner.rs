@@ -563,6 +563,26 @@ fn register_host_functions(linker: &mut Linker<HostState>) {
         .expect("register canvas_string_width");
 
     linker
+        .func_wrap(
+            "env",
+            "canvas_draw_buffer",
+            |mut caller: Caller<'_, HostState>, ptr: i32, len: i32| {
+                trace::trace_call(
+                    "canvas_draw_buffer",
+                    &[trace::TraceArg::Int(ptr as i64), trace::TraceArg::Int(len as i64)],
+                );
+                if len <= 0 {
+                    return;
+                }
+                let bytes = read_linear_memory(&mut caller, ptr as u32, len as u32);
+                if let Some(canvas) = caller.data().canvas.clone() {
+                    canvas.borrow_mut().fill_from(&bytes);
+                }
+            },
+        )
+        .expect("register canvas_draw_buffer");
+
+    linker
         .func_wrap("env", "random_seed", |caller: Caller<'_, HostState>, seed: i32| {
             trace::trace_call("random_seed", &[trace::TraceArg::Int(seed as i64)]);
             if let Some(random) = &caller.data().random {
@@ -669,6 +689,20 @@ fn register_host_functions(linker: &mut Linker<HostState>) {
             }
         })
         .expect("register start_app");
+}
+
+fn read_linear_memory(caller: &mut Caller<'_, HostState>, ptr: u32, len: u32) -> Vec<u8> {
+    let memory = match caller.get_export("memory") {
+        Some(Extern::Memory(memory)) => memory,
+        _ => return Vec::new(),
+    };
+    let data = memory.data(caller);
+    let start = ptr as usize;
+    let end = start.saturating_add(len as usize);
+    if start >= data.len() || end > data.len() {
+        return Vec::new();
+    }
+    data[start..end].to_vec()
 }
 
 fn read_c_string(caller: &mut Caller<'_, HostState>, ptr: i32) -> String {

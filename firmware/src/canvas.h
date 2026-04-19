@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <stddef.h>
 
 // 1:1 port of fri3d-runtime/src/canvas.rs semantics. 128x64 mono, 1 byte per
 // pixel: 0 = white (background), 1 = black (foreground). Kept bit-exact with
@@ -36,6 +37,12 @@ public:
     void clear();
     void set_color(Color c) { m_color = c; }
     Color color() const { return m_color; }
+
+    // Bulk overwrite from a caller-owned buffer. Copies min(len, W*H)
+    // bytes; the caller must use the same 0=white / 1=black convention
+    // as buffer(). Used by apps that render whole frames at once and
+    // want to avoid per-pixel host-call overhead.
+    void fill_from(const uint8_t* src, size_t len);
 
     void set_font(FontId id) { m_font = id; }
     FontId font() const { return m_font; }

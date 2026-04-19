@@ -49,6 +49,15 @@ impl Canvas {
         self.buffer.fill(0);
     }
 
+    /// Bulk overwrite — copies up to buffer().len() bytes from `src` using
+    /// the same 0=white / 1=black convention. Matches canvas_draw_buffer in
+    /// firmware/src/canvas.cpp so both hosts produce identical output when
+    /// apps use the bulk-blit host import.
+    pub fn fill_from(&mut self, src: &[u8]) {
+        let n = src.len().min(self.buffer.len());
+        self.buffer[..n].copy_from_slice(&src[..n]);
+    }
+
     pub fn set_color(&mut self, color: Color) {
         self.color = color;
     }
