@@ -1,12 +1,15 @@
-// Fri3d WASM Badge — hardware firmware, phase 2.
+// Fri3d WASM Badge — hardware firmware, phase 3.
 //
 // Pipeline:
-//   1. fri3d::Canvas maintains the emulator's 128x64 mono framebuffer.
-//   2. wasm_host drives a wasm3 interpreter that loads embedded_app.wasm and
+//   1. fri3d::Screen owns a 296x240 RGB565 framebuffer (the full LCD).
+//      New apps draw straight into it via screen_* host imports.
+//   2. fri3d::Canvas keeps the legacy 128x64 mono framebuffer for apps not
+//      yet ported to color. After render(), if no screen_* import was
+//      called the canvas gets blitted into the centre of the screen.
+//   3. wasm_host drives a wasm3 interpreter that loads embedded_apps.h and
 //      calls its render() / on_input() exports via the fri3d-wasm-api ABI.
-//      Host imports on the "env" module map to Canvas + Random + millis().
-//   3. blit_to_screen() upscales 2x into a 256x128 uint16_t buffer in PSRAM.
-//   4. tft.pushImage() flushes that buffer to the GC9307 LCD in one SPI burst.
+//   4. tft.pushImage() flushes the 296x240 RGB565 buffer to the LCD in a
+//      single SPI burst — no per-frame conversion or upscale step.
 
 #include <Arduino.h>
 #include <TFT_eSPI.h>
@@ -17,6 +20,7 @@
 #include "Fri3dBadge_Button.h"
 #include "app_switcher.h"
 #include "canvas.h"
+#include "screen.h"
 #include "input_queue.h"
 #include "random.h"
 #include "wasm_host.h"
@@ -33,19 +37,13 @@ using fri3d::Random;
 
 // ---- Display geometry ------------------------------------------------------
 
-static constexpr int32_t  SCALE     = 2;
-static constexpr int32_t  FB_W      = (int32_t)fri3d::SCREEN_WIDTH;
-static constexpr int32_t  FB_H      = (int32_t)fri3d::SCREEN_HEIGHT;
-static constexpr int32_t  UP_W      = FB_W * SCALE;   // 256
-static constexpr int32_t  UP_H      = FB_H * SCALE;   // 128
-static constexpr int32_t  LCD_W     = 296;
-static constexpr int32_t  LCD_H     = 240;
-static constexpr int32_t  CANVAS_X  = (LCD_W - UP_W) / 2; // 20
-static constexpr int32_t  CANVAS_Y  = (LCD_H - UP_H) / 2; // 56
+static constexpr int32_t  LCD_W = (int32_t)fri3d::SCREEN_W;  // 296
+static constexpr int32_t  LCD_H = (int32_t)fri3d::SCREEN_H;  // 240
 
-static constexpr uint16_t COLOR_BG     = TFT_BLACK;
-static constexpr uint16_t COLOR_FG     = TFT_GREEN;
-static constexpr uint16_t COLOR_CHROME = 0x18C3;
+// Legacy mono apps get blitted in this colour scheme — the design's violet
+// on near-black so old games look like they belong on the new badge OS.
+static constexpr uint32_t LEGACY_FG_RGB = 0x7b6cff;
+static constexpr uint32_t LEGACY_BG_RGB = 0x05050a;
 
 // ---- Hardware objects ------------------------------------------------------
 
@@ -53,7 +51,11 @@ TFT_eSPI tft = TFT_eSPI();
 Canvas   canvas;
 Random   rng(42);
 
-static uint16_t* upscaled = nullptr;
+// 296x240 RGB565 framebuffer. ~142 KB — lives in PSRAM. The Screen object
+// is a thin view over this buffer; it doesn't own the storage so we can
+// allocate from PSRAM separately.
+static uint16_t* g_screen_pixels = nullptr;
+static fri3d::Screen* g_screen = nullptr;
 
 // Button IDs matching the Fri3d example order.
 enum : uint8_t {
@@ -93,23 +95,6 @@ static uint32_t key_for(uint8_t bid) {
     }
 }
 
-// ---- Chrome --------------------------------------------------------------
-
-static void draw_chrome() {
-    tft.fillScreen(COLOR_CHROME);
-
-    tft.setTextColor(TFT_WHITE, COLOR_CHROME);
-    tft.setTextSize(2);
-    tft.setCursor(40, 20);
-    tft.print("Fri3d WASM Badge");
-
-    tft.setTextSize(1);
-    tft.setCursor(40, 200);
-    tft.print("A: OK   B: Back   Joystick: D-pad");
-
-    tft.drawRect(CANVAS_X - 2, CANVAS_Y - 2, UP_W + 4, UP_H + 4, TFT_DARKGREY);
-}
-
 static void show_fatal(const char* msg) {
     tft.fillScreen(TFT_RED);
     tft.setTextColor(TFT_WHITE, TFT_RED);
@@ -123,24 +108,12 @@ static void show_fatal(const char* msg) {
 
 // ---- Framebuffer blit ----------------------------------------------------
 
+// Push the entire 296x240 RGB565 buffer to the LCD in one SPI burst. With
+// the buffer already in the LCD's native format there's no per-pixel
+// conversion; pushImage just DMA-streams the bytes.
 static void blit_to_screen() {
-    if (!upscaled) return;
-    const uint8_t* src = canvas.buffer();
-
-    for (int32_t y = 0; y < FB_H; ++y) {
-        const uint8_t* row = &src[y * FB_W];
-        uint16_t* dst0 = &upscaled[(y * SCALE + 0) * UP_W];
-        uint16_t* dst1 = &upscaled[(y * SCALE + 1) * UP_W];
-        for (int32_t x = 0; x < FB_W; ++x) {
-            uint16_t c = row[x] ? COLOR_FG : COLOR_BG;
-            dst0[x * 2 + 0] = c;
-            dst0[x * 2 + 1] = c;
-            dst1[x * 2 + 0] = c;
-            dst1[x * 2 + 1] = c;
-        }
-    }
-
-    tft.pushImage(CANVAS_X, CANVAS_Y, UP_W, UP_H, upscaled);
+    if (!g_screen_pixels) return;
+    tft.pushImage(0, 0, LCD_W, LCD_H, g_screen_pixels);
 }
 
 // ---- Setup / loop --------------------------------------------------------
@@ -163,18 +136,23 @@ void setup() {
 
     log_heap("pre-alloc");
 
-    upscaled = (uint16_t*) ps_malloc((size_t)UP_W * UP_H * sizeof(uint16_t));
-    if (!upscaled) {
+    g_screen_pixels = (uint16_t*) ps_malloc(fri3d::SCREEN_BYTES);
+    if (!g_screen_pixels) {
         Serial.println("[fri3d] PSRAM alloc failed, falling back to heap");
-        upscaled = (uint16_t*) malloc((size_t)UP_W * UP_H * sizeof(uint16_t));
+        g_screen_pixels = (uint16_t*) malloc(fri3d::SCREEN_BYTES);
     }
-    log_heap("post-upscale-alloc");
+    if (!g_screen_pixels) {
+        Serial.println("[fri3d] FATAL: screen allocation failed");
+        while (true) { delay(1000); }
+    }
+    g_screen = new fri3d::Screen(g_screen_pixels);
+    log_heap("post-screen-alloc");
 
     tft.init();
     tft.writecommand(TFT_MADCTL);
     tft.writedata(TFT_MAD_BGR | TFT_MAD_MV);
     tft.setTextFont(1);
-    draw_chrome();
+    tft.fillScreen(TFT_BLACK);
     Serial.println("[fri3d] display ready");
 
     buttons[BID_A]     = new Fri3d_Button(FRI3D_BUTTON_TYPE_DIGITAL, PIN_A,     25, INPUT_PULLUP, true);
@@ -195,7 +173,7 @@ void setup() {
     // will trigger a module reload, dispatched in loop().
     const EmbeddedApp& launcher = EMBEDDED_APPS[0];
     Serial.printf("[fri3d] initializing wasm3 (%s, %u bytes)\n", launcher.name, launcher.wasm_len);
-    const char* err = wasm_host::init(canvas, rng, launcher.wasm, launcher.wasm_len);
+    const char* err = wasm_host::init(canvas, *g_screen, rng, launcher.wasm, launcher.wasm_len);
     if (err) {
         Serial.printf("[fri3d] wasm init failed: %s\n", err);
         show_fatal(err);
@@ -260,16 +238,16 @@ void loop() {
         Serial.printf("[perf] render %u ms\n", dt_render);
     }
 
-    // Skip the 64 KB SPI blit when the framebuffer is byte-identical to
-    // the last one pushed. Common on idle screens (launcher menu at rest,
-    // a paused game), and saves both power and CPU — memcmp over 8 KB is
-    // roughly two orders of magnitude cheaper than the SPI write.
-    static uint8_t last_fb[FB_W * FB_H];
-    const uint8_t* fb = canvas.buffer();
-    if (memcmp(fb, last_fb, sizeof(last_fb)) != 0) {
-        memcpy(last_fb, fb, sizeof(last_fb));
-        blit_to_screen();
+    // Legacy fallback: if the app didn't touch the new color screen this
+    // frame, blit the 128x64 mono canvas centred + 2x-upscaled into the
+    // screen using the design's violet-on-black palette. Lets old apps
+    // (mandelbrot, snake, etc.) keep running unmodified.
+    if (g_screen && !g_screen->used()) {
+        g_screen->blit_legacy_canvas(canvas.buffer(),
+                                     fri3d::SCREEN_WIDTH, fri3d::SCREEN_HEIGHT,
+                                     LEGACY_FG_RGB, LEGACY_BG_RGB);
     }
 
+    blit_to_screen();
     delay(33); // ~30 fps
 }

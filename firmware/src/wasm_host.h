@@ -2,18 +2,24 @@
 
 #include <stdint.h>
 
-namespace fri3d { class Canvas; class Random; }
+namespace fri3d { class Canvas; class Random; class Screen; }
 
-// Bridges the wasm3 interpreter to our Canvas + Random + Arduino runtime.
-// Matches the host-import surface of fri3d-wasm-api so .wasm apps built for
-// the desktop emulator run unmodified on the real badge.
+// Bridges the wasm3 interpreter to our Canvas + Screen + Random + Arduino
+// runtime. Matches the host-import surface of fri3d-wasm-api so .wasm apps
+// built for the desktop emulator run unmodified on the real badge.
 namespace wasm_host {
 
 // Initialize wasm3, load a WASM module from the given bytes, link all host
-// functions, and resolve the render/on_input exports.
-// The caller owns the bytes; they must outlive the runtime (wasm3 does not
-// copy them). Returns nullptr on success, otherwise a static error description.
+// functions, and resolve the render/on_input exports. The caller owns the
+// bytes; they must outlive the runtime (wasm3 does not copy them).
+// Returns nullptr on success, otherwise a static error description.
+//
+// `screen` is the new full-screen 296x240 RGB framebuffer; new apps draw
+// into it via screen_* host imports. `canvas` is the legacy 128x64 mono
+// framebuffer kept for backward compatibility with apps that haven't been
+// ported yet.
 const char* init(fri3d::Canvas& canvas,
+                 fri3d::Screen& screen,
                  fri3d::Random& random,
                  const uint8_t* wasm_bytes,
                  uint32_t wasm_len);

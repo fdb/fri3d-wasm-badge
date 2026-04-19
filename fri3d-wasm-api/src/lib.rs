@@ -33,6 +33,21 @@ mod bindings {
         pub fn request_render();
         pub fn exit_to_launcher();
         pub fn start_app(app_id: i32);
+
+        // ---- Full-screen RGB API (296x240) -------------------------------
+        // Colors are 24-bit packed 0x00RRGGBB. The host packs to RGB565 once
+        // per draw call (the LCD's native format), so apps never see 16-bit
+        // values — just standard web-style RGB.
+        pub fn screen_width() -> i32;
+        pub fn screen_height() -> i32;
+        pub fn screen_clear(rgb: i32);
+        pub fn screen_pixel(x: i32, y: i32, rgb: i32);
+        pub fn screen_line(x1: i32, y1: i32, x2: i32, y2: i32, rgb: i32);
+        pub fn screen_fill_rect(x: i32, y: i32, w: i32, h: i32, rgb: i32);
+        pub fn screen_stroke_rect(x: i32, y: i32, w: i32, h: i32, rgb: i32);
+        pub fn screen_circle(x: i32, y: i32, radius: i32, rgb: i32);
+        pub fn screen_disc(x: i32, y: i32, radius: i32, rgb: i32);
+        pub fn screen_text(x: i32, y: i32, text: *const u8, rgb: i32, font: i32);
     }
 }
 
@@ -99,6 +114,17 @@ mod bindings {
     pub fn exit_to_launcher() {}
 
     pub fn start_app(_app_id: i32) {}
+
+    pub fn screen_width() -> i32 { 296 }
+    pub fn screen_height() -> i32 { 240 }
+    pub fn screen_clear(_rgb: i32) {}
+    pub fn screen_pixel(_x: i32, _y: i32, _rgb: i32) {}
+    pub fn screen_line(_x1: i32, _y1: i32, _x2: i32, _y2: i32, _rgb: i32) {}
+    pub fn screen_fill_rect(_x: i32, _y: i32, _w: i32, _h: i32, _rgb: i32) {}
+    pub fn screen_stroke_rect(_x: i32, _y: i32, _w: i32, _h: i32, _rgb: i32) {}
+    pub fn screen_circle(_x: i32, _y: i32, _radius: i32, _rgb: i32) {}
+    pub fn screen_disc(_x: i32, _y: i32, _radius: i32, _rgb: i32) {}
+    pub fn screen_text(_x: i32, _y: i32, _text: *const u8, _rgb: i32, _font: i32) {}
 }
 
 const STR_BUFFER_SIZE: usize = 256;
@@ -470,6 +496,87 @@ pub mod align {
 }
 
 pub mod imgui;
+
+/// Full-screen 296x240 RGB color drawing API. Used by the new launcher and
+/// any app written against the design-system aesthetic. Apps that only use
+/// the legacy `canvas_*` functions still work — the host blits the 128x64
+/// mono canvas centred and 2x-upscaled into the screen automatically.
+pub mod screen {
+    use super::bindings;
+
+    pub const WIDTH:  u32 = 296;
+    pub const HEIGHT: u32 = 240;
+
+    /// Pack r/g/b into the 24-bit format the host expects (0x00RRGGBB).
+    pub const fn rgb(r: u8, g: u8, b: u8) -> u32 {
+        ((r as u32) << 16) | ((g as u32) << 8) | (b as u32)
+    }
+
+    fn call<T>(f: impl FnOnce() -> T) -> T { f() }
+
+    pub fn width()  -> u32 { call(|| {
+        #[cfg(target_arch = "wasm32")] unsafe { bindings::screen_width().max(0)  as u32 }
+        #[cfg(not(target_arch = "wasm32"))] { bindings::screen_width().max(0)  as u32 }
+    })}
+    pub fn height() -> u32 { call(|| {
+        #[cfg(target_arch = "wasm32")] unsafe { bindings::screen_height().max(0) as u32 }
+        #[cfg(not(target_arch = "wasm32"))] { bindings::screen_height().max(0) as u32 }
+    })}
+    pub fn clear(rgb: u32) {
+        #[cfg(target_arch = "wasm32")] unsafe { bindings::screen_clear(rgb as i32); }
+        #[cfg(not(target_arch = "wasm32"))] { bindings::screen_clear(rgb as i32); }
+    }
+    pub fn pixel(x: i32, y: i32, rgb: u32) {
+        #[cfg(target_arch = "wasm32")] unsafe { bindings::screen_pixel(x, y, rgb as i32); }
+        #[cfg(not(target_arch = "wasm32"))] { bindings::screen_pixel(x, y, rgb as i32); }
+    }
+    pub fn line(x1: i32, y1: i32, x2: i32, y2: i32, rgb: u32) {
+        #[cfg(target_arch = "wasm32")] unsafe { bindings::screen_line(x1, y1, x2, y2, rgb as i32); }
+        #[cfg(not(target_arch = "wasm32"))] { bindings::screen_line(x1, y1, x2, y2, rgb as i32); }
+    }
+    pub fn fill_rect(x: i32, y: i32, w: i32, h: i32, rgb: u32) {
+        #[cfg(target_arch = "wasm32")] unsafe { bindings::screen_fill_rect(x, y, w, h, rgb as i32); }
+        #[cfg(not(target_arch = "wasm32"))] { bindings::screen_fill_rect(x, y, w, h, rgb as i32); }
+    }
+    pub fn stroke_rect(x: i32, y: i32, w: i32, h: i32, rgb: u32) {
+        #[cfg(target_arch = "wasm32")] unsafe { bindings::screen_stroke_rect(x, y, w, h, rgb as i32); }
+        #[cfg(not(target_arch = "wasm32"))] { bindings::screen_stroke_rect(x, y, w, h, rgb as i32); }
+    }
+    pub fn circle(x: i32, y: i32, radius: i32, rgb: u32) {
+        #[cfg(target_arch = "wasm32")] unsafe { bindings::screen_circle(x, y, radius, rgb as i32); }
+        #[cfg(not(target_arch = "wasm32"))] { bindings::screen_circle(x, y, radius, rgb as i32); }
+    }
+    pub fn disc(x: i32, y: i32, radius: i32, rgb: u32) {
+        #[cfg(target_arch = "wasm32")] unsafe { bindings::screen_disc(x, y, radius, rgb as i32); }
+        #[cfg(not(target_arch = "wasm32"))] { bindings::screen_disc(x, y, radius, rgb as i32); }
+    }
+    pub fn text(x: i32, y: i32, text: &str, rgb: u32, font: u32) {
+        super::with_cstr(text, |ptr| {
+            #[cfg(target_arch = "wasm32")] unsafe {
+                bindings::screen_text(x, y, ptr, rgb as i32, font as i32);
+            }
+            #[cfg(not(target_arch = "wasm32"))] {
+                bindings::screen_text(x, y, ptr, rgb as i32, font as i32);
+            }
+        });
+    }
+}
+
+/// Fri3d badge OS palette — violet/cyan-on-black "vector terminal" aesthetic
+/// from the design system. Pulled directly from the design's CSS custom
+/// properties so apps and the launcher stay visually consistent.
+pub mod theme {
+    use super::screen::rgb;
+    pub const BG:        u32 = rgb(0x05, 0x05, 0x0a);  // near-black
+    pub const BG_PANEL:  u32 = rgb(0x0a, 0x0a, 0x14);  // panel inset
+    pub const INK:       u32 = rgb(0x7b, 0x6c, 0xff);  // violet primary
+    pub const INK_DIM:   u32 = rgb(0x4a, 0x3f, 0xb0);
+    pub const INK_DEEP:  u32 = rgb(0x2a, 0x24, 0x70);
+    pub const ACCENT:    u32 = rgb(0x29, 0xe0, 0xff);  // electric cyan
+    pub const ACCENT_DIM:u32 = rgb(0x0f, 0x8a, 0xa8);
+    pub const WARN:      u32 = rgb(0xff, 0x5e, 0xa8);  // pink warn
+    pub const WHITE:     u32 = rgb(0xe8, 0xe6, 0xff);  // soft white
+}
 
 #[macro_export]
 macro_rules! export_render {
