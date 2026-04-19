@@ -1,124 +1,127 @@
 # Fri3d WASM Badge
 
-A Rust-based WebAssembly badge platform for the Fri3d camp badge, featuring a 128x64 OLED display. Includes a desktop emulator, web emulator, and a growing set of WASM apps.
+A WebAssembly runtime for the [Fri3d Camp 2024 badge](https://github.com/Fri3dCamp/badge_2024_hw)
+(ESP32-S3, 240×296 color LCD). Rust apps compile to WASM and run on the
+real hardware via wasm3, in the browser via Emscripten, and natively for
+offline testing — all from the same C++ host.
 
 ![Fri3d Badge UI Teaser](fri3d-badge-teaser.gif)
 
 ### **[Try the Live Demo in your Browser](https://fdb.github.io/fri3d-wasm-badge/)**
 
-## Getting Started
+## Architecture
 
-### Prerequisites
+```
+┌─────────────────────────────┐
+│  Rust app (fri3d-app-*)     │  compiles to wasm32-unknown-unknown
+│  + fri3d-wasm-api SDK       │  (the 24 host functions the app imports)
+└───────────┬─────────────────┘
+            │ .wasm
+            ▼
+┌─────────────────────────────────────────────────────────────┐
+│  C++ host in firmware/src (canvas, random, wasm_host, font) │
+│  ─ shared across three targets ─                            │
+└───────┬──────────────┬──────────────┬─────────────────────────┘
+        │              │              │
+        ▼              ▼              ▼
+ ESP32-S3 badge    browser       native CLI
+ (PlatformIO)      (Emscripten)  (app-runner, parity tests)
+```
 
-- Rust toolchain (via rustup)
-- wasm32 target:
+Canvas primitives are kept **byte-exact** with the Rust reference
+implementation in `fri3d-runtime/src/canvas.rs` via a parity test harness —
+see [CLAUDE.md](CLAUDE.md) for details.
+
+## Prerequisites
+
+- Rust toolchain (via rustup) with `wasm32-unknown-unknown` target
+- `wasm-opt` ([binaryen](https://github.com/WebAssembly/binaryen)) for shrinking app WASM
+- [PlatformIO](https://platformio.org/install) for the badge firmware
+- [Emscripten](https://emscripten.org/) for the browser build
+- `uv` (Python runner) for optional parity sweeps
 
 ```bash
 rustup target add wasm32-unknown-unknown
+brew install binaryen emscripten
 ```
 
-Optional (tests and web):
-- uv (for Python test runners)
-- Node.js (for web smoke tests)
+## Building & running
 
-Linux desktop build dependencies (minifb):
+### Browser emulator (fastest feedback loop)
 
 ```bash
-sudo apt-get install -y libx11-dev libxrandr-dev libxcursor-dev libxinerama-dev libxi-dev
+firmware/web/build.sh
+cd firmware/web/dist && python3 -m http.server 8080
+# open http://localhost:8080/
 ```
 
-## Building
-
-### Quick Build (All Components)
+### Hardware firmware
 
 ```bash
-./build_all.sh
+cd firmware
+pio run                 # build
+pio run -t upload       # flash (requires USB-C to the badge)
 ```
 
-### Desktop Emulator Only
+### Native app runner (offline rendering to PNG)
 
 ```bash
-./build_emulator.sh
+firmware/tools/app-runner/build.sh
+firmware/tools/app-runner/app_runner firmware/build/fri3d_app_circles_opt.wasm \
+    --out /tmp/circles.png
 ```
 
-### WASM Apps Only
+## Tests
+
+### Canvas parity (C++ vs Rust reference)
 
 ```bash
-./build_apps.sh
+firmware/tools/canvas-parity/run.sh
 ```
 
-### Web Emulator
+Regenerates Rust-side golden framebuffers, builds the C++ tester, and
+diffs byte-for-byte. Fails loudly on any drift.
+
+### Visual parity (full apps)
 
 ```bash
-./build_web.sh
+firmware/tools/app-runner/visual_parity.sh
 ```
 
-## Running the Emulator
+Runs every app that has a Rust-generated `tests/visual/apps/<app>/golden/*.png`
+through the native C++ runner and compares pixel-for-pixel.
 
-```bash
-# Run launcher.wasm
-./target/release/fri3d-emulator
+## Controls (hardware & browser)
 
-# Run a specific app
-./target/release/fri3d-emulator build/apps/circles/circles.wasm
-```
+- D-pad / WASD / arrow keys: navigate
+- A / Z / Enter: OK / Select
+- B / X / Backspace: Back
 
-## Controls
-
-- Arrow keys: Navigate
-- Z / Enter: OK / Select
-- X / Backspace: Back
-- S: Screenshot (writes screenshot_<n>.png)
-- Left + Back (hold 500ms): Return to launcher
-
-## Running Tests
-
-```bash
-# Run all visual tests
-uv run tests/visual/run_visual_tests.py
-
-# Update golden images
-uv run tests/visual/run_visual_tests.py --update-golden
-```
-
-### Trace Integration Tests
-
-```bash
-# Build trace harness + WASM apps and run trace tests
-./build_trace_tests.sh
-```
-
-#### Updating Golden Traces
-
-Some specs use `expected_mode: "exact"` and compare against golden traces in
-`tests/trace/expected/<app>/<spec>.json`. To update them after intentional app changes:
-
-```bash
-# Run trace tests to generate new outputs
-./build_trace_tests.sh
-
-# Copy a specific trace to the expected location
-cp tests/trace/output/<app>/<spec>.json tests/trace/expected/<app>/<spec>.json
-```
-
-## Project Structure
+## Project structure
 
 ```
-fri3d-runtime/        # Shared runtime (canvas, input, wasm runner, trace)
-fri3d-emulator/       # Desktop emulator (minifb)
-fri3d-web/            # Web host (wasm32 + JS shell)
-fri3d-wasm-api/        # WASM SDK for Rust apps
-fri3d-app-*/          # Rust WASM apps
-fri3d-trace-harness/  # Trace test harness
-specs/                # Specs for the Rust port
-tests/                # Visual, trace, and web tests
+firmware/
+  src/                 # Shared C++: canvas, random, wasm_host, font, fonts
+  lib/wasm3/           # Vendored wasm3 v0.5.0
+  web/                 # Emscripten browser build (index.html, test.html, tests.js)
+  tools/
+    app-runner/        # Native WASM runner, dumps PNG
+    canvas-parity/     # C++ parity tester
+  platformio.ini       # Hardware build config
+  scripts/embed_app.sh # Rust app -> optimized embedded_app.h
+
+fri3d-runtime/         # Canvas/Random reference (used only by parity-gen)
+fri3d-wasm-api/        # App SDK — 24 host imports
+fri3d-app-*/           # Rust WASM apps
+
+tools/
+  canvas-parity-gen/   # Rust binary that emits golden framebuffers
+  transpile_fonts.py   # One-shot fonts.rs → fonts.h extractor
+
+tests/
+  canvas-golden/       # Golden framebuffers for primitive tests
+  visual/apps/         # Golden PNGs for full-app visual parity
 ```
-
-## Dependencies
-
-- Rust toolchain (stable)
-- wasm32-unknown-unknown target
-- Optional: uv, Node.js (for tests)
 
 ## License
 

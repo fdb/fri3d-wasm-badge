@@ -1,10 +1,11 @@
 [workspace]
 members = [
+    # Parity reference: C++ in firmware/src/canvas.cpp must stay byte-exact
+    # with this implementation (see tools/canvas-parity-gen).
     "fri3d-runtime",
-    "fri3d-emulator",
+    # App SDK — the 24-function host ABI that every app compiles against.
     "fri3d-wasm-api",
-    "fri3d-web",
-    "fri3d-trace-harness",
+    # Apps — all compile to wasm32-unknown-unknown.
     "fri3d-app-circles",
     "fri3d-app-dots",
     "fri3d-app-launcher",
@@ -13,11 +14,11 @@ members = [
     "fri3d-app-test-drawing",
     "fri3d-app-test-ui",
     "fri3d-app-wifi-pet",
+    # Golden-image generator for canvas primitives.
     "tools/canvas-parity-gen",
 ]
 default-members = [
     "fri3d-runtime",
-    "fri3d-emulator",
     "fri3d-wasm-api",
 ]
 resolver = "2"

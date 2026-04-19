@@ -1,0 +1,68 @@
+name: Parity
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  canvas-parity:
+    name: Canvas parity (C++ vs Rust reference)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add wasm32 target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Run canvas parity tester
+        run: firmware/tools/canvas-parity/run.sh
+
+  visual-parity:
+    name: Visual parity (per-app pixel diff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add wasm32 target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Install binaryen (wasm-opt)
+        run: sudo apt-get update && sudo apt-get install -y binaryen
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Run visual parity sweep
+        run: firmware/tools/app-runner/visual_parity.sh
+
+      - name: Upload C++ renders on failure
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: cpp-renders
+          path: /tmp/*_cpp.png
+          retention-days: 7
+
+  cargo-test:
+    name: Rust unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add wasm32 target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: cargo test
+        run: cargo test
