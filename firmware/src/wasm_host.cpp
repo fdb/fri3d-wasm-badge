@@ -17,6 +17,7 @@ extern "C" {
 
 #include "canvas.h"
 #include "random.h"
+#include "screen.h"
 
 // ---------------------------------------------------------------------------
 // Module-level state.
@@ -28,6 +29,7 @@ static IM3Function    g_fn_render   = nullptr;
 static IM3Function    g_fn_on_input = nullptr;
 
 static fri3d::Canvas* g_canvas = nullptr;
+static fri3d::Screen* g_screen = nullptr;
 static fri3d::Random* g_random = nullptr;
 
 static bool     g_exit_requested = false;
@@ -220,6 +222,95 @@ m3ApiRawFunction(h_start_app) {
 }
 
 // ---------------------------------------------------------------------------
+// Screen (full 296x240 RGB) host imports. Apps written to the new design
+// system call these directly; legacy 128x64 mono apps don't, and the host
+// auto-blits the mono canvas into the screen as a fallback.
+
+m3ApiRawFunction(h_screen_width) {
+    m3ApiReturnType(int32_t);
+    m3ApiReturn((int32_t)fri3d::SCREEN_W);
+}
+
+m3ApiRawFunction(h_screen_height) {
+    m3ApiReturnType(int32_t);
+    m3ApiReturn((int32_t)fri3d::SCREEN_H);
+}
+
+m3ApiRawFunction(h_screen_clear) {
+    m3ApiGetArg(int32_t, rgb);
+    if (g_screen) g_screen->clear((uint32_t)rgb);
+    m3ApiSuccess();
+}
+
+m3ApiRawFunction(h_screen_pixel) {
+    m3ApiGetArg(int32_t, x);
+    m3ApiGetArg(int32_t, y);
+    m3ApiGetArg(int32_t, rgb);
+    if (g_screen) g_screen->pixel(x, y, (uint32_t)rgb);
+    m3ApiSuccess();
+}
+
+m3ApiRawFunction(h_screen_line) {
+    m3ApiGetArg(int32_t, x1);
+    m3ApiGetArg(int32_t, y1);
+    m3ApiGetArg(int32_t, x2);
+    m3ApiGetArg(int32_t, y2);
+    m3ApiGetArg(int32_t, rgb);
+    if (g_screen) g_screen->line(x1, y1, x2, y2, (uint32_t)rgb);
+    m3ApiSuccess();
+}
+
+m3ApiRawFunction(h_screen_fill_rect) {
+    m3ApiGetArg(int32_t, x);
+    m3ApiGetArg(int32_t, y);
+    m3ApiGetArg(int32_t, w);
+    m3ApiGetArg(int32_t, h);
+    m3ApiGetArg(int32_t, rgb);
+    if (g_screen) g_screen->fill_rect(x, y, w, h, (uint32_t)rgb);
+    m3ApiSuccess();
+}
+
+m3ApiRawFunction(h_screen_stroke_rect) {
+    m3ApiGetArg(int32_t, x);
+    m3ApiGetArg(int32_t, y);
+    m3ApiGetArg(int32_t, w);
+    m3ApiGetArg(int32_t, h);
+    m3ApiGetArg(int32_t, rgb);
+    if (g_screen) g_screen->stroke_rect(x, y, w, h, (uint32_t)rgb);
+    m3ApiSuccess();
+}
+
+m3ApiRawFunction(h_screen_circle) {
+    m3ApiGetArg(int32_t, x);
+    m3ApiGetArg(int32_t, y);
+    m3ApiGetArg(int32_t, radius);
+    m3ApiGetArg(int32_t, rgb);
+    if (g_screen) g_screen->circle(x, y, radius, (uint32_t)rgb);
+    m3ApiSuccess();
+}
+
+m3ApiRawFunction(h_screen_disc) {
+    m3ApiGetArg(int32_t, x);
+    m3ApiGetArg(int32_t, y);
+    m3ApiGetArg(int32_t, radius);
+    m3ApiGetArg(int32_t, rgb);
+    if (g_screen) g_screen->disc(x, y, radius, (uint32_t)rgb);
+    m3ApiSuccess();
+}
+
+m3ApiRawFunction(h_screen_text) {
+    m3ApiGetArg(int32_t, x);
+    m3ApiGetArg(int32_t, y);
+    m3ApiGetArgMem(const char*, text);
+    m3ApiGetArg(int32_t, rgb);
+    m3ApiGetArg(int32_t, font);
+    if (g_screen && text) {
+        g_screen->text(x, y, text, (uint32_t)rgb, (fri3d::FontId)(uint32_t)font);
+    }
+    m3ApiSuccess();
+}
+
+// ---------------------------------------------------------------------------
 // Lifecycle.
 
 static const char* link_host_functions() {
@@ -264,15 +355,30 @@ static const char* link_host_functions() {
     LINK("v()",       exit_to_launcher);
     LINK("v(i)",      start_app);
 
+    // New full-screen color API. Apps that don't import these still work —
+    // m3Err_functionLookupFailed is treated as benign in the LINK macro.
+    LINK("i()",       screen_width);
+    LINK("i()",       screen_height);
+    LINK("v(i)",      screen_clear);
+    LINK("v(iii)",    screen_pixel);
+    LINK("v(iiiii)",  screen_line);
+    LINK("v(iiiii)",  screen_fill_rect);
+    LINK("v(iiiii)",  screen_stroke_rect);
+    LINK("v(iiii)",   screen_circle);
+    LINK("v(iiii)",   screen_disc);
+    LINK("v(iiiii)",  screen_text);
+
 #undef LINK
     return nullptr;
 }
 
 const char* wasm_host::init(fri3d::Canvas& canvas,
+                            fri3d::Screen& screen,
                             fri3d::Random& random,
                             const uint8_t* wasm_bytes,
                             uint32_t wasm_len) {
     g_canvas = &canvas;
+    g_screen = &screen;
     g_random = &random;
 
     host_log("[wasm] m3_NewEnvironment\n");
@@ -316,6 +422,9 @@ void wasm_host::render() {
     // before each render call, so apps don't need to call canvas_clear()
     // themselves (and indeed fri3d-app-circles doesn't).
     if (g_canvas) g_canvas->clear();
+    // Reset the screen-used flag — main.cpp inspects it after render() to
+    // decide whether to fall back to blitting the legacy mono canvas.
+    if (g_screen) g_screen->reset_used();
     M3Result r = m3_CallV(g_fn_render);
     if (r) {
         host_log("[wasm] render trap: %s\n", r);
@@ -352,8 +461,8 @@ static void teardown() {
 }
 
 const char* wasm_host::reload(const uint8_t* wasm_bytes, uint32_t wasm_len) {
-    if (!g_canvas || !g_random) return "reload before init";
+    if (!g_canvas || !g_screen || !g_random) return "reload before init";
     teardown();
-    // Re-enter the same init flow with the previously-registered canvas/rng.
-    return init(*g_canvas, *g_random, wasm_bytes, wasm_len);
+    // Re-enter the same init flow with the previously-registered canvas/screen/rng.
+    return init(*g_canvas, *g_screen, *g_random, wasm_bytes, wasm_len);
 }

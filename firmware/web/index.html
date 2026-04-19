@@ -5,58 +5,63 @@
 <title>Fri3d WASM Badge — Web Harness</title>
 <style>
   html, body {
-    background: #111;
+    background: #05050a;
     color: #ddd;
     font-family: ui-monospace, Menlo, monospace;
     margin: 0;
     padding: 1rem;
   }
-  h1 { font-size: 1rem; color: #aaa; margin: 0 0 0.75rem; }
+  h1 { font-size: 1rem; color: #7b6cff; margin: 0 0 0.75rem; letter-spacing: 0.15em; text-transform: uppercase; }
   .frame {
     display: inline-block;
-    padding: 28px 10px;
-    background: #18C3;   /* same dark-blue/grey chrome as the hardware */
+    padding: 24px 18px;
     background: rgb(24, 27, 34);
-    border: 1px solid #333;
-    border-radius: 4px;
+    border: 1px solid #2a2470;
+    border-radius: 6px;
+    box-shadow: 0 0 24px rgba(123, 108, 255, 0.18);
   }
   canvas {
     display: block;
     image-rendering: pixelated;
-    border: 1px solid #444;
-    background: #000;
+    border: 1px solid #2a2470;
+    background: #05050a;
   }
   .label {
-    color: #fff;
-    font-size: 0.875rem;
+    color: #e8e6ff;
+    font-size: 0.75rem;
+    letter-spacing: 0.2em;
     text-align: center;
     margin-bottom: 0.75rem;
+    text-transform: uppercase;
   }
   .hint {
-    color: #aaa;
-    font-size: 0.75rem;
+    color: #4a3fb0;
+    font-size: 0.7rem;
     text-align: center;
     margin-top: 0.5rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
   }
   #log {
     margin-top: 1rem;
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     color: #888;
     white-space: pre;
     height: 8rem;
     overflow-y: auto;
     background: #000;
-    border: 1px solid #333;
+    border: 1px solid #2a2470;
     padding: 0.5rem;
-    width: 560px;
+    width: 600px;
   }
 </style>
 </head>
 <body>
-  <h1>Fri3d WASM Badge — Web Harness</h1>
+  <h1>FRI3D//OS · WEB HARNESS · 296×240</h1>
   <div class="frame">
-    <div class="label">Fri3d WASM Badge</div>
-    <canvas id="screen" width="256" height="128"></canvas>
+    <div class="label">Fri3d Camp Badge</div>
+    <!-- Visible canvas is 2x the native 296x240 resolution for legibility. -->
+    <canvas id="screen" width="592" height="480"></canvas>
     <div class="hint">A: OK &nbsp; B: Back &nbsp; Joystick: D-pad</div>
   </div>
   <div id="log"></div>
@@ -76,8 +81,8 @@ const KEYMAP = {
 const EVENT_PRESS = 0, EVENT_RELEASE = 1, EVENT_SHORT = 2, EVENT_LONG = 3;
 const LONG_PRESS_MS = 300;
 
-// Foreground/background mirror the hardware's green-on-black look.
-const FG = [0, 255, 0], BG = [0, 0, 0];
+// Screen dimensions match firmware/src/screen.h (SCREEN_W/SCREEN_H).
+const SCREEN_W = 296, SCREEN_H = 240;
 
 const logEl = document.getElementById('log');
 function log(...args) {
@@ -94,7 +99,6 @@ var Module = {
   print: (txt) => log(txt),
   printErr: (txt) => log('[err]', txt),
   onRuntimeInitialized() {
-    // Grab typed references to the C symbols we care about.
     api.init         = Module.cwrap('web_init', 'number', []);
     api.render       = Module.cwrap('web_render', null, []);
     api.onInput      = Module.cwrap('web_on_input', null, ['number', 'number']);
@@ -102,6 +106,7 @@ var Module = {
     api.fbPtr        = Module.cwrap('web_fb', 'number', []);
     api.fbWidth      = Module.cwrap('web_fb_width', 'number', []);
     api.fbHeight     = Module.cwrap('web_fb_height', 'number', []);
+    api.screenPtr    = Module.cwrap('web_screen', 'number', []);
     api.rngGet       = Module.cwrap('web_rng_get', 'number', []);
     api.rngSeed      = Module.cwrap('web_rng_seed', null, ['number']);
     if (api.init() !== 0) { log('init failed'); return; }
@@ -109,7 +114,7 @@ var Module = {
     setupInput();
     loop();
 
-    // Expose a tiny test surface so Playwright can drive the harness.
+    // Tiny test surface for Playwright.
     window.fri3d = {
       press(key)           { api.onInput(key, EVENT_PRESS); },
       release(key, heldMs) {
@@ -123,14 +128,18 @@ var Module = {
       render() { api.render(); blit(); },
       rngGet()         { return api.rngGet(); },
       rngSeed(s)       { api.rngSeed(s >>> 0); },
+      // Legacy mono framebuffer (still used by ported-pre-color apps).
       readFb() {
         const ptr = api.fbPtr();
         const w = api.fbWidth();
         const h = api.fbHeight();
         return new Uint8Array(Module.HEAPU8.buffer, ptr, w * h).slice();
       },
-      // Run N renders back-to-back and report timing. Useful for A/B'ing
-      // app-side perf (mandelbrot etc) from the browser console.
+      // New RGB565 screen, 296x240. Returned as a fresh Uint16Array copy.
+      readScreen() {
+        const ptr = api.screenPtr();
+        return new Uint16Array(Module.HEAPU8.buffer, ptr, SCREEN_W * SCREEN_H).slice();
+      },
       bench(frames = 5) {
         const t0 = performance.now();
         for (let i = 0; i < frames; i++) api.render();
@@ -138,15 +147,13 @@ var Module = {
         return { frames, total_ms: total, per_frame_ms: total / frames };
       },
       KEY: { UP: 0, DOWN: 1, LEFT: 2, RIGHT: 3, OK: 4, BACK: 5 },
+      W: SCREEN_W, H: SCREEN_H,
     };
-    log('[web] fri3d test surface ready on window.fri3d');
+    log('[web] fri3d test surface ready on window.fri3d (296x240 RGB)');
   }
 };
 
 function setupInput() {
-  // Events go through the queue, not directly to wasm_host::on_input.
-  // Same architecture the hardware uses so a slow render frame can't
-  // swallow a quick press+release.
   document.addEventListener('keydown', (e) => {
     if (e.repeat) return;
     const k = KEYMAP[e.key];
@@ -166,26 +173,38 @@ function setupInput() {
   });
 }
 
-// Backing store for one render: 128*64 RGBA (later drawImage'd 2x into the
-// visible 256x128 canvas, matching the hardware's nearest-neighbour upscale).
-const small = document.createElement('canvas');
-small.width = 128; small.height = 64;
-const sctx = small.getContext('2d', { willReadFrequently: true });
-const sctxImg = sctx.createImageData(128, 64);
+// Backing store: one 296x240 RGBA ImageData. We unpack RGB565 → RGBA each
+// frame and blit into a 1:1 native canvas, then draw it 2x into the
+// visible canvas (image-rendering: pixelated keeps it crisp).
+const native = document.createElement('canvas');
+native.width = SCREEN_W; native.height = SCREEN_H;
+const nctx = native.getContext('2d', { willReadFrequently: true });
+const nimg = nctx.createImageData(SCREEN_W, SCREEN_H);
 const screen = document.getElementById('screen');
 const sx = screen.getContext('2d');
 sx.imageSmoothingEnabled = false;
 
 function blit() {
-  const ptr = api.fbPtr();
-  const fb = new Uint8Array(Module.HEAPU8.buffer, ptr, 128 * 64);
-  const d = sctxImg.data;
-  for (let i = 0; i < 128 * 64; i++) {
-    const c = fb[i] ? FG : BG;
-    d[i*4+0] = c[0]; d[i*4+1] = c[1]; d[i*4+2] = c[2]; d[i*4+3] = 255;
+  const ptr = api.screenPtr();
+  // RGB565: rrrrrggg gggbbbbb (high byte then low byte in little-endian
+  // memory, but we view as Uint16Array so the integer is whole).
+  const fb = new Uint16Array(Module.HEAPU8.buffer, ptr, SCREEN_W * SCREEN_H);
+  const d = nimg.data;
+  for (let i = 0; i < SCREEN_W * SCREEN_H; i++) {
+    const v = fb[i];
+    // Expand 5/6/5 bits back to 8 bits per channel; replicate top bits
+    // into low bits so 0x1F → 0xFF rather than 0xF8 (full-range).
+    const r5 = (v >> 11) & 0x1F;
+    const g6 = (v >> 5)  & 0x3F;
+    const b5 = v & 0x1F;
+    const o = i * 4;
+    d[o]     = (r5 << 3) | (r5 >> 2);
+    d[o + 1] = (g6 << 2) | (g6 >> 4);
+    d[o + 2] = (b5 << 3) | (b5 >> 2);
+    d[o + 3] = 255;
   }
-  sctx.putImageData(sctxImg, 0, 0);
-  sx.drawImage(small, 0, 0, 256, 128);
+  nctx.putImageData(nimg, 0, 0);
+  sx.drawImage(native, 0, 0, SCREEN_W * 2, SCREEN_H * 2);
 }
 
 function loop() {
