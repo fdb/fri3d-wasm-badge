@@ -162,6 +162,75 @@ void Screen::disc(int32_t x0, int32_t y0, int32_t radius, uint32_t rgb) {
     }
 }
 
+void Screen::polyline(const int32_t* pts, int32_t n, uint32_t rgb) {
+    if (!pts || n < 2) return;
+    for (int32_t i = 1; i < n; ++i) {
+        line(pts[(i - 1) * 2], pts[(i - 1) * 2 + 1],
+             pts[ i      * 2], pts[ i      * 2 + 1], rgb);
+    }
+}
+
+void Screen::polygon(const int32_t* pts, int32_t n, uint32_t rgb) {
+    if (!pts || n < 2) return;
+    polyline(pts, n, rgb);
+    line(pts[(n - 1) * 2], pts[(n - 1) * 2 + 1], pts[0], pts[1], rgb);
+}
+
+// Scanline polygon fill (even-odd rule). Doesn't bother with fancy
+// edge-table sorting — at the screen's resolution and the small polygons
+// apps actually draw, the dumb O(W*H*N) approach is plenty fast.
+void Screen::polygon_fill(const int32_t* pts, int32_t n, uint32_t rgb) {
+    if (!pts || n < 3) return;
+    m_used = true;
+    const uint16_t c = rgb_to_565(rgb);
+
+    // Find polygon's vertical bounds, clipped to screen.
+    int32_t y_min = pts[1], y_max = pts[1];
+    for (int32_t i = 1; i < n; ++i) {
+        const int32_t py = pts[i * 2 + 1];
+        if (py < y_min) y_min = py;
+        if (py > y_max) y_max = py;
+    }
+    if (y_min < 0) y_min = 0;
+    if (y_max >= (int32_t)SCREEN_H) y_max = (int32_t)SCREEN_H - 1;
+
+    // For each scanline, find x-intersections with edges, sort, fill pairs.
+    // 32 vertices is enough for any geometric fox / app icon — bigger
+    // polygons should be split or precomputed.
+    constexpr int32_t MAX_X = 32;
+    int32_t xs[MAX_X];
+
+    for (int32_t y = y_min; y <= y_max; ++y) {
+        int32_t nx = 0;
+        for (int32_t i = 0, j = n - 1; i < n; j = i++) {
+            const int32_t y1 = pts[i * 2 + 1];
+            const int32_t y2 = pts[j * 2 + 1];
+            // Edge crosses this scanline if one endpoint is above and the
+            // other below (>=/< asymmetry avoids double-counting vertices).
+            const bool crosses = (y1 <= y && y2 > y) || (y2 <= y && y1 > y);
+            if (!crosses) continue;
+            const int32_t x1 = pts[i * 2];
+            const int32_t x2 = pts[j * 2];
+            // Linear interpolation; keep integer math by avoiding float.
+            const int32_t x_cross = x1 + (y - y1) * (x2 - x1) / (y2 - y1);
+            if (nx < MAX_X) xs[nx++] = x_cross;
+        }
+        // Insertion sort — nx is tiny.
+        for (int32_t i = 1; i < nx; ++i) {
+            const int32_t v = xs[i];
+            int32_t j = i - 1;
+            while (j >= 0 && xs[j] > v) { xs[j + 1] = xs[j]; --j; }
+            xs[j + 1] = v;
+        }
+        // Fill between pairs of intersections.
+        for (int32_t i = 0; i + 1 < nx; i += 2) {
+            const int32_t x0 = xs[i];
+            const int32_t x1 = xs[i + 1];
+            raw_hline(x0, y, x1 - x0 + 1, c);
+        }
+    }
+}
+
 void Screen::text(int32_t x, int32_t y, const char* str, uint32_t rgb, FontId font) {
     if (!str) return;
     m_used = true;
