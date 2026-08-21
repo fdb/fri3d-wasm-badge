@@ -27,7 +27,7 @@
   test('launcher boots and renders a non-blank frame', () => {
     home();
     const fb = window.fri3d.readFb();
-    if (!fb.some(p => p !== 0)) throw new Error('framebuffer is blank');
+    if (!fb.some(p => p !== fb[0])) throw new Error('framebuffer is blank');
     launcherHash = fbHash();
   });
 

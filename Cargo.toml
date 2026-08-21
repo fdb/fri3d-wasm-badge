@@ -18,11 +18,15 @@ members = [
     "apps/wifi_pet",
     # Embedded bundles (generated.rs written by fri3d-pack).
     "fri3d-apps",
+    # System icons (generated.rs written by fri3d-pack from artwork/icons).
+    "fri3d-artwork",
     # Hosts: same kernel, different IO.
     "hosts/desktop",
     "hosts/web",
     # Bundler: manifest.toml + icon.png + wasm -> .fab
     "tools/fri3d-pack",
+    # Font tables: artwork/fonts/*.bdf -> fri3d-kernel/src/fonts.rs
+    "tools/fri3d-fontgen",
 ]
 default-members = [
     "fri3d-kernel",

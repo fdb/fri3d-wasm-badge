@@ -15,7 +15,7 @@ Flipper-Zero-style launcher.
 apps/<id>/                 Rust app crate + manifest.toml + icon.png
    │  cargo build --target wasm32-unknown-unknown
    ▼
-tools/fri3d-pack           → build/apps/<id>.fab   (256-byte header + wasm)
+tools/fri3d-pack           → build/apps/<id>.fab   (512-byte header + wasm)
    │                       → fri3d-apps/src/generated.rs (include_bytes!)
    ▼
 fri3d-kernel  (no_std)     canvas · input · registry · settings · lifecycle · wasmi host
@@ -29,9 +29,11 @@ Design notes and lessons learned live in [design_docs/](design_docs/README.md).
 
 ## Display
 
-Apps draw on a **160×120 monochrome canvas**. Hosts upscale it: 2× to the
-full 320×240 badge LCD, 4× on desktop and web, black pixels on a Flipper-style
-amber background.
+Apps draw on a **320×240 canvas in the DB32 palette**: one byte per pixel,
+an index into 32 colours. The badge LCD shows it 1:1; desktop and web show
+it at 2×. Text is Pixelify Sans (11 px regular, 22 px bold). The tokens —
+paper, ink, green banner, gold focus — are in
+[design_docs/017-color-ui.md](design_docs/017-color-ui.md).
 
 ## Prerequisites
 
@@ -76,7 +78,7 @@ on desktop.
 apps/hello/
   Cargo.toml       crate-type = ["cdylib"], depends on fri3d-wasm-api
   manifest.toml    id, name, version, author, description, category, icon
-  icon.png         14×14, dark pixels = set
+  icon.png         16×16, DB32 colours, transparent = hole
   src/lib.rs       export_render!, export_on_input!, optional lifecycle exports
 ```
 
@@ -98,11 +100,14 @@ hosts/web/build.sh && ...          # open /test.html, read window.testResults
 fri3d-kernel/        The kernel. no_std + alloc. wasmi host, lifecycle, limits.
 fri3d-wasm-api/      App SDK: safe wrappers over the `env` imports, IMGUI, lifecycle macros.
 fri3d-apps/          Generated embed crate (LAUNCHER + APPS slices).
+fri3d-artwork/       Generated system icons from artwork/icons/*.png.
+artwork/             Source art: db32.gpl, icons/*.png, fonts/*.bdf.
 apps/                One folder per app: launcher, settings, snake, mandelbrot, …
 hosts/desktop/       minifb host + headless screenshot tool (`fri3d`).
 hosts/web/           wasm-bindgen host, index.html harness, test.html suite.
 hosts/badge/         esp-hal firmware (separate workspace, Xtensa toolchain).
-tools/fri3d-pack/    manifest + icon + wasm → .fab bundles + generated.rs.
+tools/fri3d-pack/    manifest + icon + wasm → .fab bundles + generated.rs; artwork/icons → fri3d-artwork.
+tools/fri3d-fontgen/ artwork/fonts/*.bdf → fri3d-kernel/src/fonts.rs.
 design_docs/         Lessons learned and decisions.
 specs/               Earlier stage specs (historical).
 ```

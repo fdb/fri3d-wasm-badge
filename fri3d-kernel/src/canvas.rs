@@ -1,4 +1,6 @@
 use crate::font::{FontData, FontDrawTarget};
+use alloc::boxed::Box;
+use crate::palette;
 use crate::types::{Color, Font};
 use crate::{FRAMEBUFFER_LEN, SCREEN_HEIGHT, SCREEN_WIDTH};
 
@@ -11,7 +13,9 @@ const DRAW_ALL: u8 = DRAW_UPPER_RIGHT | DRAW_UPPER_LEFT | DRAW_LOWER_LEFT | DRAW
 pub struct Canvas {
     width: u32,
     height: u32,
-    buffer: [u8; FRAMEBUFFER_LEN],
+    /// Heap-allocated once at boot: 76 800 bytes would overflow the
+    /// badge's main stack if built by value.
+    buffer: Box<[u8]>,
     color: Color,
     font: Font,
     font_data: FontData,
@@ -32,8 +36,8 @@ impl Canvas {
         Self {
             width,
             height,
-            buffer: [0; FRAMEBUFFER_LEN],
-            color: Color::Black,
+            buffer: alloc::vec![palette::PAPER.0; FRAMEBUFFER_LEN].into_boxed_slice(),
+            color: palette::INK,
             font,
             font_data,
         }
@@ -51,17 +55,18 @@ impl Canvas {
         &self.buffer
     }
 
+    /// Fill with [`palette::PAPER`]. The kernel does this before every render.
     pub fn clear(&mut self) {
-        self.buffer.fill(0);
+        self.buffer.fill(palette::PAPER.0);
     }
 
-    /// Bulk overwrite — copies up to buffer().len() bytes from `src` using
-    /// the same 0=white / 1=black convention. Matches canvas_draw_buffer in
-    /// firmware/src/canvas.cpp so both hosts produce identical output when
-    /// apps use the bulk-blit host import.
+    /// Bulk overwrite — copies up to buffer().len() palette indices from
+    /// `src`, row-major. Out-of-range indices are clamped to the palette.
     pub fn fill_from(&mut self, src: &[u8]) {
         let n = src.len().min(self.buffer.len());
-        self.buffer[..n].copy_from_slice(&src[..n]);
+        for (dst, &s) in self.buffer[..n].iter_mut().zip(src) {
+            *dst = Color::from_index(s).0;
+        }
     }
 
     pub fn set_color(&mut self, color: Color) {
@@ -234,24 +239,16 @@ impl Canvas {
     }
 
     pub fn draw_circle(&mut self, x: i32, y: i32, radius: u32) {
-        if self.color == Color::Xor {
-            self.draw_xor_circle(x, y, radius);
-            return;
-        }
         self.draw_circle_with_option(x, y, radius as i32, DRAW_ALL, self.color);
     }
 
     pub fn draw_disc(&mut self, x0: i32, y0: i32, radius: u32) {
-        if self.color == Color::Xor {
-            self.draw_xor_disc(x0, y0, radius);
-            return;
-        }
         self.draw_disc_with_option(x0, y0, radius as i32, DRAW_ALL, self.color);
     }
 
     /// Draw a 1-bit bitmap: rows of `ceil(w/8)` bytes, MSB = leftmost
     /// pixel. Set bits are drawn in the current color; clear bits are
-    /// skipped (transparent). Used for app icons.
+    /// skipped (transparent).
     pub fn draw_bitmap(&mut self, x: i32, y: i32, w: u32, h: u32, bits: &[u8]) {
         let row_bytes = (w as usize).div_ceil(8);
         for row in 0..h as usize {
@@ -261,6 +258,29 @@ impl Canvas {
             for col in 0..w as usize {
                 if line[col / 8] & (0x80 >> (col % 8)) != 0 {
                     self.draw_dot(x + col as i32, y + row as i32);
+                }
+            }
+        }
+    }
+
+    /// Draw an indexed-colour image: one palette index per pixel, row-major,
+    /// [`palette::TRANSPARENT`] skipped. `scale` repeats every pixel
+    /// `scale`×`scale` times (0 draws nothing). Used for icons.
+    pub fn draw_image(&mut self, x: i32, y: i32, w: u32, h: u32, scale: u32, pixels: &[u8]) {
+        let scale = scale as i32;
+        for row in 0..h as usize {
+            let Some(line) = pixels.get(row * w as usize..(row + 1) * w as usize) else {
+                return;
+            };
+            for (col, &index) in line.iter().enumerate() {
+                if index == palette::TRANSPARENT {
+                    continue;
+                }
+                let color = Color::from_index(index);
+                let px = x + col as i32 * scale;
+                let py = y + row as i32 * scale;
+                for dy in 0..scale {
+                    self.draw_hline_color(px, py + dy, scale as u32, color);
                 }
             }
         }
@@ -284,12 +304,7 @@ impl Canvas {
         if x >= self.width || y >= self.height {
             return;
         }
-        let idx = (y * self.width + x) as usize;
-        match color {
-            Color::White => self.buffer[idx] = 0,
-            Color::Black => self.buffer[idx] = 1,
-            Color::Xor => self.buffer[idx] ^= 1,
-        }
+        self.buffer[(y * self.width + x) as usize] = color.0;
     }
 
     fn draw_hline_color(&mut self, x: i32, y: i32, length: u32, color: Color) {
@@ -307,48 +322,6 @@ impl Canvas {
         }
         for offset in 0..length {
             self.set_pixel_with_color(x, y + offset as i32, color);
-        }
-    }
-
-    fn draw_xor_circle(&mut self, x0: i32, y0: i32, radius: u32) {
-        if radius == 0 {
-            self.set_pixel_with_color(x0, y0, Color::Xor);
-            return;
-        }
-
-        let mut x = 0i32;
-        let mut y = radius as i32;
-        let mut d = 1 - y;
-
-        while x <= y {
-            if x == y {
-                self.set_pixel_with_color(x0 + x, y0 + y, Color::Xor);
-                self.set_pixel_with_color(x0 - x, y0 + y, Color::Xor);
-                self.set_pixel_with_color(x0 + x, y0 - y, Color::Xor);
-                self.set_pixel_with_color(x0 - x, y0 - y, Color::Xor);
-            } else if x == 0 {
-                self.set_pixel_with_color(x0, y0 + y, Color::Xor);
-                self.set_pixel_with_color(x0, y0 - y, Color::Xor);
-                self.set_pixel_with_color(x0 + y, y0, Color::Xor);
-                self.set_pixel_with_color(x0 - y, y0, Color::Xor);
-            } else {
-                self.set_pixel_with_color(x0 + x, y0 + y, Color::Xor);
-                self.set_pixel_with_color(x0 - x, y0 + y, Color::Xor);
-                self.set_pixel_with_color(x0 + x, y0 - y, Color::Xor);
-                self.set_pixel_with_color(x0 - x, y0 - y, Color::Xor);
-                self.set_pixel_with_color(x0 + y, y0 + x, Color::Xor);
-                self.set_pixel_with_color(x0 - y, y0 + x, Color::Xor);
-                self.set_pixel_with_color(x0 + y, y0 - x, Color::Xor);
-                self.set_pixel_with_color(x0 - y, y0 - x, Color::Xor);
-            }
-
-            if d < 0 {
-                d += 2 * x + 3;
-            } else {
-                d += 2 * (x - y) + 5;
-                y -= 1;
-            }
-            x += 1;
         }
     }
 
@@ -474,33 +447,6 @@ impl Canvas {
         }
     }
 
-    fn draw_xor_disc(&mut self, x0: i32, y0: i32, radius: u32) {
-        if radius == 0 {
-            self.set_pixel_with_color(x0, y0, Color::Xor);
-            return;
-        }
-
-        let r = radius as i32;
-        let r_sq = r * r;
-
-        for dy in -r..=r {
-            let y_sq = dy * dy;
-            if y_sq > r_sq {
-                continue;
-            }
-
-            let mut x_extent = 0;
-            while (x_extent + 1) * (x_extent + 1) <= r_sq - y_sq {
-                x_extent += 1;
-            }
-
-            let line_y = y0 + dy;
-            let line_x = x0 - x_extent;
-            let line_w = (2 * x_extent + 1) as u32;
-
-            self.draw_hline_color(line_x, line_y, line_w, Color::Xor);
-        }
-    }
 }
 
 impl FontDrawTarget for Canvas {
@@ -512,7 +458,12 @@ impl FontDrawTarget for Canvas {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{Color, Font};
+use alloc::boxed::Box;
+use crate::palette;
+use crate::types::Font;
+
+    const INK: u8 = palette::INK.0;
+    const PAPER: u8 = palette::PAPER.0;
 
     fn idx(canvas: &Canvas, x: u32, y: u32) -> usize {
         (y * canvas.width() + x) as usize
@@ -522,80 +473,80 @@ mod tests {
     fn draw_dot_sets_expected_pixel() {
         let mut canvas = Canvas::new();
         canvas.clear();
-        canvas.set_color(Color::Black);
+        canvas.set_color(palette::INK);
         canvas.draw_dot(2, 3);
 
         let index = idx(&canvas, 2, 3);
-        assert_eq!(canvas.buffer()[index], 1);
+        assert_eq!(canvas.buffer()[index], INK);
     }
 
     #[test]
     fn draw_line_horizontal() {
         let mut canvas = Canvas::new();
         canvas.clear();
-        canvas.set_color(Color::Black);
+        canvas.set_color(palette::INK);
         canvas.draw_line(0, 0, 3, 0);
 
         for x in 0..=3 {
-            assert_eq!(canvas.buffer()[idx(&canvas, x, 0)], 1);
+            assert_eq!(canvas.buffer()[idx(&canvas, x, 0)], INK);
         }
-        assert_eq!(canvas.buffer()[idx(&canvas, 0, 1)], 0);
+        assert_eq!(canvas.buffer()[idx(&canvas, 0, 1)], PAPER);
     }
 
     #[test]
     fn draw_line_vertical() {
         let mut canvas = Canvas::new();
         canvas.clear();
-        canvas.set_color(Color::Black);
+        canvas.set_color(palette::INK);
         canvas.draw_line(2, 0, 2, 3);
 
         for y in 0..=3 {
-            assert_eq!(canvas.buffer()[idx(&canvas, 2, y)], 1);
+            assert_eq!(canvas.buffer()[idx(&canvas, 2, y)], INK);
         }
-        assert_eq!(canvas.buffer()[idx(&canvas, 1, 0)], 0);
+        assert_eq!(canvas.buffer()[idx(&canvas, 1, 0)], PAPER);
     }
 
     #[test]
     fn draw_frame_border_only() {
         let mut canvas = Canvas::new();
         canvas.clear();
-        canvas.set_color(Color::Black);
+        canvas.set_color(palette::INK);
         canvas.draw_frame(0, 0, 3, 3);
 
-        assert_eq!(canvas.buffer()[idx(&canvas, 0, 0)], 1);
-        assert_eq!(canvas.buffer()[idx(&canvas, 1, 0)], 1);
-        assert_eq!(canvas.buffer()[idx(&canvas, 2, 0)], 1);
-        assert_eq!(canvas.buffer()[idx(&canvas, 0, 1)], 1);
-        assert_eq!(canvas.buffer()[idx(&canvas, 2, 1)], 1);
-        assert_eq!(canvas.buffer()[idx(&canvas, 0, 2)], 1);
-        assert_eq!(canvas.buffer()[idx(&canvas, 1, 2)], 1);
-        assert_eq!(canvas.buffer()[idx(&canvas, 2, 2)], 1);
-        assert_eq!(canvas.buffer()[idx(&canvas, 1, 1)], 0);
+        assert_eq!(canvas.buffer()[idx(&canvas, 0, 0)], INK);
+        assert_eq!(canvas.buffer()[idx(&canvas, 1, 0)], INK);
+        assert_eq!(canvas.buffer()[idx(&canvas, 2, 0)], INK);
+        assert_eq!(canvas.buffer()[idx(&canvas, 0, 1)], INK);
+        assert_eq!(canvas.buffer()[idx(&canvas, 2, 1)], INK);
+        assert_eq!(canvas.buffer()[idx(&canvas, 0, 2)], INK);
+        assert_eq!(canvas.buffer()[idx(&canvas, 1, 2)], INK);
+        assert_eq!(canvas.buffer()[idx(&canvas, 2, 2)], INK);
+        assert_eq!(canvas.buffer()[idx(&canvas, 1, 1)], PAPER);
     }
 
     #[test]
     fn draw_box_fills_area() {
         let mut canvas = Canvas::new();
         canvas.clear();
-        canvas.set_color(Color::Black);
+        canvas.set_color(palette::INK);
         canvas.draw_box(1, 1, 2, 2);
 
-        assert_eq!(canvas.buffer()[idx(&canvas, 1, 1)], 1);
-        assert_eq!(canvas.buffer()[idx(&canvas, 2, 1)], 1);
-        assert_eq!(canvas.buffer()[idx(&canvas, 1, 2)], 1);
-        assert_eq!(canvas.buffer()[idx(&canvas, 2, 2)], 1);
-        assert_eq!(canvas.buffer()[idx(&canvas, 0, 0)], 0);
+        assert_eq!(canvas.buffer()[idx(&canvas, 1, 1)], INK);
+        assert_eq!(canvas.buffer()[idx(&canvas, 2, 1)], INK);
+        assert_eq!(canvas.buffer()[idx(&canvas, 1, 2)], INK);
+        assert_eq!(canvas.buffer()[idx(&canvas, 2, 2)], INK);
+        assert_eq!(canvas.buffer()[idx(&canvas, 0, 0)], PAPER);
     }
 
     #[test]
     fn draw_str_sets_pixels() {
         let mut canvas = Canvas::new();
         canvas.clear();
-        canvas.set_color(Color::Black);
+        canvas.set_color(palette::INK);
         canvas.set_font(Font::Primary);
         canvas.draw_str(0, 10, "A");
 
-        let filled = canvas.buffer().iter().filter(|&&value| value == 1).count();
+        let filled = canvas.buffer().iter().filter(|&&value| value == INK).count();
         assert!(filled > 10);
     }
 }

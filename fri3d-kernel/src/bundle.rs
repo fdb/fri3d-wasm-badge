@@ -1,6 +1,6 @@
 //! `.fab` — Fri3d App Bundle.
 //!
-//! A bundle is a fixed 256-byte header followed by the payload (the app's
+//! A bundle is a fixed 512-byte header followed by the payload (the app's
 //! `.wasm`). Every field sits at a fixed offset so the kernel reads it in
 //! place from flash; nothing is parsed or copied at boot. `fri3d-pack`
 //! writes bundles from `manifest.toml` + `icon.png` + the compiled wasm.
@@ -10,34 +10,35 @@
 //! | Offset | Size | Field |
 //! | ------ | ---- | ----- |
 //! | 0      | 4    | magic `FAB1` |
-//! | 4      | 2    | format version (1) |
+//! | 4      | 2    | format version (2) |
 //! | 6      | 2    | flags (bit 0 = system app) |
 //! | 8      | 24   | id, `[a-z0-9_]`, NUL-padded |
 //! | 32     | 32   | name |
 //! | 64     | 16   | version |
 //! | 80     | 32   | author |
 //! | 112    | 96   | description |
-//! | 208    | 1    | icon width (14) |
-//! | 209    | 1    | icon height (14) |
+//! | 208    | 1    | icon width (16) |
+//! | 209    | 1    | icon height (16) |
 //! | 210    | 1    | payload kind (0 = wasm) |
-//! | 211    | 1    | reserved |
-//! | 212    | 28   | icon bitmap, 2 bytes per row, MSB = leftmost pixel |
+//! | 211    | 29   | reserved |
 //! | 240    | 4    | payload length |
 //! | 244    | 12   | reserved |
-//! | 256    | n    | payload |
+//! | 256    | 256  | icon, one palette index per pixel, row-major, 255 = transparent |
+//! | 512    | n    | payload |
 
 pub const MAGIC: &[u8; 4] = b"FAB1";
-pub const FORMAT_VERSION: u16 = 1;
-pub const HEADER_LEN: usize = 256;
+pub const FORMAT_VERSION: u16 = 2;
+pub const HEADER_LEN: usize = 512;
 
 pub const FLAG_SYSTEM: u16 = 1 << 0;
 
 pub const PAYLOAD_WASM: u8 = 0;
 
-pub const ICON_W: usize = 14;
-pub const ICON_H: usize = 14;
-pub const ICON_ROW_BYTES: usize = 2;
-pub const ICON_LEN: usize = ICON_ROW_BYTES * ICON_H;
+pub const ICON_W: usize = 16;
+pub const ICON_H: usize = 16;
+pub const ICON_LEN: usize = ICON_W * ICON_H;
+/// Icon pixel value that leaves the background untouched.
+pub const ICON_TRANSPARENT: u8 = 255;
 
 pub mod offset {
     pub const MAGIC: usize = 0;
@@ -51,8 +52,8 @@ pub mod offset {
     pub const ICON_W: usize = 208;
     pub const ICON_H: usize = 209;
     pub const PAYLOAD_KIND: usize = 210;
-    pub const ICON: usize = 212;
     pub const PAYLOAD_LEN: usize = 240;
+    pub const ICON: usize = 256;
 }
 
 pub mod len {
@@ -63,9 +64,9 @@ pub mod len {
     pub const DESCRIPTION: usize = 96;
 }
 
-const _: () = assert!(offset::ICON + ICON_LEN <= offset::PAYLOAD_LEN);
 const _: () = assert!(offset::DESCRIPTION + len::DESCRIPTION <= offset::ICON_W);
-const _: () = assert!(offset::PAYLOAD_LEN + 4 + 12 == HEADER_LEN);
+const _: () = assert!(offset::PAYLOAD_LEN + 4 + 12 == offset::ICON);
+const _: () = assert!(offset::ICON + ICON_LEN == HEADER_LEN);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum BundleError {
@@ -187,6 +188,7 @@ impl HeaderBuilder {
         buf[offset::ICON_W] = ICON_W as u8;
         buf[offset::ICON_H] = ICON_H as u8;
         buf[offset::PAYLOAD_KIND] = PAYLOAD_WASM;
+        buf[offset::ICON..offset::ICON + ICON_LEN].fill(ICON_TRANSPARENT);
         Self { buf }
     }
 
@@ -220,8 +222,8 @@ impl HeaderBuilder {
         self.buf[offset::FLAGS..offset::FLAGS + 2].copy_from_slice(&flags.to_le_bytes());
         self
     }
-    pub fn icon(&mut self, bitmap: &[u8; ICON_LEN]) -> &mut Self {
-        self.buf[offset::ICON..offset::ICON + ICON_LEN].copy_from_slice(bitmap);
+    pub fn icon(&mut self, pixels: &[u8; ICON_LEN]) -> &mut Self {
+        self.buf[offset::ICON..offset::ICON + ICON_LEN].copy_from_slice(pixels);
         self
     }
     pub fn payload_len(&mut self, n: u32) -> &mut Self {

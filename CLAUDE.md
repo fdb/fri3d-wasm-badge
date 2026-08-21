@@ -42,11 +42,17 @@ shows the problem:
   `fri3d-kernel/src/canvas.rs` or `font.rs`, run the headless desktop
   host on `test_drawing` (`--keys right` cycles scenes) and look.
 - **Apps are `no_std`, no `alloc`.** State in `static AppCell<T>`.
+- **Colours are DB32 indices, never RGB.** Use the `color::` names from
+  `fri3d-wasm-api` (roles in design_docs/017). System icons are PNGs in
+  `artwork/icons/`; `cargo run -p fri3d-pack` regenerates `fri3d-artwork`.
+  Fonts are BDFs in `artwork/fonts/`; `cargo run -p fri3d-fontgen`
+  regenerates `fonts.rs`.
 
 ## Adding an app
 
 1. `apps/<id>/` with `Cargo.toml` (crate `fri3d-app-<id>`, cdylib),
-   `manifest.toml`, a 14×14 `icon.png`, `src/lib.rs`.
+   `manifest.toml`, a 16×16 `icon.png` in the DB32 palette
+   (`artwork/db32.gpl` for Aseprite; transparent = hole), `src/lib.rs`.
 2. Add `"apps/<id>"` to the workspace `members` in `Cargo.toml`.
 3. `cargo run -p fri3d-pack` regenerates `fri3d-apps/src/generated.rs`.
 4. Screenshot it headlessly; then browser; then badge.

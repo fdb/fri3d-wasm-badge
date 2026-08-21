@@ -36,6 +36,7 @@ mod bindings {
         // Draws a 1-bit bitmap (rows of ceil(w/8) bytes, MSB first) in the
         // current color. Clear bits are transparent.
         pub fn canvas_draw_bitmap(x: i32, y: i32, w: i32, h: i32, ptr: *const u8);
+        pub fn canvas_draw_image(x: i32, y: i32, w: i32, h: i32, scale: i32, ptr: *const u8);
         pub fn app_count() -> i32;
         // Copies the 256-byte bundle header of app `index` to `ptr`.
         pub fn app_info(index: i32, ptr: *mut u8, len: i32) -> i32;
@@ -112,6 +113,8 @@ mod bindings {
 
     pub fn canvas_draw_bitmap(_x: i32, _y: i32, _w: i32, _h: i32, _ptr: *const u8) {}
 
+    pub fn canvas_draw_image(_x: i32, _y: i32, _w: i32, _h: i32, _scale: i32, _ptr: *const u8) {}
+
     pub fn app_count() -> i32 {
         0
     }
@@ -135,9 +138,9 @@ mod bindings {
     pub fn log_str(_ptr: *const u8) {}
 }
 
-/// Native canvas size. Hosts upscale (2× on the badge LCD).
-pub const SCREEN_WIDTH: u32 = 160;
-pub const SCREEN_HEIGHT: u32 = 120;
+/// Native canvas size: the badge LCD, 1:1.
+pub const SCREEN_WIDTH: u32 = 320;
+pub const SCREEN_HEIGHT: u32 = 240;
 
 const STR_BUFFER_SIZE: usize = 256;
 
@@ -467,6 +470,39 @@ pub fn canvas_draw_bitmap(x: i32, y: i32, w: u32, h: u32, bits: &[u8]) {
     }
 }
 
+/// Draw an indexed-colour image: `w*h` palette indices, row-major,
+/// `color::TRANSPARENT` skipped. `scale` repeats every pixel `scale` times
+/// in both directions (icons at 2× in a grid).
+pub fn canvas_draw_image(x: i32, y: i32, w: u32, h: u32, scale: u32, pixels: &[u8]) {
+    if pixels.len() < (w * h) as usize {
+        return;
+    }
+    let ptr = pixels.as_ptr();
+    #[cfg(target_arch = "wasm32")]
+    unsafe {
+        bindings::canvas_draw_image(x, y, w as i32, h as i32, scale as i32, ptr);
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        bindings::canvas_draw_image(x, y, w as i32, h as i32, scale as i32, ptr);
+    }
+}
+
+/// Draw an [`Image`] at `scale`.
+pub fn canvas_draw_icon(x: i32, y: i32, scale: u32, image: &Image) {
+    canvas_draw_image(x, y, image.w, image.h, scale, image.pixels);
+}
+
+/// An indexed-colour image: `w*h` palette indices, `color::TRANSPARENT`
+/// for holes. System icons in `fri3d-artwork` and app icons in
+/// [`AppInfo`] both have this shape.
+#[derive(Copy, Clone)]
+pub struct Image {
+    pub w: u32,
+    pub h: u32,
+    pub pixels: &'static [u8],
+}
+
 /// Number of installed apps (launcher excluded). Index `0..count` is the
 /// id accepted by `start_app`.
 pub fn app_count() -> u32 {
@@ -547,16 +583,16 @@ fn with_two_cstr<R>(a: &str, b: &str, f: impl FnOnce(*const u8, *const u8) -> R)
     f(ba.as_ptr(), bb.as_ptr())
 }
 
-/// The 256-byte bundle header of an installed app, as copied by the
+/// The 512-byte bundle header of an installed app, as copied by the
 /// kernel. Field offsets match `fri3d_kernel::bundle`.
 pub struct AppInfo {
     header: [u8; AppInfo::LEN],
 }
 
 impl AppInfo {
-    pub const LEN: usize = 256;
-    pub const ICON_W: u32 = 14;
-    pub const ICON_H: u32 = 14;
+    pub const LEN: usize = 512;
+    pub const ICON_W: u32 = 16;
+    pub const ICON_H: u32 = 16;
 
     pub const fn empty() -> Self {
         Self { header: [0; Self::LEN] }
@@ -599,9 +635,14 @@ impl AppInfo {
     pub fn is_system(&self) -> bool {
         self.header[6] & 1 != 0
     }
-    /// 14x14 1-bit icon, 2 bytes per row.
+    /// 16x16 icon: one palette index per pixel, `color::TRANSPARENT` for holes.
     pub fn icon(&self) -> &[u8] {
-        &self.header[212..212 + 28]
+        &self.header[256..256 + 256]
+    }
+
+    /// Draw the icon at `scale` (1 in lists, 2 in the home grid).
+    pub fn draw_icon(&self, x: i32, y: i32, scale: u32) {
+        canvas_draw_image(x, y, Self::ICON_W, Self::ICON_H, scale, self.icon());
     }
 }
 
@@ -627,17 +668,73 @@ impl<T: Copy> AppCell<T> {
     }
 }
 
+/// DB32 palette indices. Mirrors `fri3d_kernel::palette`; design doc 017
+/// lists the roles.
 pub mod color {
-    pub const WHITE: u32 = 0;
-    pub const BLACK: u32 = 1;
-    pub const XOR: u32 = 2;
+    pub const BLACK: u32 = 0;
+    pub const INK: u32 = 1;
+    pub const PLUM: u32 = 2;
+    pub const BROWN_DARK: u32 = 3;
+    pub const BROWN: u32 = 4;
+    pub const TERRA: u32 = 5;
+    pub const TAN: u32 = 6;
+    pub const PAPER: u32 = 7;
+    pub const GOLD: u32 = 8;
+    pub const GREEN_LIGHT: u32 = 9;
+    pub const GREEN: u32 = 10;
+    pub const TEAL: u32 = 11;
+    pub const GREEN_DARK: u32 = 12;
+    pub const OLIVE: u32 = 13;
+    pub const FOREST: u32 = 14;
+    pub const INDIGO: u32 = 15;
+    pub const BLUE_DARK: u32 = 16;
+    pub const BLUE_MID: u32 = 17;
+    pub const BLUE: u32 = 18;
+    pub const CYAN: u32 = 19;
+    pub const SKY: u32 = 20;
+    pub const WHITE: u32 = 21;
+    pub const GREY_LIGHT: u32 = 22;
+    pub const GREY: u32 = 23;
+    pub const GREY_DARK: u32 = 24;
+    pub const CHARCOAL: u32 = 25;
+    pub const PURPLE: u32 = 26;
+    pub const RED: u32 = 27;
+    pub const ROSE: u32 = 28;
+    pub const PINK: u32 = 29;
+    pub const SAGE: u32 = 30;
+    pub const GOLD_DARK: u32 = 31;
+
+    // UI roles.
+    /// Screen background; what `canvas_clear` fills with.
+    pub const CARD: u32 = WHITE;
+    pub const MUTED: u32 = BROWN;
+    pub const FOCUS: u32 = GOLD;
+    pub const REST_BORDER: u32 = TAN;
+
+    /// Image pixel value that is not drawn.
+    pub const TRANSPARENT: u8 = 255;
 }
 
 pub mod font {
+    /// Pixelify Sans 11 px regular: body text, labels.
     pub const PRIMARY: u32 = 0;
+    /// Same face as `PRIMARY`.
     pub const SECONDARY: u32 = 1;
+    /// Same face as `PRIMARY`.
     pub const KEYBOARD: u32 = 2;
+    /// Pixelify Sans 22 px bold.
     pub const BIG_NUMBERS: u32 = 3;
+    /// Pixelify Sans 22 px bold: banner titles.
+    pub const TITLE: u32 = 4;
+}
+
+/// Text metrics of the built-in faces (ascent above the baseline,
+/// descent below). Rows are laid out from these.
+pub mod metrics {
+    pub const PRIMARY_ASCENT: i32 = 8;
+    pub const PRIMARY_DESCENT: i32 = 2;
+    pub const TITLE_ASCENT: i32 = 16;
+    pub const TITLE_DESCENT: i32 = 4;
 }
 
 pub mod input {

@@ -2,7 +2,7 @@
 //!
 //! One crate, three hosts (desktop, browser, badge). The kernel owns every
 //! byte of state the badge needs at runtime and allocates it once at boot:
-//! the 160x120 framebuffer, the input queue, the app registry, the settings
+//! the 320x240 framebuffer, the input queue, the app registry, the settings
 //! table. Apps are WebAssembly modules run by wasmi; each app gets a fixed
 //! fuel budget per call and a capped linear memory, so a broken app cannot
 //! stall or exhaust the badge.
@@ -32,17 +32,18 @@ pub mod registry;
 pub mod settings;
 pub mod types;
 pub mod net;
+pub mod palette;
 pub mod wifi;
 
 pub use kernel::{Kernel, StepResult};
 
-/// Native canvas. The 320×240 badge LCD shows it at 2×.
-pub const SCREEN_WIDTH: u32 = 160;
-pub const SCREEN_HEIGHT: u32 = 120;
+/// Native canvas: the badge LCD, one byte (a [`palette`] index) per pixel.
+pub const SCREEN_WIDTH: u32 = 320;
+pub const SCREEN_HEIGHT: u32 = 240;
 pub const FRAMEBUFFER_LEN: usize = (SCREEN_WIDTH * SCREEN_HEIGHT) as usize;
 
 /// Kernel ABI version reported to apps. Bump when host imports change shape.
-pub const KERNEL_VERSION: u32 = 2;
+pub const KERNEL_VERSION: u32 = 3;
 
 /// Hard limits. Every table in the kernel is sized by one of these.
 pub mod limits {

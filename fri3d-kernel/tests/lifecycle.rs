@@ -271,7 +271,7 @@ fn app_info_header_is_exact_copy() {
     // registry API the host sees.
     assert_eq!(k.app_count(), 1);
     assert_eq!(k.app_name(0), Some("rec"));
-    assert_eq!(HEADER_LEN, 256);
+    assert_eq!(HEADER_LEN, 512);
 }
 
 /// A user app that tries every Wi-Fi action and reports each result

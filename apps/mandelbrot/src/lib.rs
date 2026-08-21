@@ -84,8 +84,20 @@ fn in_main_body(x: i32, y: i32) -> bool {
     fp_mul(q, q + qx) < fp_mul(FP_ONE / 4, fp_mul(y, y))
 }
 
-// Build a full 128x64 framebuffer in WASM memory using fixed-point math,
-// then ship it to the host in one canvas_draw_buffer call.
+/// Outside the set, the escape iteration picks a band from this ramp.
+const RAMP: [u8; 8] = [
+    api::color::SKY as u8,
+    api::color::CYAN as u8,
+    api::color::BLUE as u8,
+    api::color::BLUE_MID as u8,
+    api::color::INDIGO as u8,
+    api::color::BLUE_DARK as u8,
+    api::color::TEAL as u8,
+    api::color::GREEN_LIGHT as u8,
+];
+
+// Build a full-screen framebuffer of palette indices in WASM memory using
+// fixed-point math, then ship it to the host in one canvas_draw_buffer call.
 fn render_impl() {
     static mut FB: [u8; (W * H) as usize] = [0; (W * H) as usize];
 
@@ -109,8 +121,8 @@ fn render_impl() {
     for y in 0..H {
         let mut x0 = -x_offset;
         for x in 0..W {
-            let inside = if in_main_body(x0, y0) {
-                true
+            let pixel = if in_main_body(x0, y0) {
+                api::color::INK as u8
             } else {
                 let mut x1: i32 = 0;
                 let mut y1: i32 = 0;
@@ -125,9 +137,13 @@ fn render_impl() {
                     y2 = fp_mul(y1, y1);
                     iter += 1;
                 }
-                iter >= MAX_ITER
+                if iter >= MAX_ITER {
+                    api::color::INK as u8
+                } else {
+                    RAMP[(iter as usize) % RAMP.len()]
+                }
             };
-            fb[(y * W + x) as usize] = if inside { 1 } else { 0 };
+            fb[(y * W + x) as usize] = pixel;
             x0 += dx;
         }
         y0 += dy;

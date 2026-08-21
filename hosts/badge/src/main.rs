@@ -2,8 +2,8 @@
 //!
 //! The kernel does all the work; this file is the IO layer:
 //! CH32 expander (buttons, LCD reset, backlight) over I²C1, ST7789V over
-//! SPI2, a 2× upscale of the 160×120 canvas to the full 320×240 panel, and
-//! the Wi-Fi radio behind the kernel's three primitives (scan, connect,
+//! SPI2, the 320×240 canvas blitted 1:1 through the DB32 → RGB565 table,
+//! and the Wi-Fi radio behind the kernel's three primitives (scan, connect,
 //! disconnect).
 
 #![no_std]
@@ -46,7 +46,7 @@ use esp_radio::wifi::{AuthenticationMethod, Config as WifiConfig, WifiController
 use fri3d_kernel::types::InputKey;
 use fri3d_kernel::net::NetRequest;
 use fri3d_kernel::wifi::{ScanEntry, WifiRequest};
-use fri3d_kernel::{Kernel, FRAMEBUFFER_LEN, SCREEN_HEIGHT, SCREEN_WIDTH};
+use fri3d_kernel::{palette, Kernel, FRAMEBUFFER_LEN, SCREEN_HEIGHT, SCREEN_WIDTH};
 use mipidsi::interface::SpiInterface;
 use mipidsi::models::ST7789;
 use mipidsi::options::{ColorInversion, ColorOrder, Orientation, Rotation};
@@ -165,19 +165,19 @@ fn ota_confirm_boot(flash: &mut esp_storage::FlashStorage<'static>) {
 
 // ---- Panel geometry -------------------------------------------------------
 
-const LCD_W: u16 = 320;
-const LCD_H: u16 = 240;
-const SCALE: u16 = 2;
-const FB_W: u16 = SCREEN_WIDTH as u16;
-const FB_H: u16 = SCREEN_HEIGHT as u16;
-const UP_W: u16 = FB_W * SCALE; // 256
-const UP_H: u16 = FB_H * SCALE; // 128
-const CANVAS_X: u16 = (LCD_W - UP_W) / 2; // 0
-const CANVAS_Y: u16 = (LCD_H - UP_H) / 2; // 0
+const LCD_W: u16 = SCREEN_WIDTH as u16;
+const LCD_H: u16 = SCREEN_HEIGHT as u16;
 
-// Flipper-style amber backlight, black pixels.
-const AMBER: Rgb565 = Rgb565::new(0xFF >> 3, 0x82 >> 2, 0x00 >> 3);
-const INK: Rgb565 = Rgb565::BLACK;
+/// Framebuffer byte → RGB565, built once from the kernel palette.
+const LUT: [u16; 32] = {
+    let mut lut = [0u16; 32];
+    let mut i = 0;
+    while i < 32 {
+        lut[i] = palette::rgb565(i as u8);
+        i += 1;
+    }
+    lut
+};
 
 // ---- CH32 expander --------------------------------------------------------
 
@@ -325,8 +325,8 @@ fn main() -> ! {
     let dc = Output::new(peripherals.GPIO4, Level::Low, OutputConfig::default());
     let spi_dev = ExclusiveDevice::new_no_delay(spi, cs).expect("spi device");
 
-    // mipidsi batches pixel writes through this buffer; one scaled row pair
-    // (2 × 256 px × 2 bytes) per flush keeps the SPI bus streaming.
+    // mipidsi batches pixel writes through this buffer; three panel rows
+    // (3 × 320 px × 2 bytes) per flush keep the SPI bus streaming.
     static mut DI_BUF: [u8; 2048] = [0; 2048];
     #[allow(static_mut_refs)]
     let di_buf = unsafe { &mut DI_BUF };
@@ -350,7 +350,7 @@ fn main() -> ! {
     };
     println!("[fri3d] display ready");
 
-    let _ = display.clear(AMBER);
+    let _ = display.clear(Rgb565::from(RawU16::new(LUT[palette::PAPER.0 as usize])));
 
     // -- kernel ------------------------------------------------------------
     let mut kernel = Box::new(Kernel::new());
@@ -373,9 +373,10 @@ fn main() -> ! {
     );
 
     // -- main loop ---------------------------------------------------------
-    static mut LAST_FB: [u8; FRAMEBUFFER_LEN] = [0xFF; FRAMEBUFFER_LEN];
-    #[allow(static_mut_refs)]
-    let last_fb = unsafe { &mut LAST_FB };
+    // The last blitted frame lives in PSRAM: a 76 800-byte static would
+    // take its share of internal DRAM from the main stack, and the wasmi
+    // translator needs that stack when it loads an app.
+    let last_fb: &'static mut [u8] = Box::leak(alloc::vec![0xFF; FRAMEBUFFER_LEN].into_boxed_slice());
 
     let mut settings_img = [0u8; fri3d_kernel::settings::IMAGE_LEN];
     let mut wifi_img = [0u8; fri3d_kernel::wifi::IMAGE_LEN];
@@ -784,26 +785,13 @@ type Disp = mipidsi::Display<
     mipidsi::NoResetPin,
 >;
 
-/// 2× nearest-neighbour upscale, streamed one canvas row (= two panel rows)
-/// at a time so no full-size frame buffer is needed.
+/// 1:1 blit of the whole canvas, one streamed pixel iterator so no
+/// RGB565 frame buffer is needed.
 fn blit(display: &mut Disp, fb: &[u8]) {
-    let ink: u16 = RawU16::from(INK).into_inner();
-    let amber: u16 = RawU16::from(AMBER).into_inner();
-    for y in 0..FB_H {
-        let row = &fb[(y as usize) * FB_W as usize..][..FB_W as usize];
-        let line = row.iter().flat_map(move |&px| {
-            let c = if px != 0 { ink } else { amber };
-            [c, c]
-        });
-        // Two identical panel rows per canvas row.
-        let pixels = line.clone().chain(line).map(|raw| Rgb565::from(RawU16::new(raw)));
-        let sy = CANVAS_Y + y * SCALE;
-        if display
-            .set_pixels(CANVAS_X, sy, CANVAS_X + UP_W - 1, sy + SCALE - 1, pixels)
-            .is_err()
-        {
-            println!("[fri3d] blit error at row {}", y);
-            return;
-        }
+    let pixels = fb
+        .iter()
+        .map(|&px| Rgb565::from(RawU16::new(LUT[(px & 31) as usize])));
+    if display.set_pixels(0, 0, LCD_W - 1, LCD_H - 1, pixels).is_err() {
+        println!("[fri3d] blit error");
     }
 }

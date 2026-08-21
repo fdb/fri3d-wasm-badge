@@ -13,7 +13,7 @@
 
 use fri3d_wasm_api as api;
 use fri3d_wasm_api::imgui::UiVirtualKeyboard;
-use fri3d_wasm_api::{align, color, font, imgui, input, wifi};
+use fri3d_wasm_api::{color, font, imgui, input, wifi};
 
 const NS: &str = "system";
 const KEY_BRIGHTNESS: &str = "brightness";
@@ -108,8 +108,8 @@ fn render_impl() {
 // -- main menu ---------------------------------------------------------------
 
 fn render_menu(s: &mut State) {
-    imgui::ui_label("Settings", font::PRIMARY, align::CENTER);
-    imgui::ui_separator();
+    imgui::ui_banner("Settings", "", None);
+    imgui::ui_spacer(8);
 
     let wifi_value = match wifi::status() {
         wifi::STATUS_OFF => "Off",
@@ -186,8 +186,8 @@ fn row_status(ssid: &wifi::Ssid, secure: bool) -> &'static str {
 }
 
 fn render_wifi(s: &mut State) {
-    imgui::ui_label("Wi-Fi", font::PRIMARY, align::CENTER);
-    imgui::ui_separator();
+    imgui::ui_banner("Wi-Fi", "", None);
+    imgui::ui_spacer(8);
 
     let on = wifi::enabled();
     let nets = if on { list_len() } else { 0 };
@@ -235,8 +235,8 @@ fn select_network(s: &mut State, ssid: wifi::Ssid, secure: bool) {
 // -- one network -----------------------------------------------------------------
 
 fn render_network(s: &mut State) {
-    imgui::ui_label(clip(s.selected.as_str(), 24), font::PRIMARY, align::CENTER);
-    imgui::ui_separator();
+    imgui::ui_banner(clip(s.selected.as_str(), 24), "", None);
+    imgui::ui_spacer(8);
 
     let connected = wifi::status() == wifi::STATUS_CONNECTED && wifi::current_ssid() == s.selected;
 
@@ -306,21 +306,20 @@ fn render_keyboard(s: &mut State) {
 // -- about -----------------------------------------------------------------------------
 
 fn render_about() {
-    imgui::ui_label("About", font::PRIMARY, align::CENTER);
-    imgui::ui_separator();
-    api::canvas_set_color(color::BLACK);
-    api::canvas_set_font(font::SECONDARY);
+    imgui::ui_banner("About", "", None);
+    api::canvas_set_color(color::INK);
+    api::canvas_set_font(font::PRIMARY);
     let mut line = Small::new();
     line.push_str("Fri3d WASM badge");
-    api::canvas_draw_str(2, 26, line.as_str());
+    api::canvas_draw_str(8, 50, line.as_str());
     let mut line = Small::new();
     line.push_str("kernel ABI v");
     line.push(api::kernel_version());
-    api::canvas_draw_str(2, 36, line.as_str());
+    api::canvas_draw_str(8, 66, line.as_str());
     let mut line = Small::new();
     line.push(api::app_count());
     line.push_str(" apps installed");
-    api::canvas_draw_str(2, 46, line.as_str());
+    api::canvas_draw_str(8, 82, line.as_str());
     imgui::ui_footer_left("Back");
 }
 

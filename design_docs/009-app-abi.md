@@ -5,7 +5,7 @@ import from module `env`, everything it may export, and the rules the
 kernel enforces. `fri3d-wasm-api` wraps all of this in safe Rust; this
 document is the ground truth the wrapper follows.
 
-ABI version: `kernel_version() == 2`. The version bumps when a signature
+ABI version: `kernel_version() == 3`. The version bumps when a signature
 changes or a function is removed. Adding a function is not a bump: an
 app that does not import it never notices.
 
@@ -31,21 +31,22 @@ app that does not import it never notices.
 
 | Signature | Semantics |
 | --- | --- |
-| `canvas_clear()` | Fill with white. The kernel already clears before every `render`. |
-| `canvas_width() -> i32`, `canvas_height() -> i32` | 160, 120. Prefer the SDK constants. |
-| `canvas_set_color(c)` | 0 white, 1 black, 2 XOR. Other values = black. |
-| `canvas_set_font(f)` | 0 Primary (helvB08, bold), 1 Secondary (haxrcorp4089), 2 Keyboard (profont11), 3 BigNumbers (profont22, digits only). |
+| `canvas_clear()` | Fill with `PAPER`. The kernel already clears before every `render`. |
+| `canvas_width() -> i32`, `canvas_height() -> i32` | 320, 240. Prefer the SDK constants. |
+| `canvas_set_color(c)` | DB32 palette index 0–31 (design doc 017). Other values = `INK`. |
+| `canvas_set_font(f)` | 0 Primary, 1 Secondary, 2 Keyboard: Pixelify Sans 11 regular. 3 BigNumbers, 4 Title: Pixelify Sans 22 bold. |
 | `canvas_draw_dot(x, y)` | One pixel. Out of range: ignored. |
 | `canvas_draw_line(x1, y1, x2, y2)` | Bresenham, inclusive ends. |
 | `canvas_draw_frame(x, y, w, h)` / `canvas_draw_box(x, y, w, h)` | Outline / filled rectangle. |
 | `canvas_draw_rframe(x, y, w, h, r)` / `canvas_draw_rbox(...)` | Rounded variants. |
-| `canvas_draw_circle(x, y, r)` / `canvas_draw_disc(x, y, r)` | Outline / filled. XOR-safe: each pixel touched once. |
+| `canvas_draw_circle(x, y, r)` / `canvas_draw_disc(x, y, r)` | Outline / filled. |
 | `canvas_draw_str(x, y, ptr)` | Text at baseline `y`, current font and colour. |
 | `canvas_string_width(ptr) -> i32` | Advance width in pixels for the current font. |
-| `canvas_draw_buffer(ptr, len)` | Replace the framebuffer with `len` bytes (0 white, 1 black), row-major. `len` clipped to `width*height`. One call per frame for full-frame renderers. |
-| `canvas_draw_bitmap(x, y, w, h, ptr)` | 1-bit bitmap, rows of `ceil(w/8)` bytes, MSB = leftmost pixel. Set bits drawn in the current colour, clear bits transparent. `w ≤ 160`, `h ≤ 120`. |
+| `canvas_draw_buffer(ptr, len)` | Replace the framebuffer with `len` palette indices, row-major. `len` clipped to `width*height`. One call per frame for full-frame renderers. |
+| `canvas_draw_bitmap(x, y, w, h, ptr)` | 1-bit bitmap, rows of `ceil(w/8)` bytes, MSB = leftmost pixel. Set bits drawn in the current colour, clear bits transparent. `w ≤ 320`, `h ≤ 240`. |
+| `canvas_draw_image(x, y, w, h, scale, ptr)` | `w*h` palette indices, row-major, 255 = transparent. Each pixel drawn `scale`×`scale` (0–8). Icons. |
 
-Known wart: the SDK's `imgui::ui_icon` reads bitmaps LSB-first, the opposite of `canvas_draw_bitmap`. Icons in `.fab` headers are MSB-first; draw them with `canvas_draw_bitmap`.
+Known wart: the SDK's `imgui::ui_icon` reads 1-bit bitmaps LSB-first, the opposite of `canvas_draw_bitmap`. App icons are indexed images; draw them with `AppInfo::draw_icon`.
 
 ### Random and time
 
@@ -71,7 +72,7 @@ Known wart: the SDK's `imgui::ui_icon` reads bitmaps LSB-first, the opposite of 
 | `exit_to_launcher()` | Leave the app. No-op for the launcher. |
 | `start_app(index)` | Start registry app `index`. From an app: that app stops first. Invalid index: kernel error, focus unchanged. |
 | `app_count() -> i32` | Installed apps (launcher excluded). |
-| `app_info(index, ptr, len) -> i32` | Copy the app's 256-byte bundle header to `ptr`. Returns 256, or -1 if `index` is out of range or `len < 256` or the range does not fit. Offsets: see 006. |
+| `app_info(index, ptr, len) -> i32` | Copy the app's 512-byte bundle header to `ptr`. Returns 512, or -1 if `index` is out of range or `len < 512` or the range does not fit. Offsets: see 006. |
 | `kernel_version() -> i32` | This document's version. |
 
 ### Settings

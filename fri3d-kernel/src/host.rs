@@ -397,11 +397,7 @@ fn with_str(caller: &mut C<'_>, ptr: i32, f: impl FnOnce(&mut Shared, &str)) {
 }
 
 fn color_from(v: i32) -> Color {
-    match v {
-        0 => Color::White,
-        2 => Color::Xor,
-        _ => Color::Black,
-    }
+    Color::from_index(v.clamp(0, 255) as u8)
 }
 
 fn font_from(v: i32) -> Font {
@@ -409,6 +405,7 @@ fn font_from(v: i32) -> Font {
         1 => Font::Secondary,
         2 => Font::Keyboard,
         3 => Font::BigNumbers,
+        4 => Font::Title,
         _ => Font::Primary,
     }
 }
@@ -515,6 +512,23 @@ fn register_imports(linker: &mut Linker<HostState>) -> Result<(), WasmiError> {
         },
     )?;
 
+    linker.func_wrap(
+        "env",
+        "canvas_draw_image",
+        |mut c: C<'_>, x: i32, y: i32, w: i32, h: i32, scale: i32, ptr: i32| {
+            let Some(memory) = memory_of(&mut c) else { return };
+            let (mem, state) = memory.data_and_store_mut(&mut c);
+            let (w, h) = (
+                w.clamp(0, crate::SCREEN_WIDTH as i32) as usize,
+                h.clamp(0, crate::SCREEN_HEIGHT as i32) as usize,
+            );
+            let scale = scale.clamp(0, 8) as u32;
+            let start = ptr.max(0) as usize;
+            let Some(pixels) = mem.get(start..start + w * h) else { return };
+            state.shared.borrow_mut().canvas.draw_image(x, y, w as u32, h as u32, scale, pixels);
+        },
+    )?;
+
     // -- random / time ------------------------------------------------
     linker.func_wrap("env", "random_seed", |c: C<'_>, seed: i32| {
         c.data().shared.borrow_mut().random.seed(seed as u32);
@@ -553,7 +567,7 @@ fn register_imports(linker: &mut Linker<HostState>) -> Result<(), WasmiError> {
     linker.func_wrap("env", "app_count", |c: C<'_>| -> i32 {
         c.data().shared.borrow().registry.len() as i32
     })?;
-    // Copies the 256-byte bundle header of app `index` into app memory.
+    // Copies the 512-byte bundle header of app `index` into app memory.
     // Returns bytes written, or -1.
     linker.func_wrap("env", "app_info", |mut c: C<'_>, index: i32, ptr: i32, len: i32| -> i32 {
         let Some(memory) = memory_of(&mut c) else { return -1 };

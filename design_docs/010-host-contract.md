@@ -1,7 +1,7 @@
 # 010 — Host contract and what three hosts taught us
 
 The kernel is driven, never driving. A host is anything that can supply
-a clock, button edges, a place to put 19 200 bytes, and (optionally)
+a clock, button edges, a place to put 76 800 bytes, and (optionally)
 a place to persist 3 332 bytes.
 
 ## The API
@@ -15,7 +15,7 @@ kernel.boot(now_ms)
 
 kernel.push_raw_input(key, pressed, now_ms)     // idempotent per edge
 let r = kernel.step(now_ms) -> StepResult { frame, next_wake_ms }
-kernel.framebuffer() -> Ref<[u8]>               // 160*120, 0 white / 1 black
+kernel.framebuffer() -> Ref<[u8]>               // 320*240 DB32 indices (palette::RGB)
 kernel.take_settings_image(&mut [u8; IMAGE_LEN]) -> bool   // true when dirty
 kernel.take_log_line() -> Option<String<96>>
 kernel.setting("system", "brightness") -> Option<u32>
@@ -89,8 +89,16 @@ that is honest for a process that runs them until exit.
 - **Stack.** Bare metal has no task stack limit; the 32 KB wasm3 lesson
   from the Arduino firmware does not apply.
 - **rust-lld cannot link Xtensa.** The GCC from `espup` stays as linker.
+- **The main stack is what is left of internal DRAM.** `.bss` statics and
+  the internal `heap_allocator!` come out of the same 512 KB; a 76 800-byte
+  framebuffer copy as a static pushed the stack below what wasmi's
+  translator needs to load the launcher (`write to the stack guard`
+  panic, bootloop). Big buffers go to the PSRAM heap via `vec!` +
+  `into_boxed_slice()` — never `Box::new([0; N])`, which builds the
+  array on the stack first. The kernel's own framebuffer is boxed for the
+  same reason.
 
 ## A fourth host would need
 
-A clock, seven button levels, a 160×120 blit, and 3.3 KB of storage.
+A clock, seven button levels, a 320×240 palette blit, and 3.3 KB of storage.
 Nothing else. The web host is 200 lines; that is the budget.

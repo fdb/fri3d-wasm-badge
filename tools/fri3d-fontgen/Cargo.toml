@@ -1,0 +1,6 @@
+[package]
+name = "fri3d-fontgen"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Turns artwork/fonts/*.bdf into fri3d-kernel/src/fonts.rs."

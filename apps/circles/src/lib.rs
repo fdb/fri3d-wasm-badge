@@ -7,12 +7,11 @@ static SEED: api::AppCell<u32> = api::AppCell::new(42);
 
 fn render_impl() {
     api::random_seed(SEED.get());
-    api::canvas_set_color(api::color::BLACK);
-
     for _ in 0..10 {
         let x = api::random_range(api::SCREEN_WIDTH) as i32;
         let y = api::random_range(api::SCREEN_HEIGHT) as i32;
-        let radius = api::random_range(15) + 3;
+        let radius = api::random_range(30) + 6;
+        api::canvas_set_color(api::random_range(32));
         api::canvas_draw_circle(x, y, radius);
     }
 }

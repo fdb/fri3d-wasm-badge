@@ -122,6 +122,7 @@ dependencies = [
 name = "fri3d-app-launcher"
 version = "0.1.0"
 dependencies = [
+ "fri3d-artwork",
  "fri3d-wasm-api",
 ]
 
@@ -176,6 +177,17 @@ dependencies = [
 
 [[package]]
 name = "fri3d-apps"
+version = "0.1.0"
+
+[[package]]
+name = "fri3d-artwork"
+version = "0.1.0"
+dependencies = [
+ "fri3d-wasm-api",
+]
+
+[[package]]
+name = "fri3d-fontgen"
 version = "0.1.0"
 
 [[package]]

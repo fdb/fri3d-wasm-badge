@@ -21,7 +21,7 @@ use crate::registry::RegistryError;
 use crate::settings::{IMAGE_LEN, SYSTEM_NS};
 use crate::net::NetRequest;
 use crate::wifi::{ScanEntry, WifiRequest, WifiStatus, IMAGE_LEN as WIFI_IMAGE_LEN};
-use crate::types::{Color, Font, InputKey, InputType};
+use crate::types::{Font, InputKey, InputType};
 use alloc::rc::Rc;
 use core::cell::RefCell;
 use heapless::String;
@@ -394,7 +394,7 @@ impl Kernel {
         let mut shared = self.shared.borrow_mut();
         let cv = &mut shared.canvas;
         cv.clear();
-        cv.set_color(Color::Black);
+        cv.set_color(crate::palette::INK);
         cv.set_font(Font::Primary);
         cv.draw_str(2, 12, "Kernel: launcher down");
         cv.set_font(Font::Secondary);

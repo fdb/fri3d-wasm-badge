@@ -15,7 +15,7 @@
 <body>
   <h1>Fri3d Badge — Web Host</h1>
   <div class="frame">
-    <canvas id="screen" width="160" height="120"></canvas>
+    <canvas id="screen" width="320" height="240"></canvas>
     <div class="hint">Arrows/WASD: d-pad &nbsp; Z/Enter: OK &nbsp; X/Backspace: Back &nbsp; M/Esc: Menu</div>
   </div>
   <div id="log"></div>
@@ -32,8 +32,7 @@ const KEYMAP = {
   x: KEY.BACK, X: KEY.BACK, Backspace: KEY.BACK,
   m: KEY.MENU, M: KEY.MENU, Escape: KEY.MENU,
 };
-const W = 160, H = 120;
-const AMBER = [0xFF, 0x82, 0x00];
+const W = 320, H = 240;
 
 const logEl = document.getElementById('log');
 function log(...args) { logEl.textContent += args.join(' ') + '\n'; logEl.scrollTop = logEl.scrollHeight; }
@@ -43,6 +42,7 @@ const ctx = canvas.getContext('2d');
 const image = ctx.createImageData(W, H);
 
 let kernel = null;
+let palette = null;
 let timeOffset = 0;
 const now = () => (performance.now() + timeOffset) >>> 0;
 
@@ -50,13 +50,12 @@ function draw() {
   const fb = kernel.framebuffer();
   let b = kernel.setting('system', 'brightness');
   b = b < 0 ? 100 : Math.min(100, Math.max(10, b));
-  const bg = AMBER.map(c => (c * b / 100) | 0);
   const px = image.data;
   for (let i = 0; i < fb.length; i++) {
-    const on = fb[i] !== 0;
-    px[i * 4 + 0] = on ? 0 : bg[0];
-    px[i * 4 + 1] = on ? 0 : bg[1];
-    px[i * 4 + 2] = on ? 0 : bg[2];
+    const c = palette[fb[i] & 31];
+    px[i * 4 + 0] = (((c >> 16) & 0xff) * b / 100) | 0;
+    px[i * 4 + 1] = (((c >> 8) & 0xff) * b / 100) | 0;
+    px[i * 4 + 2] = ((c & 0xff) * b / 100) | 0;
     px[i * 4 + 3] = 255;
   }
   ctx.putImageData(image, 0, 0);
@@ -109,6 +108,7 @@ function loop() {
 
 const ready = init().then(() => {
   kernel = new WebKernel(now());
+  palette = kernel.palette();
   try {
     const saved = localStorage.getItem('fri3d.settings');
     if (saved) kernel.load_settings(Uint8Array.from(atob(saved), c => c.charCodeAt(0)));

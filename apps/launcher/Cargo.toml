@@ -8,3 +8,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 fri3d-wasm-api = { path = "../../fri3d-wasm-api" }
+fri3d-artwork = { path = "../../fri3d-artwork" }

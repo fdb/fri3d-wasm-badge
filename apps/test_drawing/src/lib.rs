@@ -96,7 +96,7 @@ api::export_get_scene_count!(get_scene_count_impl);
 api::wasm_panic_handler!();
 
 fn render_horizontal_lines() {
-    api::canvas_set_color(api::color::BLACK);
+    api::canvas_set_color(api::color::INK);
     for y in (0..H).step_by(8) {
         api::canvas_draw_line(0, y, 127, y);
     }
@@ -106,7 +106,7 @@ fn render_horizontal_lines() {
 }
 
 fn render_vertical_lines() {
-    api::canvas_set_color(api::color::BLACK);
+    api::canvas_set_color(api::color::INK);
     for x in (0..W).step_by(8) {
         api::canvas_draw_line(x, 0, x, 63);
     }
@@ -116,7 +116,7 @@ fn render_vertical_lines() {
 }
 
 fn render_diagonal_lines() {
-    api::canvas_set_color(api::color::BLACK);
+    api::canvas_set_color(api::color::INK);
     api::canvas_draw_line(0, 0, 127, 63);
     api::canvas_draw_line(127, 0, 0, 63);
     for i in (0..W).step_by(16) {
@@ -127,7 +127,7 @@ fn render_diagonal_lines() {
 
 fn render_random_pixels() {
     api::random_seed(RANDOM_SEED);
-    api::canvas_set_color(api::color::BLACK);
+    api::canvas_set_color(api::color::INK);
     for _ in 0..500 {
         let x = api::random_range(api::SCREEN_WIDTH) as i32;
         let y = api::random_range(api::SCREEN_HEIGHT) as i32;
@@ -137,7 +137,7 @@ fn render_random_pixels() {
 
 fn render_circles() {
     api::random_seed(RANDOM_SEED);
-    api::canvas_set_color(api::color::BLACK);
+    api::canvas_set_color(api::color::INK);
     api::canvas_draw_circle(CX, CY, 30);
     api::canvas_draw_circle(CX, CY, 20);
     api::canvas_draw_circle(CX, CY, 10);
@@ -149,17 +149,17 @@ fn render_circles() {
 
 fn render_filled_circles() {
     api::random_seed(RANDOM_SEED);
-    api::canvas_set_color(api::color::BLACK);
+    api::canvas_set_color(api::color::INK);
     api::canvas_draw_disc(32, 32, 20);
     api::canvas_draw_disc(96, 32, 20);
     api::canvas_draw_disc(CX, CY / 2, 8);
     api::canvas_draw_disc(CX, CY + CY / 2, 8);
-    api::canvas_set_color(api::color::XOR);
+    api::canvas_set_color(api::color::TERRA);
     api::canvas_draw_disc(CX, CY, 18);
 }
 
 fn render_rectangles() {
-    api::canvas_set_color(api::color::BLACK);
+    api::canvas_set_color(api::color::INK);
     api::canvas_draw_frame(4, 4, 120, 56);
     api::canvas_draw_frame(14, 10, 100, 44);
     api::canvas_draw_frame(24, 16, 80, 32);
@@ -171,17 +171,17 @@ fn render_rectangles() {
 }
 
 fn render_filled_rectangles() {
-    api::canvas_set_color(api::color::BLACK);
+    api::canvas_set_color(api::color::INK);
     api::canvas_draw_box(10, 10, 30, 20);
     api::canvas_draw_box(88, 10, 30, 20);
     api::canvas_draw_box(10, 34, 30, 20);
     api::canvas_draw_box(88, 34, 30, 20);
-    api::canvas_set_color(api::color::XOR);
+    api::canvas_set_color(api::color::TERRA);
     api::canvas_draw_box(30, 20, 68, 24);
 }
 
 fn render_rounded_rectangles() {
-    api::canvas_set_color(api::color::BLACK);
+    api::canvas_set_color(api::color::INK);
     api::canvas_draw_rframe(5, 5, 50, 25, 3);
     api::canvas_draw_rframe(73, 5, 50, 25, 8);
     api::canvas_draw_rbox(5, 34, 50, 25, 5);
@@ -189,7 +189,7 @@ fn render_rounded_rectangles() {
 }
 
 fn render_text() {
-    api::canvas_set_color(api::color::BLACK);
+    api::canvas_set_color(api::color::INK);
     api::canvas_set_font(api::font::PRIMARY);
     api::canvas_draw_str(5, 12, "Primary Font");
     api::canvas_set_font(api::font::SECONDARY);
@@ -198,11 +198,23 @@ fn render_text() {
     api::canvas_draw_str(5, 36, "Keyboard: ABCDEF");
     api::canvas_set_font(api::font::BIG_NUMBERS);
     api::canvas_draw_str(5, 58, "123");
+    api::canvas_set_font(api::font::TITLE);
+    api::canvas_set_color(api::color::GREEN_DARK);
+    api::canvas_draw_str(5, 84, "Title Font");
+    api::canvas_set_font(api::font::PRIMARY);
+    let mut y = 100;
+    for c in 0..32u32 {
+        api::canvas_set_color(c);
+        api::canvas_draw_box(5 + (c % 16) as i32 * 18, y + (c / 16) as i32 * 18, 16, 16);
+    }
+    y += 40;
+    api::canvas_set_color(api::color::INK);
+    api::canvas_draw_str(5, y + 8, "DB32 palette");
 }
 
 fn render_mixed_primitives() {
     api::random_seed(RANDOM_SEED);
-    api::canvas_set_color(api::color::BLACK);
+    api::canvas_set_color(api::color::INK);
 
     for x in (0..W).step_by(16) {
         api::canvas_draw_line(x, 0, x, 63);
@@ -228,7 +240,7 @@ fn render_mixed_primitives() {
 }
 
 fn render_checkerboard() {
-    api::canvas_set_color(api::color::BLACK);
+    api::canvas_set_color(api::color::INK);
     for y in (0..H).step_by(8) {
         for x in (0..W).step_by(8) {
             if ((x / 8) + (y / 8)) % 2 == 0 {

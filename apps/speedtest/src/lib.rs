@@ -5,12 +5,12 @@
 #![deny(unsafe_code)]
 
 use fri3d_wasm_api as api;
-use fri3d_wasm_api::{align, color, font, imgui, input, net, wifi};
+use fri3d_wasm_api::{color, font, imgui, input, net, wifi};
 
 const URL: &str = "http://speedtest.tele2.net/1MB.zip";
 const STEPS: usize = 3;
-const LINE_Y0: i32 = 30;
-const LINE_H: i32 = 14;
+const LINE_Y0: i32 = 52;
+const LINE_H: i32 = 20;
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 enum Result {
@@ -86,16 +86,15 @@ fn render_impl() {
     advance();
     let s = STATE.get();
     imgui::ui_begin();
-    imgui::ui_label("Speed Test", font::PRIMARY, align::CENTER);
-    imgui::ui_separator();
+    imgui::ui_banner("Speed Test", "", None);
     imgui::ui_end();
 
-    api::canvas_set_color(color::BLACK);
-    api::canvas_set_font(font::SECONDARY);
+    api::canvas_set_color(color::INK);
+    api::canvas_set_font(font::PRIMARY);
     let labels = ["DNS 1.1.1.1", "DNS 8.8.8.8", "1 MB download"];
     for (i, label) in labels.iter().enumerate() {
         let y = LINE_Y0 + i as i32 * LINE_H;
-        api::canvas_draw_str(4, y, label);
+        api::canvas_draw_str(8, y, label);
         let mut v = Text::new();
         match s.results[i] {
             Result::Pending => v.push_str("-"),
@@ -123,7 +122,7 @@ fn render_impl() {
             Result::Failed => v.push_str("failed"),
         }
         let w = api::canvas_string_width(v.as_str()) as i32;
-        api::canvas_draw_str(api::SCREEN_WIDTH as i32 - 4 - w, y, v.as_str());
+        api::canvas_draw_str(api::SCREEN_WIDTH as i32 - 8 - w, y, v.as_str());
     }
 
     let hint = if s.running {
@@ -133,7 +132,8 @@ fn render_impl() {
     } else {
         "OK: start   Back: exit"
     };
-    api::canvas_draw_str(4, api::SCREEN_HEIGHT as i32 - 4, hint);
+    api::canvas_set_color(color::MUTED);
+    api::canvas_draw_str(8, api::SCREEN_HEIGHT as i32 - 8, hint);
 }
 
 fn on_input_impl(key: u32, kind: u32) {

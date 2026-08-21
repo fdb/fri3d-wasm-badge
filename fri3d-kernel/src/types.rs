@@ -46,12 +46,21 @@ pub enum InputType {
     Repeat = 4,
 }
 
+/// A DB32 palette index, 0..=31. See [`crate::palette`].
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[repr(u8)]
-pub enum Color {
-    White = 0,
-    Black = 1,
-    Xor = 2,
+pub struct Color(pub u8);
+
+impl Color {
+    pub const COUNT: u8 = 32;
+
+    /// Clamp any byte to a valid index; out-of-range values become ink.
+    pub const fn from_index(index: u8) -> Self {
+        if index < Self::COUNT {
+            Color(index)
+        } else {
+            crate::palette::INK
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -61,4 +70,5 @@ pub enum Font {
     Secondary = 1,
     Keyboard = 2,
     BigNumbers = 3,
+    Title = 4,
 }

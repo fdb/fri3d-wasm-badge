@@ -4,6 +4,8 @@
 use fri3d_wasm_api as api;
 
 const MAX_SNAKE_LEN: usize = 253;
+/// Board cells are `CELL` px; the board fills the screen minus the frame.
+const CELL: i32 = 8;
 const BOARD_MAX_X: u8 = 38;
 const BOARD_MAX_Y: u8 = 28;
 const STEP_INTERVAL_MS: u32 = 250;
@@ -273,39 +275,45 @@ fn write_score(score: u16, buffer: &mut [u8; 16]) -> usize {
 }
 
 fn render_state(state: &SnakeState) {
-    api::canvas_set_color(api::color::BLACK);
-
+    api::canvas_set_color(api::color::INK);
     api::canvas_draw_frame(0, 0, api::SCREEN_WIDTH, api::SCREEN_HEIGHT);
+    api::canvas_draw_frame(1, 1, api::SCREEN_WIDTH - 2, api::SCREEN_HEIGHT - 2);
 
-    let fruit_x = state.fruit.x as i32 * 4 + 1;
-    let fruit_y = state.fruit.y as i32 * 4 + 1;
-    api::canvas_draw_rframe(fruit_x, fruit_y, 6, 6, 2);
+    api::canvas_set_color(api::color::RED);
+    let fruit_x = state.fruit.x as i32 * CELL + 2;
+    let fruit_y = state.fruit.y as i32 * CELL + 2;
+    api::canvas_draw_rbox(fruit_x, fruit_y, CELL as u32 + 2, CELL as u32 + 2, 3);
 
     for idx in 0..state.len as usize {
         let point = state.points[idx];
-        let px = point.x as i32 * 4 + 2;
-        let py = point.y as i32 * 4 + 2;
-        api::canvas_draw_box(px, py, 4, 4);
+        let px = point.x as i32 * CELL + 4;
+        let py = point.y as i32 * CELL + 4;
+        api::canvas_set_color(if idx == 0 { api::color::GREEN_DARK } else { api::color::GREEN });
+        api::canvas_draw_box(px, py, CELL as u32, CELL as u32);
     }
 
     if state.state == GameState::GameOver {
-        api::canvas_set_color(api::color::WHITE);
-        api::canvas_draw_box(34, 20, 62, 24);
+        let (bx, by, bw, bh) = (68, 84, 184, 72);
+        api::canvas_set_color(api::color::CARD);
+        api::canvas_draw_rbox(bx, by, bw, bh, 2);
+        api::canvas_set_color(api::color::INK);
+        api::canvas_draw_rframe(bx, by, bw, bh, 2);
+        api::canvas_draw_rframe(bx + 1, by + 1, bw - 2, bh - 2, 2);
 
-        api::canvas_set_color(api::color::BLACK);
-        api::canvas_draw_frame(34, 20, 62, 24);
+        api::canvas_set_font(api::font::TITLE);
+        let title = "Game Over";
+        let width = api::canvas_string_width(title) as i32;
+        api::canvas_draw_str((api::SCREEN_WIDTH as i32 - width) / 2, by + 30, title);
 
         api::canvas_set_font(api::font::PRIMARY);
-        api::canvas_draw_str(37, 31, "Game Over");
-
-        api::canvas_set_font(api::font::SECONDARY);
+        api::canvas_set_color(api::color::MUTED);
         let score = state.len.saturating_sub(7);
         let mut buffer = [0u8; 16];
         let len = write_score(score, &mut buffer);
         if let Ok(text) = core::str::from_utf8(&buffer[..len]) {
             let width = api::canvas_string_width(text) as i32;
             let x = (api::SCREEN_WIDTH as i32 - width) / 2;
-            api::canvas_draw_str(x, 41, text);
+            api::canvas_draw_str(x, by + 54, text);
         }
     }
 }

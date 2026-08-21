@@ -3,31 +3,35 @@
 The launcher is an ordinary app (`apps/launcher`) with `system = true`.
 The kernel keeps it resident and pauses/resumes it around other apps.
 
-## Look: Flipper Zero on 160×120
+## Look: the home grid (design doc 017)
 
 ```
-┌──────────────────────────────┐
-│ Fri3d                    2/8 │  status bar, secondary font, 1 px rule
-├──────────────────────────────┤
-│ [icon] Circles              ▓│  6 rows × 16 px (rows = (120-13)/16)
-│▐[icon] Dots                ▌░│  focused row: inverted rounded box
-│ [icon] Mandelbrot           ░│  dotted scrollbar, solid thumb
-└──────────────────────────────┘
+┌──────────────────────────────────────┐
+│ Fri3d                            (((●│  green banner 24 px, Wi-Fi mark
+│ APPS                             1/2 │  section label + page, muted
+│ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ │
+│ │ [2×] │ │ [2×] │ │ [2×] │ │ [2×] │ │  4×2 cells of 70×62, gap 8
+│ │ Name │ │ Name │ │ Name │ │ Name │ │  white card, tan border;
+│ └──────┘ └──────┘ └──────┘ └──────┘ │  the focused cell has a gold border
+│ …second row…                         │
+│ ■ Menu                        Open ■ │  footer 18 px
+└──────────────────────────────────────┘
 ```
 
-- Icon 14×14 at x = 3, name in the bold primary font at x = 22.
-- The focused row is `draw_rbox(0, y, 123, 16, r = 3)` in black, then
-  icon and text in white. That is how Flipper's submenu shows selection
-  and it stays legible when upscaled 2× on the colour LCD.
-- Up/Down wrap. Holding Up/Down repeats (the kernel synthesises repeats).
-- OK starts the app. Right (or long OK) opens an info page: name,
-  version, author, id, description word-wrapped, `< Back   Open >`.
+- The 16×16 icon is drawn at 2× and centred; the name sits on the cell's
+  last text row.
+- Left/Right step through apps and wrap; Up/Down move by a row. Holding
+  a direction repeats (the kernel synthesises repeats).
+- Eight apps per page; the page follows the selection.
+- OK starts the app. Long OK opens the info page: icon card, name in the
+  title face, author and id, description word-wrapped in a panel,
+  `■ Back   Open ■`.
 - Back does nothing on the home screen; Menu is handled by the kernel.
 
 ## Data flow
 
 `on_start` / `on_resume` call `app_count()`. Each render fetches the
-visible headers (six) with `app_info(i, buf, 256)` — three 256-byte
+visible headers (eight) with `app_info(i, buf, 512)` — eight 512-byte
 copies per frame, no cache, no allocation. The selected index survives
 an app run, so returning lands on the app you came from.
 
@@ -40,8 +44,9 @@ an app run, so returning lands on the app you came from.
 
 ## Settings app
 
-`apps/settings`, also `system = true`. Brightness (10–100 %, Left/Right
-in steps of 10), Sound (toggle) and About (kernel ABI version, app
-count). Values live in the `system` namespace; hosts read
-`kernel.setting("system", "brightness")` after each step and apply it
-(LCD backlight via the CH32 on the badge, amber tint on desktop/web).
+`apps/settings`, also `system = true`. A banner, then an `imgui` menu:
+Wi-Fi, Brightness (10–100 %, Left/Right in steps of 10), Sound (toggle)
+and About (kernel ABI version, app count). Values live in the `system`
+namespace; hosts read `kernel.setting("system", "brightness")` after
+each step and apply it (LCD backlight via the CH32 on the badge, dimmed
+pixels on desktop/web).

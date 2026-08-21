@@ -1,6 +1,10 @@
 //! fri3d-pack: turn `apps/<id>/{manifest.toml, icon.png, Cargo.toml}` into
-//! `build/apps/<id>.fab` bundles, and regenerate `fri3d-apps/src/generated.rs`
-//! so hosts can embed them.
+//! `build/apps/<id>.fab` bundles, regenerate `fri3d-apps/src/generated.rs`
+//! so hosts can embed them, and regenerate `fri3d-artwork/src/generated.rs`
+//! from the system icons in `artwork/icons/`.
+//!
+//! Icons are PNGs in the DB32 palette: every opaque pixel is snapped to
+//! the nearest palette entry, transparent pixels stay holes.
 //!
 //! Usage:
 //!   fri3d-pack [--apps-dir apps] [--out build/apps] [--no-build] [--debug]
@@ -9,6 +13,7 @@
 //! `target/`. `--debug` packs the debug build.
 
 use fri3d_kernel::bundle::{self, HeaderBuilder, FLAG_SYSTEM, ICON_H, ICON_LEN, ICON_W};
+use fri3d_kernel::palette;
 use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -123,6 +128,7 @@ fn run() -> Result<(), String> {
     packed.sort_by(|a, b| (a.system, &a.name).cmp(&(b.system, &b.name)));
 
     write_generated(&root, &launcher, &packed)?;
+    write_artwork(&root)?;
 
     println!("\n{:<14} {:<8} {:>8}  bundle", "id", "category", "wasm");
     for p in std::iter::once(&launcher).chain(packed.iter()) {
@@ -222,23 +228,25 @@ fn crate_name(dir: &Path) -> Result<String, String> {
     Ok(c.package.name)
 }
 
-/// Decode any PNG into the 14x14 1-bit icon: dark pixels set, light or
-/// transparent pixels clear.
+/// Decode the app icon: exactly 16x16, snapped to the DB32 palette.
 fn load_icon(path: &Path) -> Result<[u8; ICON_LEN], String> {
+    let (w, h, pixels) = load_indexed_png(path)?;
+    if w != ICON_W || h != ICON_H {
+        return Err(format!("{}: icon must be {ICON_W}x{ICON_H}, got {w}x{h}", path.display()));
+    }
+    let mut icon = [0u8; ICON_LEN];
+    icon.copy_from_slice(&pixels);
+    Ok(icon)
+}
+
+/// Decode any PNG into DB32 indices (`palette::TRANSPARENT` where alpha < 128).
+fn load_indexed_png(path: &Path) -> Result<(usize, usize, Vec<u8>), String> {
     let file = fs::File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let mut decoder = png::Decoder::new(file);
     decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
     let mut reader = decoder.read_info().map_err(|e| format!("{}: {e}", path.display()))?;
     let mut buf = vec![0; reader.output_buffer_size()];
     let info = reader.next_frame(&mut buf).map_err(|e| format!("{}: {e}", path.display()))?;
-    if info.width as usize != ICON_W || info.height as usize != ICON_H {
-        return Err(format!(
-            "{}: icon must be {ICON_W}x{ICON_H}, got {}x{}",
-            path.display(),
-            info.width,
-            info.height
-        ));
-    }
     let channels = match info.color_type {
         png::ColorType::Grayscale => 1,
         png::ColorType::GrayscaleAlpha => 2,
@@ -246,22 +254,73 @@ fn load_icon(path: &Path) -> Result<[u8; ICON_LEN], String> {
         png::ColorType::Rgba => 4,
         other => return Err(format!("{}: unsupported color type {other:?}", path.display())),
     };
-    let mut icon = [0u8; ICON_LEN];
-    for y in 0..ICON_H {
-        for x in 0..ICON_W {
-            let px = &buf[(y * ICON_W + x) * channels..][..channels];
-            let (lum, alpha) = match channels {
-                1 => (px[0] as u32, 255),
-                2 => (px[0] as u32, px[1] as u32),
-                3 => ((px[0] as u32 + px[1] as u32 + px[2] as u32) / 3, 255),
-                _ => ((px[0] as u32 + px[1] as u32 + px[2] as u32) / 3, px[3] as u32),
-            };
-            if alpha >= 128 && lum < 128 {
-                icon[y * bundle::ICON_ROW_BYTES + x / 8] |= 0x80 >> (x % 8);
-            }
-        }
+    let (w, h) = (info.width as usize, info.height as usize);
+    let mut out = Vec::with_capacity(w * h);
+    for px in buf[..w * h * channels].chunks(channels) {
+        let (r, g, b, a) = match channels {
+            1 => (px[0], px[0], px[0], 255),
+            2 => (px[0], px[0], px[0], px[1]),
+            3 => (px[0], px[1], px[2], 255),
+            _ => (px[0], px[1], px[2], px[3]),
+        };
+        out.push(if a < 128 { palette::TRANSPARENT } else { nearest_db32(r, g, b) });
     }
-    Ok(icon)
+    Ok((w, h, out))
+}
+
+fn nearest_db32(r: u8, g: u8, b: u8) -> u8 {
+    let dist = |c: u32| {
+        let dr = ((c >> 16) & 0xff) as i32 - r as i32;
+        let dg = ((c >> 8) & 0xff) as i32 - g as i32;
+        let db = (c & 0xff) as i32 - b as i32;
+        dr * dr + dg * dg + db * db
+    };
+    palette::RGB
+        .iter()
+        .enumerate()
+        .min_by_key(|(_, &c)| dist(c))
+        .map(|(i, _)| i as u8)
+        .unwrap_or(0)
+}
+
+/// `artwork/icons/<name>.png` → `pub static NAME: Image` in fri3d-artwork.
+fn write_artwork(root: &Path) -> Result<(), String> {
+    let dir = root.join("artwork/icons");
+    let mut files: Vec<PathBuf> = fs::read_dir(&dir)
+        .map_err(|e| format!("read {}: {e}", dir.display()))?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().is_some_and(|x| x == "png"))
+        .collect();
+    files.sort();
+    let mut s = String::new();
+    s.push_str("// Generated by tools/fri3d-pack from artwork/icons/*.png. Do not edit.\n\n");
+    s.push_str("use fri3d_wasm_api::Image;\n\n");
+    for path in &files {
+        let stem = path.file_stem().unwrap().to_string_lossy();
+        if !stem.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_') {
+            return Err(format!("{}: icon names must match [a-z0-9_]+", path.display()));
+        }
+        let (w, h, pixels) = load_indexed_png(path)?;
+        if w > 64 || h > 64 {
+            return Err(format!("{}: system icons are at most 64x64", path.display()));
+        }
+        s.push_str(&format!("/// {}: {w}x{h}.\n", path.file_name().unwrap().to_string_lossy()));
+        s.push_str(&format!(
+            "pub static {}: Image = Image {{ w: {w}, h: {h}, pixels: &[\n",
+            stem.to_ascii_uppercase()
+        ));
+        for row in pixels.chunks(w) {
+            s.push_str("    ");
+            for p in row {
+                s.push_str(&format!("{p:>3},"));
+            }
+            s.push('\n');
+        }
+        s.push_str("] };\n\n");
+    }
+    let gen_path = root.join("fri3d-artwork/src/generated.rs");
+    fs::write(&gen_path, s).map_err(|e| format!("{}: {e}", gen_path.display()))?;
+    Ok(())
 }
 
 fn write_generated(root: &Path, launcher: &Packed, apps: &[Packed]) -> Result<(), String> {

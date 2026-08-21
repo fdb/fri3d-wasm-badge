@@ -3,8 +3,8 @@
 
 use fri3d_wasm_api as api;
 
-const HEADER_HEIGHT: i16 = 12;
-const PET_RADIUS: i16 = 2;
+const HEADER_HEIGHT: i16 = 24;
+const PET_RADIUS: i16 = 4;
 const MAX_APS: usize = 6;
 const ENERGY_MAX: u8 = 100;
 const ENERGY_GAIN: u8 = 10;
@@ -227,25 +227,32 @@ fn active_ap_count(state: &State) -> usize {
 }
 
 fn draw_scene(state: &State) {
-    api::canvas_set_color(api::color::BLACK);
+    api::canvas_set_color(api::color::GREEN);
+    api::canvas_draw_box(0, 0, api::SCREEN_WIDTH, HEADER_HEIGHT as u32);
+    api::canvas_set_color(api::color::GREEN_DARK);
+    api::canvas_draw_box(0, HEADER_HEIGHT as i32 - 2, api::SCREEN_WIDTH, 2);
+    api::canvas_set_color(api::color::CARD);
+    api::canvas_set_font(api::font::TITLE);
+    api::canvas_draw_str(8, 18, "WiFi Pet");
     api::canvas_set_font(api::font::PRIMARY);
+    draw_label_value(120, 15, "Eaten", state.eaten as u32);
+    draw_energy_bar(200, 6, 112, 12, state.energy);
 
-    api::canvas_draw_str(0, 8, "WiFi Pet");
-    draw_label_value(0, 16, "Eaten", state.eaten as u32);
-    draw_energy_bar(70, 0, 56, 8, state.energy);
-
+    api::canvas_set_color(api::color::BLUE);
     for ap in state.aps.iter() {
         if !ap.active {
             continue;
         }
-        api::canvas_draw_frame((ap.x - 1) as i32, (ap.y - 1) as i32, 3, 3);
+        api::canvas_draw_frame((ap.x - 2) as i32, (ap.y - 2) as i32, 5, 5);
     }
 
     let pet_x = state.pet_x as i32;
     let pet_y = state.pet_y as i32;
+    api::canvas_set_color(api::color::TERRA);
     api::canvas_draw_disc(pet_x, pet_y, PET_RADIUS as u32);
-    api::canvas_draw_dot(pet_x - 1, pet_y - 1);
-    api::canvas_draw_dot(pet_x + 1, pet_y - 1);
+    api::canvas_set_color(api::color::INK);
+    api::canvas_draw_dot(pet_x - 2, pet_y - 1);
+    api::canvas_draw_dot(pet_x + 2, pet_y - 1);
 
     if state.energy == 0 {
         api::canvas_draw_line(pet_x - 2, pet_y + 2, pet_x + 2, pet_y + 2);
@@ -256,10 +263,13 @@ fn draw_energy_bar(x: i32, y: i32, w: u32, h: u32, energy: u8) {
     if w < 2 || h < 2 {
         return;
     }
+    api::canvas_set_color(api::color::INK);
     api::canvas_draw_frame(x, y, w, h);
-    let fill_width = (w - 2) * energy as u32 / ENERGY_MAX as u32;
+    api::canvas_draw_frame(x + 1, y + 1, w - 2, h - 2);
+    let fill_width = (w - 4) * energy as u32 / ENERGY_MAX as u32;
     if fill_width > 0 {
-        api::canvas_draw_box(x + 1, y + 1, fill_width, h - 2);
+        api::canvas_set_color(api::color::GOLD);
+        api::canvas_draw_box(x + 2, y + 2, fill_width, h - 4);
     }
 }
 

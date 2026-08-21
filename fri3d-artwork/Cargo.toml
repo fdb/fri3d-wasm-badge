@@ -1,0 +1,11 @@
+[package]
+name = "fri3d-artwork"
+version = "0.1.0"
+edition = "2021"
+description = "System icons from artwork/icons/*.png. Regenerate with `cargo run -p fri3d-pack`."
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+fri3d-wasm-api = { path = "../fri3d-wasm-api" }

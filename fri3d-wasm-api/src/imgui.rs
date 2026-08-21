@@ -12,21 +12,27 @@ const UI_MAX_LAYOUT_DEPTH: usize = 8;
 const UI_MAX_FOCUSABLE: i16 = 32;
 const UI_MAX_DEFERRED: usize = 16;
 const UI_DEFERRED_TEXT_CAP: usize = 128;
-const UI_FONT_HEIGHT_PRIMARY: i16 = 12;
-const UI_FONT_HEIGHT_SECONDARY: i16 = 11;
-const UI_BUTTON_PADDING_X: i16 = 4;
-const UI_BUTTON_PADDING_Y: i16 = 2;
-const UI_MENU_ITEM_HEIGHT: i16 = 12;
-const UI_FOOTER_HEIGHT: i16 = 12;
-const UI_SCROLLBAR_WIDTH: i16 = 3;
-const UI_VK_ORIGIN_X: i16 = 1;
-const UI_VK_ORIGIN_Y: i16 = 29;
+// Row heights follow design doc 017: body rows 14 px (Pixelify 11 has
+// ascent 8, descent 2), title rows 24 px, menu rows 28 px.
+const UI_FONT_HEIGHT_PRIMARY: i16 = 14;
+const UI_FONT_HEIGHT_SECONDARY: i16 = 14;
+const UI_FONT_HEIGHT_TITLE: i16 = 24;
+const UI_PAD: i16 = 8;
+const UI_BUTTON_PADDING_X: i16 = 8;
+const UI_BUTTON_PADDING_Y: i16 = 6;
+const UI_MENU_ITEM_HEIGHT: i16 = 28;
+const UI_FOOTER_HEIGHT: i16 = 18;
+const UI_SCROLLBAR_WIDTH: i16 = 4;
+/// The keyboard layout tables are authored on a 128-px grid; draw them 2×.
+const UI_VK_SCALE: i16 = 2;
+const UI_VK_ORIGIN_X: i16 = 8;
+const UI_VK_ORIGIN_Y: i16 = 74;
 const UI_VK_ROW_COUNT: u8 = 3;
 const UI_VK_VALIDATOR_TIMEOUT_MS: u32 = 4000;
-const UI_VK_BACKSPACE_W: i16 = 16;
-const UI_VK_BACKSPACE_H: i16 = 9;
-const UI_VK_ENTER_W: i16 = 24;
-const UI_VK_ENTER_H: i16 = 11;
+const UI_VK_BACKSPACE_W: i16 = 32;
+const UI_VK_BACKSPACE_H: i16 = 18;
+const UI_VK_ENTER_W: i16 = 48;
+const UI_VK_ENTER_H: i16 = 22;
 
 const UI_VK_ENTER_KEY: u8 = b'\r';
 const UI_VK_BACKSPACE_KEY: u8 = b'\x08';
@@ -172,9 +178,27 @@ fn set_current_layout(ctx: &mut UiContext, layout: UiLayoutStack) {
 
 fn font_height(font_id: u32) -> i16 {
     match font_id {
+        font::TITLE | font::BIG_NUMBERS => UI_FONT_HEIGHT_TITLE,
         font::PRIMARY => UI_FONT_HEIGHT_PRIMARY,
         _ => UI_FONT_HEIGHT_SECONDARY,
     }
+}
+
+/// Baseline offset inside a row of `font_height`: the glyphs sit centred.
+fn font_baseline(font_id: u32) -> i16 {
+    match font_id {
+        font::TITLE | font::BIG_NUMBERS => 20,
+        _ => 11,
+    }
+}
+
+/// The focus treatment from design doc 017: a card with a 2-px gold frame.
+fn draw_focus_box(x: i16, y: i16, w: i16, h: i16) {
+    canvas_set_color(color::CARD);
+    canvas_draw_rbox(x as i32, y as i32, w as u32, h as u32, 2);
+    canvas_set_color(color::FOCUS);
+    canvas_draw_rframe(x as i32, y as i32, w as u32, h as u32, 2);
+    canvas_draw_rframe(x as i32 + 1, y as i32 + 1, w as u32 - 2, h as u32 - 2, 2);
 }
 
 fn layout_next(ctx: &mut UiContext, width: i16, height: i16) -> (i16, i16, i16) {
@@ -238,16 +262,22 @@ fn in_centered_hstack(ctx: &UiContext) -> bool {
 
 fn draw_button_internal(x: i16, y: i16, w: i16, h: i16, text: &str, focused: bool) {
     canvas_set_font(font::SECONDARY);
+    let baseline = y as i32 + UI_BUTTON_PADDING_Y as i32 + font_baseline(font::SECONDARY) as i32 - 2;
     if focused {
-        canvas_set_color(color::BLACK);
+        canvas_set_color(color::GREEN);
         canvas_draw_rbox(x as i32, y as i32, w as u32, h as u32, 2);
-        canvas_set_color(color::WHITE);
-        canvas_draw_str(x as i32 + UI_BUTTON_PADDING_X as i32, y as i32 + h as i32 - UI_BUTTON_PADDING_Y as i32, text);
-    } else {
-        canvas_set_color(color::BLACK);
+        canvas_set_color(color::FOCUS);
         canvas_draw_rframe(x as i32, y as i32, w as u32, h as u32, 2);
-        canvas_draw_str(x as i32 + UI_BUTTON_PADDING_X as i32, y as i32 + h as i32 - UI_BUTTON_PADDING_Y as i32, text);
+        canvas_draw_rframe(x as i32 + 1, y as i32 + 1, w as u32 - 2, h as u32 - 2, 2);
+        canvas_set_color(color::CARD);
+    } else {
+        canvas_set_color(color::CARD);
+        canvas_draw_rbox(x as i32, y as i32, w as u32, h as u32, 2);
+        canvas_set_color(color::INK);
+        canvas_draw_rframe(x as i32, y as i32, w as u32, h as u32, 2);
+        canvas_draw_rframe(x as i32 + 1, y as i32 + 1, w as u32 - 2, h as u32 - 2, 2);
     }
+    canvas_draw_str(x as i32 + UI_BUTTON_PADDING_X as i32, baseline, text);
 }
 
 fn defer_button(ctx: &mut UiContext, x: i16, y: i16, w: i16, h: i16, text: &str, focused: bool) {
@@ -520,24 +550,51 @@ pub fn ui_label(text: &str, font_id: u32, align_mode: u32) {
         let (x, y, w) = layout_next(ctx, 0, font_height);
 
         canvas_set_font(font_id);
-        canvas_set_color(color::BLACK);
+        canvas_set_color(color::INK);
 
         let text_width = canvas_string_width(text) as i16;
         let text_x = match align_mode {
             align::CENTER => x + (w - text_width) / 2,
-            align::RIGHT => x + w - text_width,
-            _ => x,
+            align::RIGHT => x + w - text_width - UI_PAD,
+            _ => x + UI_PAD,
         };
 
-        canvas_draw_str(text_x as i32, (y + font_height) as i32, text);
+        canvas_draw_str(text_x as i32, (y + font_baseline(font_id)) as i32, text);
+    });
+}
+
+/// The green title banner from design doc 017: 24 px tall, title in the
+/// title face, `right` and an optional icon at the right edge. Advances
+/// the layout by its height.
+pub fn ui_banner(title: &str, right: &str, icon: Option<&crate::Image>) {
+    with_ctx(|ctx| {
+        let (x, y, w) = layout_next(ctx, 0, UI_FONT_HEIGHT_TITLE);
+        canvas_set_color(color::GREEN);
+        canvas_draw_box(x as i32, y as i32, w as u32, UI_FONT_HEIGHT_TITLE as u32);
+        canvas_set_color(color::GREEN_DARK);
+        canvas_draw_box(x as i32, (y + UI_FONT_HEIGHT_TITLE - 2) as i32, w as u32, 2);
+
+        canvas_set_color(color::CARD);
+        canvas_set_font(font::TITLE);
+        canvas_draw_str((x + UI_PAD) as i32, (y + 18) as i32, title);
+
+        let mut edge = x + w - UI_PAD;
+        if let Some(icon) = icon {
+            edge -= icon.w as i16;
+            crate::canvas_draw_icon(edge as i32, (y + (UI_FONT_HEIGHT_TITLE - icon.h as i16) / 2) as i32, 1, icon);
+            edge -= UI_PAD;
+        }
+        canvas_set_font(font::PRIMARY);
+        let rw = canvas_string_width(right) as i16;
+        canvas_draw_str((edge - rw) as i32, (y + 15) as i32, right);
     });
 }
 
 pub fn ui_separator() {
     with_ctx(|ctx| {
-        let (x, y, w) = layout_next(ctx, 0, 5);
-        canvas_set_color(color::BLACK);
-        canvas_draw_line(x as i32, (y + 2) as i32, (x + w - 1) as i32, (y + 2) as i32);
+        let (x, y, w) = layout_next(ctx, 0, 8);
+        canvas_set_color(color::REST_BORDER);
+        canvas_draw_box((x + UI_PAD) as i32, (y + 3) as i32, (w - 2 * UI_PAD) as u32, 2);
     });
 }
 
@@ -584,18 +641,22 @@ pub fn ui_progress(mut value: f32, width: i16) {
             value = 1.0;
         }
 
-        let bar_height = 8;
+        let bar_height = 12;
         let (x, y, w) = layout_next(ctx, width, bar_height);
 
-        let bar_width = if width > 0 { width } else { w - 8 };
+        let bar_width = if width > 0 { width } else { w - 2 * UI_PAD };
         let bar_x = x + (w - bar_width) / 2;
 
-        canvas_set_color(color::BLACK);
+        canvas_set_color(color::TAN);
+        canvas_draw_box(bar_x as i32, y as i32, bar_width as u32, bar_height as u32);
+        canvas_set_color(color::INK);
         canvas_draw_frame(bar_x as i32, y as i32, bar_width as u32, bar_height as u32);
+        canvas_draw_frame((bar_x + 1) as i32, (y + 1) as i32, (bar_width - 2) as u32, (bar_height - 2) as u32);
 
-        let fill_width = (value * (bar_width - 2) as f32) as i16;
+        let fill_width = (value * (bar_width - 4) as f32) as i16;
         if fill_width > 0 {
-            canvas_draw_box((bar_x + 1) as i32, (y + 1) as i32, fill_width as u32, (bar_height - 2) as u32);
+            canvas_set_color(color::GOLD);
+            canvas_draw_box((bar_x + 2) as i32, (y + 2) as i32, fill_width as u32, (bar_height - 4) as u32);
         }
     });
 }
@@ -605,7 +666,7 @@ pub fn ui_icon(data: &[u8], width: u8, height: u8) {
         let (x, y, w) = layout_next(ctx, width as i16, height as i16);
         let icon_x = x + (w - width as i16) / 2;
 
-        canvas_set_color(color::BLACK);
+        canvas_set_color(color::INK);
         let bytes_per_row = (width + 7) / 8;
         for iy in 0..height {
             for ix in 0..width {
@@ -625,11 +686,8 @@ pub fn ui_checkbox(text: &str, checked: &mut bool) -> bool {
     with_ctx(|ctx| {
         canvas_set_font(font::SECONDARY);
 
-        let box_size = 10;
-        let mut item_height = UI_FONT_HEIGHT_SECONDARY + 2;
-        if item_height < box_size {
-            item_height = box_size;
-        }
+        let box_size = 14;
+        let item_height = UI_MENU_ITEM_HEIGHT;
 
         let (x, y, w) = layout_next(ctx, 0, item_height);
 
@@ -642,22 +700,22 @@ pub fn ui_checkbox(text: &str, checked: &mut bool) -> bool {
             crate::request_render();
         }
 
-        let box_x = x + 2;
+        let box_x = x + UI_PAD;
         let box_y = y + (item_height - box_size) / 2;
 
-        canvas_set_color(color::BLACK);
         if focused {
-            canvas_draw_box(x as i32, y as i32, w as u32, item_height as u32);
-            canvas_set_color(color::WHITE);
+            draw_focus_box(x, y, w, item_height);
         }
-
+        canvas_set_color(color::INK);
         canvas_draw_frame(box_x as i32, box_y as i32, box_size as u32, box_size as u32);
+        canvas_draw_frame((box_x + 1) as i32, (box_y + 1) as i32, (box_size - 2) as u32, (box_size - 2) as u32);
         if *checked {
-            canvas_draw_line((box_x + 2) as i32, (box_y + 5) as i32, (box_x + 4) as i32, (box_y + 7) as i32);
-            canvas_draw_line((box_x + 4) as i32, (box_y + 7) as i32, (box_x + 7) as i32, (box_y + 2) as i32);
+            canvas_set_color(color::GREEN);
+            canvas_draw_box((box_x + 4) as i32, (box_y + 4) as i32, (box_size - 8) as u32, (box_size - 8) as u32);
+            canvas_set_color(color::INK);
         }
 
-        canvas_draw_str((box_x + box_size + 4) as i32, (y + item_height - 2) as i32, text);
+        canvas_draw_str((box_x + box_size + UI_PAD) as i32, (y + 18) as i32, text);
         if activated {
             crate::request_render();
         }
@@ -747,15 +805,13 @@ pub fn ui_menu_item(text: &str, index: i16) -> bool {
         canvas_set_font(font::SECONDARY);
         let visible_index = index - scroll;
         let y = ctx.menu_y_start + visible_index * UI_MENU_ITEM_HEIGHT;
-        let item_width = UI_SCREEN_WIDTH - UI_SCROLLBAR_WIDTH - 2;
+        let item_width = UI_SCREEN_WIDTH - UI_SCROLLBAR_WIDTH - 2 * UI_PAD;
 
-        canvas_set_color(color::BLACK);
         if focused {
-            canvas_draw_box(0, y as i32, item_width as u32, UI_MENU_ITEM_HEIGHT as u32);
-            canvas_set_color(color::WHITE);
+            draw_focus_box(UI_PAD, y, item_width, UI_MENU_ITEM_HEIGHT);
         }
-
-        canvas_draw_str(2, (y + UI_MENU_ITEM_HEIGHT - 2) as i32, text);
+        canvas_set_color(color::INK);
+        canvas_draw_str((2 * UI_PAD) as i32, (y + 18) as i32, text);
         if activated {
             crate::request_render();
         }
@@ -792,17 +848,16 @@ pub fn ui_menu_item_value(label: &str, value: &str, index: i16) -> bool {
         canvas_set_font(font::SECONDARY);
         let visible_index = index - scroll;
         let y = ctx.menu_y_start + visible_index * UI_MENU_ITEM_HEIGHT;
-        let item_width = UI_SCREEN_WIDTH - UI_SCROLLBAR_WIDTH - 2;
+        let item_width = UI_SCREEN_WIDTH - UI_SCROLLBAR_WIDTH - 2 * UI_PAD;
 
-        canvas_set_color(color::BLACK);
         if focused {
-            canvas_draw_box(0, y as i32, item_width as u32, UI_MENU_ITEM_HEIGHT as u32);
-            canvas_set_color(color::WHITE);
+            draw_focus_box(UI_PAD, y, item_width, UI_MENU_ITEM_HEIGHT);
         }
-
-        canvas_draw_str(2, (y + UI_MENU_ITEM_HEIGHT - 2) as i32, label);
+        canvas_set_color(color::INK);
+        canvas_draw_str((2 * UI_PAD) as i32, (y + 18) as i32, label);
         let value_width = canvas_string_width(value) as i16;
-        canvas_draw_str((item_width - value_width - 2) as i32, (y + UI_MENU_ITEM_HEIGHT - 2) as i32, value);
+        canvas_set_color(color::MUTED);
+        canvas_draw_str((UI_PAD + item_width - value_width - UI_PAD) as i32, (y + 18) as i32, value);
         if activated {
             crate::request_render();
         }
@@ -820,7 +875,7 @@ pub fn ui_menu_end() {
         if ctx.menu_total > ctx.menu_visible {
             let scroll = ctx.menu_scroll;
             let scrollbar_height = ctx.menu_visible * UI_MENU_ITEM_HEIGHT;
-            let scrollbar_x = UI_SCREEN_WIDTH - 2;
+            let scrollbar_x = UI_SCREEN_WIDTH - UI_PAD / 2;
 
             let mut thumb_height = (scrollbar_height * ctx.menu_visible) / ctx.menu_total;
             if thumb_height < 4 {
@@ -831,15 +886,10 @@ pub fn ui_menu_end() {
                 + ((scrollbar_height - thumb_height) * scroll)
                     / (ctx.menu_total - ctx.menu_visible);
 
-            canvas_set_color(color::BLACK);
-            let mut y = ctx.menu_y_start;
-            let end = ctx.menu_y_start + scrollbar_height;
-            while y < end {
-                canvas_draw_dot(scrollbar_x as i32, y as i32);
-                y += 2;
-            }
-
-            canvas_draw_box((scrollbar_x - 1) as i32, thumb_y as i32, 3, thumb_height as u32);
+            canvas_set_color(color::TAN);
+            canvas_draw_box((scrollbar_x - 1) as i32, ctx.menu_y_start as i32, 2, scrollbar_height as u32);
+            canvas_set_color(color::INK);
+            canvas_draw_box((scrollbar_x - 2) as i32, thumb_y as i32, 4, thumb_height as u32);
         }
 
         if let Some(mut layout) = current_layout(ctx) {
@@ -867,10 +917,9 @@ pub fn ui_footer_left(text: &str) -> bool {
         canvas_set_font(font::SECONDARY);
         let y = UI_SCREEN_HEIGHT - UI_FOOTER_HEIGHT;
 
-        canvas_set_color(color::BLACK);
-        canvas_draw_line(2, (y + 5) as i32, 6, (y + 2) as i32);
-        canvas_draw_line(2, (y + 5) as i32, 6, (y + 8) as i32);
-        canvas_draw_str(9, (y + UI_FOOTER_HEIGHT - 2) as i32, text);
+        canvas_set_color(color::INK);
+        canvas_draw_box(UI_PAD as i32, (y + 5) as i32, 6, 6);
+        canvas_draw_str((UI_PAD + 10) as i32, (y + 13) as i32, text);
 
         let activated = ctx.has_input
             && ctx.last_key == input::KEY_LEFT as u8
@@ -889,12 +938,12 @@ pub fn ui_footer_center(text: &str) -> bool {
         let y = UI_SCREEN_HEIGHT - UI_FOOTER_HEIGHT;
 
         let text_width = canvas_string_width(text) as i16;
-        let total_width = text_width + 12;
+        let total_width = text_width + 10;
         let x = (UI_SCREEN_WIDTH - total_width) / 2;
 
-        canvas_set_color(color::BLACK);
-        canvas_draw_disc((x + 4) as i32, (y + 5) as i32, 3);
-        canvas_draw_str((x + 12) as i32, (y + UI_FOOTER_HEIGHT - 2) as i32, text);
+        canvas_set_color(color::INK);
+        canvas_draw_disc((x + 3) as i32, (y + 8) as i32, 3);
+        canvas_draw_str((x + 10) as i32, (y + 13) as i32, text);
 
         false
     })
@@ -906,14 +955,11 @@ pub fn ui_footer_right(text: &str) -> bool {
         let y = UI_SCREEN_HEIGHT - UI_FOOTER_HEIGHT;
 
         let text_width = canvas_string_width(text) as i16;
-        let x = UI_SCREEN_WIDTH - text_width - 10;
+        let x = UI_SCREEN_WIDTH - UI_PAD - 10 - text_width;
 
-        canvas_set_color(color::BLACK);
-        canvas_draw_str(x as i32, (y + UI_FOOTER_HEIGHT - 2) as i32, text);
-
-        let arrow_x = UI_SCREEN_WIDTH - 7;
-        canvas_draw_line((arrow_x + 4) as i32, (y + 5) as i32, arrow_x as i32, (y + 2) as i32);
-        canvas_draw_line((arrow_x + 4) as i32, (y + 5) as i32, arrow_x as i32, (y + 8) as i32);
+        canvas_set_color(color::INK);
+        canvas_draw_str(x as i32, (y + 13) as i32, text);
+        canvas_draw_box((UI_SCREEN_WIDTH - UI_PAD - 6) as i32, (y + 5) as i32, 6, 6);
 
         let activated = ctx.has_input
             && ctx.last_key == input::KEY_RIGHT as u8
@@ -1345,20 +1391,24 @@ pub fn ui_virtual_keyboard<const N: usize>(
     let header_text = header;
     let text = core::str::from_utf8(&keyboard.buffer[..text_length]).unwrap_or("");
 
-    canvas_set_color(color::BLACK);
+    canvas_set_color(color::INK);
     canvas_set_font(font::PRIMARY);
-    canvas_draw_str(2, 8, header_text);
+    canvas_draw_str(UI_PAD as i32, 20, header_text);
 
-    canvas_draw_rframe(1, 12, 126, 15, 2);
+    canvas_set_color(color::CARD);
+    canvas_draw_rbox(UI_PAD as i32, 28, (UI_SCREEN_WIDTH - 2 * UI_PAD) as u32, 28, 2);
+    canvas_set_color(color::INK);
+    canvas_draw_rframe(UI_PAD as i32, 28, (UI_SCREEN_WIDTH - 2 * UI_PAD) as u32, 28, 2);
+    canvas_draw_rframe(UI_PAD as i32 + 1, 29, (UI_SCREEN_WIDTH - 2 * UI_PAD - 2) as u32, 26, 2);
 
     canvas_set_font(font::SECONDARY);
-    let mut needed_width = UI_SCREEN_WIDTH - 8;
-    let mut start_pos: i16 = 4;
+    let mut needed_width = UI_SCREEN_WIDTH - 4 * UI_PAD;
+    let mut start_pos: i16 = 2 * UI_PAD;
 
     if canvas_string_width(text) as i16 > needed_width {
-        canvas_draw_str(start_pos as i32, 22, "...");
-        start_pos += 6;
-        needed_width -= 8;
+        canvas_draw_str(start_pos as i32, 46, "...");
+        start_pos += 12;
+        needed_width -= 14;
     }
 
     let mut visible_text = text;
@@ -1371,13 +1421,14 @@ pub fn ui_virtual_keyboard<const N: usize>(
 
     let visible_width = canvas_string_width(visible_text) as i16;
     if keyboard.clear_default_text {
-        canvas_draw_rbox((start_pos - 1) as i32, 14, (visible_width + 2) as u32, 10, 2);
-        canvas_set_color(color::WHITE);
+        canvas_set_color(color::FOCUS);
+        canvas_draw_rbox((start_pos - 2) as i32, 34, (visible_width + 4) as u32, 16, 2);
+        canvas_set_color(color::INK);
     } else {
-        canvas_draw_str((start_pos + visible_width + 1) as i32, 22, "|");
+        canvas_draw_str((start_pos + visible_width + 1) as i32, 46, "|");
     }
 
-    canvas_draw_str(start_pos as i32, 22, visible_text);
+    canvas_draw_str(start_pos as i32, 46, visible_text);
 
     canvas_set_font(font::KEYBOARD);
 
@@ -1389,50 +1440,36 @@ pub fn ui_virtual_keyboard<const N: usize>(
             let key = keys[column as usize];
             let selected = keyboard.row == row && keyboard.col == column;
 
-            let key_x = UI_VK_ORIGIN_X + key.x as i16;
-            let key_y = UI_VK_ORIGIN_Y + key.y as i16;
+            let key_x = UI_VK_ORIGIN_X + key.x as i16 * UI_VK_SCALE;
+            let key_y = UI_VK_ORIGIN_Y + key.y as i16 * UI_VK_SCALE;
 
             if key.text == UI_VK_ENTER_KEY {
-                canvas_set_color(color::BLACK);
-                if selected {
-                    canvas_draw_rbox(key_x as i32, key_y as i32, UI_VK_ENTER_W as u32, UI_VK_ENTER_H as u32, 2);
-                    canvas_set_color(color::WHITE);
-                } else {
-                    canvas_draw_rframe(key_x as i32, key_y as i32, UI_VK_ENTER_W as u32, UI_VK_ENTER_H as u32, 2);
-                }
+                draw_button_internal(key_x, key_y, UI_VK_ENTER_W, UI_VK_ENTER_H, "", selected);
                 canvas_set_font(font::SECONDARY);
                 let label = "OK";
                 let label_width = canvas_string_width(label) as i16;
                 let label_x = key_x + (UI_VK_ENTER_W - label_width) / 2;
-                canvas_draw_str(label_x as i32, (key_y + UI_VK_ENTER_H - 2) as i32, label);
+                canvas_draw_str(label_x as i32, (key_y + 15) as i32, label);
                 canvas_set_font(font::KEYBOARD);
                 continue;
             }
 
             if key.text == UI_VK_BACKSPACE_KEY {
-                canvas_set_color(color::BLACK);
-                if selected {
-                    canvas_draw_rbox(key_x as i32, key_y as i32, UI_VK_BACKSPACE_W as u32, UI_VK_BACKSPACE_H as u32, 2);
-                    canvas_set_color(color::WHITE);
-                } else {
-                    canvas_draw_rframe(key_x as i32, key_y as i32, UI_VK_BACKSPACE_W as u32, UI_VK_BACKSPACE_H as u32, 2);
-                }
+                draw_button_internal(key_x, key_y, UI_VK_BACKSPACE_W, UI_VK_BACKSPACE_H, "", selected);
                 let mid_y = key_y + (UI_VK_BACKSPACE_H / 2);
-                let left_x = key_x + 3;
-                let right_x = key_x + UI_VK_BACKSPACE_W - 4;
-                canvas_draw_line(left_x as i32, mid_y as i32, right_x as i32, mid_y as i32);
-                canvas_draw_line(left_x as i32, mid_y as i32, (left_x + 3) as i32, (mid_y - 3) as i32);
-                canvas_draw_line(left_x as i32, mid_y as i32, (left_x + 3) as i32, (mid_y + 3) as i32);
+                let left_x = key_x + 8;
+                let right_x = key_x + UI_VK_BACKSPACE_W - 9;
+                canvas_draw_box(left_x as i32, (mid_y - 1) as i32, (right_x - left_x) as u32, 2);
+                canvas_draw_line(left_x as i32, mid_y as i32, (left_x + 4) as i32, (mid_y - 4) as i32);
+                canvas_draw_line(left_x as i32, mid_y as i32, (left_x + 4) as i32, (mid_y + 4) as i32);
                 continue;
             }
 
             if selected {
-                canvas_set_color(color::BLACK);
-                canvas_draw_box((key_x - 1) as i32, (key_y - 8) as i32, 7, 10);
-                canvas_set_color(color::WHITE);
-            } else {
-                canvas_set_color(color::BLACK);
+                canvas_set_color(color::FOCUS);
+                canvas_draw_rbox((key_x - 4) as i32, (key_y - 11) as i32, 15, 15, 2);
             }
+            canvas_set_color(color::INK);
 
             let mut glyph = key.text;
             if keyboard.clear_default_text || (text_length == 0 && vk_is_lowercase(key.text)) {
@@ -1447,11 +1484,11 @@ pub fn ui_virtual_keyboard<const N: usize>(
 
     if keyboard.validator_visible {
         canvas_set_font(font::SECONDARY);
-        canvas_set_color(color::WHITE);
-        canvas_draw_box(8, 10, 112, 44);
-        canvas_set_color(color::BLACK);
-        canvas_draw_rframe(8, 8, 112, 48, 3);
-        canvas_draw_rframe(9, 9, 110, 46, 2);
+        canvas_set_color(color::CARD);
+        canvas_draw_rbox(40, 70, 240, 100, 3);
+        canvas_set_color(color::INK);
+        canvas_draw_rframe(40, 70, 240, 100, 3);
+        canvas_draw_rframe(41, 71, 238, 98, 2);
 
         let msg_len = keyboard
             .validator_message
@@ -1461,7 +1498,7 @@ pub fn ui_virtual_keyboard<const N: usize>(
         let message = core::str::from_utf8(&keyboard.validator_message[..msg_len]).unwrap_or("");
         let msg_width = canvas_string_width(message) as i16;
         let msg_x = (UI_SCREEN_WIDTH - msg_width) / 2;
-        canvas_draw_str(msg_x as i32, 34, message);
+        canvas_draw_str(msg_x as i32, 124, message);
     }
 
     if submitted {

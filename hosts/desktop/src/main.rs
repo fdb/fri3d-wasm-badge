@@ -15,14 +15,15 @@ use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::Arc;
-use fri3d_kernel::{Kernel, FRAMEBUFFER_LEN, SCREEN_HEIGHT, SCREEN_WIDTH};
+use fri3d_kernel::{palette, Kernel, FRAMEBUFFER_LEN, SCREEN_HEIGHT, SCREEN_WIDTH};
 use minifb::{Key, Scale, Window, WindowOptions};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-// Flipper-Zero-like amber backlight with black pixels.
-const BG: u32 = 0x00FF8200;
-const FG: u32 = 0x00000000;
+/// Window pixel for a framebuffer byte at a backlight level.
+fn pixel(index: u8, brightness: u32) -> u32 {
+    scale_color(palette::rgb(index), brightness)
+}
 
 struct Args {
     headless: bool,
@@ -235,20 +236,18 @@ fn run_headless(kernel: &mut Kernel, args: &Args) {
 }
 
 fn run_window(kernel: &mut Kernel, settings_path: &Path, wifi_path: &Path, start: Instant) {
-    const SCALE: usize = 4;
     let (w, h) = (SCREEN_WIDTH as usize, SCREEN_HEIGHT as usize);
     let mut window = Window::new(
         "Fri3d Badge",
         w,
         h,
         WindowOptions {
-            scale: Scale::X4,
+            scale: Scale::X2,
             ..WindowOptions::default()
         },
     )
     .expect("open window");
     window.set_target_fps(60);
-    let _ = SCALE;
 
     let bindings: [(&[Key], InputKey); 7] = [
         (&[Key::Up, Key::W], InputKey::Up),
@@ -260,7 +259,7 @@ fn run_window(kernel: &mut Kernel, settings_path: &Path, wifi_path: &Path, start
         (&[Key::M, Key::Escape], InputKey::Menu),
     ];
 
-    let mut rgb = vec![BG; w * h];
+    let mut rgb = vec![0u32; w * h];
     let mut last_error = String::new();
     let mut shot = 0u32;
     let mut settings_img = [0u8; IMAGE_LEN];
@@ -291,10 +290,9 @@ fn run_window(kernel: &mut Kernel, settings_path: &Path, wifi_path: &Path, start
         let dt = t0.elapsed();
         if result.frame {
             let brightness = kernel.setting("system", "brightness").unwrap_or(100).clamp(10, 100);
-            let bg = scale_color(BG, brightness);
             let fb = kernel.framebuffer();
             for (dst, &px) in rgb.iter_mut().zip(fb.iter()) {
-                *dst = if px != 0 { FG } else { bg };
+                *dst = pixel(px, brightness);
             }
             drop(fb);
             if dt > Duration::from_millis(20) || last_perf.elapsed() > Duration::from_secs(5) {
@@ -460,8 +458,7 @@ fn state_path(name: &str) -> PathBuf {
     home.join(".fri3d-badge").join(name)
 }
 
-/// Greyscale PNG, 0 = black pixel, 255 = white — the convention of
-/// tests/visual/apps/*/golden/*.png.
+/// RGB PNG of the framebuffer through the DB32 palette.
 fn write_png(path: &Path, fb: &[u8]) -> Result<(), String> {
     debug_assert_eq!(fb.len(), FRAMEBUFFER_LEN);
     if let Some(parent) = path.parent() {
@@ -471,10 +468,16 @@ fn write_png(path: &Path, fb: &[u8]) -> Result<(), String> {
     }
     let file = std::fs::File::create(path).map_err(|e| format!("create {}: {e}", path.display()))?;
     let mut encoder = png::Encoder::new(std::io::BufWriter::new(file), SCREEN_WIDTH, SCREEN_HEIGHT);
-    encoder.set_color(png::ColorType::Grayscale);
+    encoder.set_color(png::ColorType::Rgb);
     encoder.set_depth(png::BitDepth::Eight);
     let mut writer = encoder.write_header().map_err(|e| format!("png: {e}"))?;
-    let grey: Vec<u8> = fb.iter().map(|&p| if p != 0 { 0 } else { 255 }).collect();
-    writer.write_image_data(&grey).map_err(|e| format!("png: {e}"))?;
+    let rgb: Vec<u8> = fb
+        .iter()
+        .flat_map(|&p| {
+            let c = palette::rgb(p);
+            [(c >> 16) as u8, (c >> 8) as u8, c as u8]
+        })
+        .collect();
+    writer.write_image_data(&rgb).map_err(|e| format!("png: {e}"))?;
     Ok(())
 }

@@ -20,13 +20,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Kernel + tools tests
-        run: cargo test -p fri3d-kernel -p fri3d-wasm-api -p fri3d-pack
+        run: cargo test -p fri3d-kernel -p fri3d-wasm-api -p fri3d-pack -p fri3d-fontgen
 
       - name: Clippy (kernel, pack)
         run: cargo clippy -p fri3d-kernel -p fri3d-pack -- -D warnings
 
       - name: Apps compile to wasm32
-        run: cargo build --release --target wasm32-unknown-unknown --workspace --exclude fri3d-host-desktop --exclude fri3d-pack --exclude fri3d-apps --exclude fri3d-host-web
+        run: cargo build --release --target wasm32-unknown-unknown --workspace --exclude fri3d-host-desktop --exclude fri3d-pack --exclude fri3d-apps --exclude fri3d-host-web --exclude fri3d-fontgen
 
   screenshots:
     name: Pack apps + headless screenshots

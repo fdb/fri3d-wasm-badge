@@ -3,7 +3,7 @@
 
 use fri3d_wasm_api as api;
 
-const DOT_COUNT: u32 = 200;
+const DOT_COUNT: u32 = 800;
 const SEED_MAX: u32 = i32::MAX as u32;
 static SEED: api::AppCell<u32> = api::AppCell::new(1);
 
@@ -15,8 +15,6 @@ fn render_impl() {
         return;
     }
 
-    api::canvas_set_color(api::color::BLACK);
-
     let mut state = SEED.get();
     if state == 0 {
         state = 1;
@@ -27,6 +25,8 @@ fn render_impl() {
         let x = (state % width) as i32;
         state = lcg(state);
         let y = (state % height) as i32;
+        state = lcg(state);
+        api::canvas_set_color(state % 32);
         api::canvas_draw_dot(x, y);
     }
 }

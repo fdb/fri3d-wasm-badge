@@ -52,6 +52,11 @@ impl WebKernel {
         self.kernel.framebuffer().to_vec()
     }
 
+    /// The DB32 palette as `0xRRGGBB`, indexed by framebuffer byte.
+    pub fn palette(&self) -> Vec<u32> {
+        fri3d_kernel::palette::RGB.to_vec()
+    }
+
     pub fn app_count(&self) -> u32 {
         self.kernel.app_count() as u32
     }

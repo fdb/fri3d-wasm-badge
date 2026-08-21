@@ -6,7 +6,7 @@
 apps/snake/
   Cargo.toml        crate fri3d-app-snake, cdylib, depends on fri3d-wasm-api
   manifest.toml     id, name, version, author, description, category, icon, system
-  icon.png          14x14, any PNG colour type; dark = set, transparent = clear
+  icon.png          16x16 PNG; opaque pixels snap to the DB32 palette, transparent = hole
   src/lib.rs
 ```
 
@@ -32,8 +32,8 @@ settings namespace, which is why it is restricted to `[a-z0-9_]`.
 
 1. `cargo build --release --target wasm32-unknown-unknown -p <crate>`.
 2. `wasm-opt -Oz --strip-debug` if `wasm-opt` is on the PATH.
-3. Decode `icon.png` into 28 bytes (14 rows × 2 bytes, MSB first).
-4. Write the 256-byte header + wasm to `build/apps/<id>.fab`.
+3. Decode `icon.png` into 256 palette indices (255 = transparent).
+4. Write the 512-byte header + wasm to `build/apps/<id>.fab`.
 5. Regenerate `fri3d-apps/src/generated.rs`:
    ```rust
    pub static LAUNCHER: &[u8] = include_bytes!("../../build/apps/launcher.fab");
@@ -47,7 +47,7 @@ pass the slices straight to the kernel; the desktop host can also load
 
 ## Binary layout
 
-Fixed 256-byte header, little-endian, NUL-padded strings. Reader and
+Fixed 512-byte header, little-endian, NUL-padded strings. Reader and
 writer share one definition in `fri3d_kernel::bundle` (`Bundle` parses,
 `HeaderBuilder` writes; the pack tool depends on the kernel crate so the
 layout cannot drift).
@@ -55,27 +55,27 @@ layout cannot drift).
 | Offset | Size | Field |
 | --- | --- | --- |
 | 0 | 4 | `FAB1` |
-| 4 | 2 | format version = 1 |
+| 4 | 2 | format version = 2 |
 | 6 | 2 | flags: bit 0 = system |
 | 8 | 24 | id |
 | 32 | 32 | name |
 | 64 | 16 | version |
 | 80 | 32 | author |
 | 112 | 96 | description |
-| 208 | 1 | icon width = 14 |
-| 209 | 1 | icon height = 14 |
+| 208 | 1 | icon width = 16 |
+| 209 | 1 | icon height = 16 |
 | 210 | 1 | payload kind: 0 = wasm (reserved for a native AOT payload) |
-| 212 | 28 | icon bitmap |
 | 240 | 4 | payload length |
-| 256 | n | payload |
+| 256 | 256 | icon: one DB32 index per pixel, row-major, 255 = transparent |
+| 512 | n | payload |
 
-`app_info(i, ptr, 256)` copies this header verbatim into the app's
+`app_info(i, ptr, 512)` copies this header verbatim into the app's
 memory; `fri3d_wasm_api::AppInfo` reads the fields back at the same
 offsets. The launcher therefore needs no string parsing and no
 allocation to show every installed app.
 
-## Why 14×14 icons
+## Why 16×16 icons
 
-Flipper Zero's main menu uses 14×14 icons next to a text label on a
-128×64 display; at our 160×120 that gives six rows of 16 px under an
-11 px status bar. MicroPythonOS's 64×64 colour icons would not fit.
+The home grid (design doc 017) draws icons at 2× in 70×62 cells and lists
+draw them at 1×. 16×16 is the size pixel artists expect, it scales to a
+crisp 32×32, and 256 bytes per app is nothing next to the wasm payload.
