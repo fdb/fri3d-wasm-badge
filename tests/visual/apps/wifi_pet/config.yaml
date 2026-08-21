@@ -1,5 +1,0 @@
-name: WiFi Pet
-description: Virtual pet screen (initial state)
-
-scenes:
-  - name: Default

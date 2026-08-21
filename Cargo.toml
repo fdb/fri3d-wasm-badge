@@ -22,8 +22,6 @@ members = [
     "hosts/web",
     # Bundler: manifest.toml + icon.png + wasm -> .fab
     "tools/fri3d-pack",
-    # Golden-image generator for canvas primitives (C++ reference parity).
-    "tools/canvas-parity-gen",
 ]
 default-members = [
     "fri3d-kernel",

@@ -26,8 +26,6 @@ fri3d-kernel  (no_std)     canvas · input · registry · settings · lifecycle 
 ```
 
 Design notes and lessons learned live in [design_docs/](design_docs/README.md).
-The C++ firmware under `firmware/` is the previous implementation, kept
-as a reference for canvas parity; it is not built by default.
 
 ## Display
 
@@ -92,7 +90,6 @@ for the API and the performance rules it encodes.
 ```bash
 cargo test -p fri3d-kernel        # unit + lifecycle tests (WAT apps, fuel, settings policy)
 hosts/web/build.sh && ...          # open /test.html, read window.testResults
-firmware/tools/canvas-parity/run.sh   # C++ reference canvas vs the kernel canvas
 ```
 
 ## Project structure
@@ -106,10 +103,8 @@ hosts/desktop/       minifb host + headless screenshot tool (`fri3d`).
 hosts/web/           wasm-bindgen host, index.html harness, test.html suite.
 hosts/badge/         esp-hal firmware (separate workspace, Xtensa toolchain).
 tools/fri3d-pack/    manifest + icon + wasm → .fab bundles + generated.rs.
-tools/canvas-parity-gen/  Golden framebuffers for the C++ reference parity test.
 design_docs/         Lessons learned and decisions.
 specs/               Earlier stage specs (historical).
-firmware/            Previous C++ implementation (reference only).
 ```
 
 ## License

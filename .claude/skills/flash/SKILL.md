@@ -63,7 +63,5 @@ Report the image size from espflash's output (the app is ~1.1 MB today,
 
 ## Notes
 
-- The previous C++/PlatformIO firmware under `firmware/` is a reference
-  only. Do not `pio run` for the 2026 badge.
 - Flashing replaces the MicroPythonOS partition layout; restoring MPOS
   means reflashing its image.

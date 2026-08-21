@@ -38,9 +38,9 @@ shows the problem:
 - **Bundle layout is shared.** Change `fri3d_kernel::bundle` and
   `fri3d_wasm_api::AppInfo` together; bump `FORMAT_VERSION` if offsets
   move.
-- **Canvas stays bit-exact** with the C++ reference until that
-  reference is retired: run `firmware/tools/canvas-parity/run.sh` after
-  touching `fri3d-kernel/src/canvas.rs` or `font.rs`.
+- **Canvas changes need a screenshot.** After touching
+  `fri3d-kernel/src/canvas.rs` or `font.rs`, run the headless desktop
+  host on `test_drawing` (`--keys right` cycles scenes) and look.
 - **Apps are `no_std`, no `alloc`.** State in `static AppCell<T>`.
 
 ## Adding an app

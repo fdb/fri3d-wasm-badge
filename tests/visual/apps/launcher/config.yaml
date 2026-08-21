@@ -1,5 +1,0 @@
-name: Launcher
-description: Default launcher menu
-
-scenes:
-  - name: Initial Menu

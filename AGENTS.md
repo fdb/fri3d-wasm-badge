@@ -19,7 +19,6 @@ cargo run --release -p fri3d-host-desktop -- --headless --app snake \
 cargo test -p fri3d-kernel                             # kernel tests
 hosts/web/build.sh && (cd hosts/web/dist && python3 -m http.server 8091)
 hosts/badge/flash.sh                                   # build + flash badge
-firmware/tools/canvas-parity/run.sh                    # C++ reference parity
 ```
 
 ## Commit style
