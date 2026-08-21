@@ -19,7 +19,7 @@ mod bindings {
         pub fn canvas_draw_disc(x: i32, y: i32, radius: i32);
         pub fn canvas_draw_str(x: i32, y: i32, text: *const u8);
         pub fn canvas_string_width(text: *const u8) -> i32;
-        // Overwrites the entire 128*64 framebuffer in one host call.
+        // Overwrites the entire framebuffer in one host call.
         // `ptr` points to exactly width*height bytes (0 = white, 1 = black).
         // Use for apps that render whole frames at once (Mandelbrot etc) —
         // saves the per-pixel wasm3 boundary crossing.
@@ -33,6 +33,16 @@ mod bindings {
         pub fn request_render();
         pub fn exit_to_launcher();
         pub fn start_app(app_id: i32);
+        // Draws a 1-bit bitmap (rows of ceil(w/8) bytes, MSB first) in the
+        // current color. Clear bits are transparent.
+        pub fn canvas_draw_bitmap(x: i32, y: i32, w: i32, h: i32, ptr: *const u8);
+        pub fn app_count() -> i32;
+        // Copies the 256-byte bundle header of app `index` to `ptr`.
+        pub fn app_info(index: i32, ptr: *mut u8, len: i32) -> i32;
+        pub fn kernel_version() -> i32;
+        pub fn settings_get_u32(ns: *const u8, key: *const u8, default: i32) -> i32;
+        pub fn settings_set_u32(ns: *const u8, key: *const u8, value: i32) -> i32;
+        pub fn log_str(ptr: *const u8);
     }
 }
 
@@ -99,7 +109,35 @@ mod bindings {
     pub fn exit_to_launcher() {}
 
     pub fn start_app(_app_id: i32) {}
+
+    pub fn canvas_draw_bitmap(_x: i32, _y: i32, _w: i32, _h: i32, _ptr: *const u8) {}
+
+    pub fn app_count() -> i32 {
+        0
+    }
+
+    pub fn app_info(_index: i32, _ptr: *mut u8, _len: i32) -> i32 {
+        -1
+    }
+
+    pub fn kernel_version() -> i32 {
+        0
+    }
+
+    pub fn settings_get_u32(_ns: *const u8, _key: *const u8, default: i32) -> i32 {
+        default
+    }
+
+    pub fn settings_set_u32(_ns: *const u8, _key: *const u8, _value: i32) -> i32 {
+        0
+    }
+
+    pub fn log_str(_ptr: *const u8) {}
 }
+
+/// Native canvas size. Hosts upscale (2× on the badge LCD).
+pub const SCREEN_WIDTH: u32 = 160;
+pub const SCREEN_HEIGHT: u32 = 120;
 
 const STR_BUFFER_SIZE: usize = 256;
 
@@ -262,7 +300,7 @@ pub fn canvas_draw_str(x: i32, y: i32, text: &str) {
 }
 
 /// Overwrite the entire 128x64 framebuffer in one host call. `buffer` must
-/// be exactly canvas_width() * canvas_height() bytes (8192 for the badge),
+/// be exactly canvas_width() * canvas_height() bytes (SCREEN_WIDTH * SCREEN_HEIGHT),
 /// where 0 = white (background) and 1 = black (foreground). Faster than
 /// per-pixel canvas_draw_dot for apps that render a full frame every time
 /// (Mandelbrot, procedural textures, etc).
@@ -411,6 +449,162 @@ pub fn start_app(app_id: u32) {
     }
 }
 
+/// Draw a 1-bit bitmap with the current color. `bits` holds `h` rows of
+/// `ceil(w/8)` bytes, MSB = leftmost pixel. Clear bits are transparent.
+pub fn canvas_draw_bitmap(x: i32, y: i32, w: u32, h: u32, bits: &[u8]) {
+    let row_bytes = (w as usize).div_ceil(8);
+    if bits.len() < row_bytes * h as usize {
+        return;
+    }
+    let ptr = bits.as_ptr();
+    #[cfg(target_arch = "wasm32")]
+    unsafe {
+        bindings::canvas_draw_bitmap(x, y, w as i32, h as i32, ptr);
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        bindings::canvas_draw_bitmap(x, y, w as i32, h as i32, ptr);
+    }
+}
+
+/// Number of installed apps (launcher excluded). Index `0..count` is the
+/// id accepted by `start_app`.
+pub fn app_count() -> u32 {
+    #[cfg(target_arch = "wasm32")]
+    unsafe {
+        return bindings::app_count().max(0) as u32;
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        bindings::app_count().max(0) as u32
+    }
+}
+
+/// Kernel ABI version.
+pub fn kernel_version() -> u32 {
+    #[cfg(target_arch = "wasm32")]
+    unsafe {
+        return bindings::kernel_version().max(0) as u32;
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        bindings::kernel_version().max(0) as u32
+    }
+}
+
+/// Log a line to the host console. Clipped to 96 bytes by the kernel.
+pub fn log(text: &str) {
+    with_cstr(text, |ptr| {
+        #[cfg(target_arch = "wasm32")]
+        unsafe {
+            bindings::log_str(ptr);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            bindings::log_str(ptr);
+        }
+    });
+}
+
+/// Read a persisted u32 setting. `ns` must be this app's id, or `"system"`
+/// for apps packed with `system = true`. Other namespaces return `default`.
+pub fn settings_get_u32(ns: &str, key: &str, default: u32) -> u32 {
+    with_two_cstr(ns, key, |ns, key| {
+        #[cfg(target_arch = "wasm32")]
+        unsafe {
+            return bindings::settings_get_u32(ns, key, default as i32) as u32;
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            bindings::settings_get_u32(ns, key, default as i32) as u32
+        }
+    })
+}
+
+/// Persist a u32 setting. Returns false when denied or when the table is
+/// full (64 entries across all apps).
+pub fn settings_set_u32(ns: &str, key: &str, value: u32) -> bool {
+    with_two_cstr(ns, key, |ns, key| {
+        #[cfg(target_arch = "wasm32")]
+        unsafe {
+            return bindings::settings_set_u32(ns, key, value as i32) != 0;
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            bindings::settings_set_u32(ns, key, value as i32) != 0
+        }
+    })
+}
+
+fn with_two_cstr<R>(a: &str, b: &str, f: impl FnOnce(*const u8, *const u8) -> R) -> R {
+    const N: usize = 24;
+    let mut ba = [0u8; N];
+    let mut bb = [0u8; N];
+    let la = a.len().min(N - 1);
+    let lb = b.len().min(N - 1);
+    ba[..la].copy_from_slice(&a.as_bytes()[..la]);
+    bb[..lb].copy_from_slice(&b.as_bytes()[..lb]);
+    f(ba.as_ptr(), bb.as_ptr())
+}
+
+/// The 256-byte bundle header of an installed app, as copied by the
+/// kernel. Field offsets match `fri3d_kernel::bundle`.
+pub struct AppInfo {
+    header: [u8; AppInfo::LEN],
+}
+
+impl AppInfo {
+    pub const LEN: usize = 256;
+    pub const ICON_W: u32 = 14;
+    pub const ICON_H: u32 = 14;
+
+    pub const fn empty() -> Self {
+        Self { header: [0; Self::LEN] }
+    }
+
+    /// Fetch app `index` from the kernel. Returns false if out of range.
+    pub fn fetch(&mut self, index: u32) -> bool {
+        let ptr = self.header.as_mut_ptr();
+        #[cfg(target_arch = "wasm32")]
+        unsafe {
+            return bindings::app_info(index as i32, ptr, Self::LEN as i32) == Self::LEN as i32;
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            bindings::app_info(index as i32, ptr, Self::LEN as i32) == Self::LEN as i32
+        }
+    }
+
+    fn field(&self, at: usize, max: usize) -> &str {
+        let f = &self.header[at..at + max];
+        let end = f.iter().position(|&b| b == 0).unwrap_or(max);
+        core::str::from_utf8(&f[..end]).unwrap_or("")
+    }
+
+    pub fn id(&self) -> &str {
+        self.field(8, 24)
+    }
+    pub fn name(&self) -> &str {
+        self.field(32, 32)
+    }
+    pub fn version(&self) -> &str {
+        self.field(64, 16)
+    }
+    pub fn author(&self) -> &str {
+        self.field(80, 32)
+    }
+    pub fn description(&self) -> &str {
+        self.field(112, 96)
+    }
+    pub fn is_system(&self) -> bool {
+        self.header[6] & 1 != 0
+    }
+    /// 14x14 1-bit icon, 2 bytes per row.
+    pub fn icon(&self) -> &[u8] {
+        &self.header[212..212 + 28]
+    }
+}
+
 pub struct AppCell<T: Copy> {
     value: core::cell::Cell<T>,
 }
@@ -453,6 +647,9 @@ pub mod input {
     pub const KEY_RIGHT: u32 = 3;
     pub const KEY_OK: u32 = 4;
     pub const KEY_BACK: u32 = 5;
+    /// Home key. A short press always returns to the launcher; apps still
+    /// see the press/release pair and the long press.
+    pub const KEY_MENU: u32 = 6;
 
     pub const TYPE_PRESS: u32 = 0;
     pub const TYPE_RELEASE: u32 = 1;
@@ -489,6 +686,56 @@ macro_rules! export_on_input {
         #[allow(unsafe_code)]
         pub extern "C" fn on_input(key: u32, kind: u32) {
             $func(key, kind);
+        }
+    };
+}
+
+/// Lifecycle exports. All optional; the kernel calls what it finds.
+///
+/// `on_start` runs once after the module is instantiated, before the first
+/// render. `on_resume` runs when the app gains the screen, `on_pause` when
+/// it loses it (the launcher sees these around every app launch). `on_stop`
+/// runs once before the instance is dropped — persist state here.
+#[macro_export]
+macro_rules! export_on_start {
+    ($func:path) => {
+        #[no_mangle]
+        #[allow(unsafe_code)]
+        pub extern "C" fn on_start() {
+            $func();
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! export_on_stop {
+    ($func:path) => {
+        #[no_mangle]
+        #[allow(unsafe_code)]
+        pub extern "C" fn on_stop() {
+            $func();
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! export_on_pause {
+    ($func:path) => {
+        #[no_mangle]
+        #[allow(unsafe_code)]
+        pub extern "C" fn on_pause() {
+            $func();
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! export_on_resume {
+    ($func:path) => {
+        #[no_mangle]
+        #[allow(unsafe_code)]
+        pub extern "C" fn on_resume() {
+            $func();
         }
     };
 }

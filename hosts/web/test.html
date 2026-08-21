@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Fri3d Badge — Tests</title></head>
+<body>
+<p>Running tests… results land in <code>window.testResults</code>.</p>
+<pre id="out"></pre>
+<iframe id="host" src="index.html" style="width:620px;height:520px;border:0"></iframe>
+<script src="tests.js"></script>
+<script>
+  const frame = document.getElementById('host');
+  frame.addEventListener('load', async () => {
+    window.fri3d = frame.contentWindow.fri3d;
+    await window.fri3d.ready;
+    const r = window.runTests();
+    window.testResults = r;
+    document.getElementById('out').textContent =
+      r.results.map(x => (x.ok ? 'PASS ' : 'FAIL ') + x.name + (x.error ? ': ' + x.error : '')).join('\n') +
+      `\n\n${r.passed} passed, ${r.failed} failed`;
+  });
+</script>
+</body>
+</html>

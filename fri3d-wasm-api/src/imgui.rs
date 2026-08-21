@@ -5,8 +5,8 @@ use crate::{canvas_draw_box, canvas_draw_disc, canvas_draw_dot, canvas_draw_fram
             canvas_set_color, canvas_set_font, canvas_string_width, canvas_clear};
 use crate::{align, color, font, input};
 
-const UI_SCREEN_WIDTH: i16 = 128;
-const UI_SCREEN_HEIGHT: i16 = 64;
+const UI_SCREEN_WIDTH: i16 = crate::SCREEN_WIDTH as i16;
+const UI_SCREEN_HEIGHT: i16 = crate::SCREEN_HEIGHT as i16;
 
 const UI_MAX_LAYOUT_DEPTH: usize = 8;
 const UI_MAX_FOCUSABLE: i16 = 32;

@@ -1,0 +1,18 @@
+[build]
+target = "xtensa-esp32s3-none-elf"
+
+[target.xtensa-esp32s3-none-elf]
+# The Xtensa GCC that espup installs next to the `esp` toolchain. If you
+# installed it elsewhere, put `xtensa-esp32s3-elf-gcc` on PATH and delete
+# this line.
+linker = "/Users/fdb/.rustup/toolchains/esp/xtensa-esp-elf/esp-15.2.0_20250920/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc"
+rustflags = [
+  "-C", "link-arg=-nostartfiles",
+  "-C", "link-arg=-Wl,-Tlinkall.x",
+  # Back traces across the wasmi interpreter.
+  "-C", "force-frame-pointers",
+]
+runner = "espflash flash --monitor --flash-size 16mb"
+
+[unstable]
+build-std = ["alloc", "core"]

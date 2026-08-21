@@ -9,4 +9,4 @@ name = "canvas-parity-gen"
 path = "src/main.rs"
 
 [dependencies]
-fri3d-runtime = { path = "../../fri3d-runtime" }
+fri3d-kernel = { path = "../../fri3d-kernel" }

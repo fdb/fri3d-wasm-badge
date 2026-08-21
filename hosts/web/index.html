@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fri3d Badge — Web Host</title>
+<style>
+  html, body { background: #111; color: #ddd; font-family: ui-monospace, Menlo, monospace; margin: 0; padding: 1rem; }
+  h1 { font-size: 1rem; color: #aaa; margin: 0 0 .75rem; }
+  .frame { display: inline-block; padding: 24px; background: #1c1c1c; border: 1px solid #333; border-radius: 8px; }
+  canvas { display: block; width: 512px; height: 256px; image-rendering: pixelated; border: 2px solid #000; }
+  .hint { color: #aaa; font-size: .75rem; text-align: center; margin-top: .5rem; }
+  #log { margin-top: 1rem; font-size: .75rem; color: #888; white-space: pre; height: 8rem; overflow-y: auto; background: #000; border: 1px solid #333; padding: .5rem; width: 560px; }
+</style>
+</head>
+<body>
+  <h1>Fri3d Badge — Web Host</h1>
+  <div class="frame">
+    <canvas id="screen" width="160" height="120"></canvas>
+    <div class="hint">Arrows/WASD: d-pad &nbsp; Z/Enter: OK &nbsp; X/Backspace: Back &nbsp; M/Esc: Menu</div>
+  </div>
+  <div id="log"></div>
+<script type="module">
+import init, { WebKernel } from './pkg/fri3d_host_web.js';
+
+const KEY = { UP: 0, DOWN: 1, LEFT: 2, RIGHT: 3, OK: 4, BACK: 5, MENU: 6 };
+const KEYMAP = {
+  ArrowUp: KEY.UP, w: KEY.UP, W: KEY.UP,
+  ArrowDown: KEY.DOWN, s: KEY.DOWN, S: KEY.DOWN,
+  ArrowLeft: KEY.LEFT, a: KEY.LEFT, A: KEY.LEFT,
+  ArrowRight: KEY.RIGHT, d: KEY.RIGHT, D: KEY.RIGHT,
+  z: KEY.OK, Z: KEY.OK, Enter: KEY.OK,
+  x: KEY.BACK, X: KEY.BACK, Backspace: KEY.BACK,
+  m: KEY.MENU, M: KEY.MENU, Escape: KEY.MENU,
+};
+const W = 160, H = 120;
+const AMBER = [0xFF, 0x82, 0x00];
+
+const logEl = document.getElementById('log');
+function log(...args) { logEl.textContent += args.join(' ') + '\n'; logEl.scrollTop = logEl.scrollHeight; }
+
+const canvas = document.getElementById('screen');
+const ctx = canvas.getContext('2d');
+const image = ctx.createImageData(W, H);
+
+let kernel = null;
+let timeOffset = 0;
+const now = () => (performance.now() + timeOffset) >>> 0;
+
+function draw() {
+  const fb = kernel.framebuffer();
+  let b = kernel.setting('system', 'brightness');
+  b = b < 0 ? 100 : Math.min(100, Math.max(10, b));
+  const bg = AMBER.map(c => (c * b / 100) | 0);
+  const px = image.data;
+  for (let i = 0; i < fb.length; i++) {
+    const on = fb[i] !== 0;
+    px[i * 4 + 0] = on ? 0 : bg[0];
+    px[i * 4 + 1] = on ? 0 : bg[1];
+    px[i * 4 + 2] = on ? 0 : bg[2];
+    px[i * 4 + 3] = 255;
+  }
+  ctx.putImageData(image, 0, 0);
+}
+
+let lastError = '';
+function housekeeping() {
+  let line;
+  while ((line = kernel.take_log()) !== undefined) log('[app]', line);
+  const err = kernel.last_error();
+  if (err !== lastError) { lastError = err; if (err) log('[kernel]', err); }
+  const img = kernel.settings_image();
+  if (img) {
+    try { localStorage.setItem('fri3d.settings', btoa(String.fromCharCode(...img))); } catch (e) {}
+  }
+}
+
+function step() {
+  const changed = kernel.step(now());
+  if (changed) draw();
+  housekeeping();
+  return changed;
+}
+
+const pressed = new Set();
+window.addEventListener('keydown', (e) => {
+  const k = KEYMAP[e.key];
+  if (k === undefined || !kernel) return;
+  e.preventDefault();
+  if (pressed.has(k)) return;
+  pressed.add(k);
+  kernel.push_key(k, true, (e.timeStamp + timeOffset) >>> 0);
+});
+window.addEventListener('keyup', (e) => {
+  const k = KEYMAP[e.key];
+  if (k === undefined || !kernel) return;
+  e.preventDefault();
+  pressed.delete(k);
+  kernel.push_key(k, false, (e.timeStamp + timeOffset) >>> 0);
+});
+
+function loop() {
+  if (kernel) step();
+  requestAnimationFrame(loop);
+}
+
+const ready = init().then(() => {
+  kernel = new WebKernel(now());
+  try {
+    const saved = localStorage.getItem('fri3d.settings');
+    if (saved) kernel.load_settings(Uint8Array.from(atob(saved), c => c.charCodeAt(0)));
+  } catch (e) {}
+  log(`kernel up: ${kernel.app_count()} apps`);
+  step();
+  requestAnimationFrame(loop);
+});
+
+window.fri3d = {
+  KEY,
+  ready,
+  tap(key, heldMs = 50) {
+    kernel.push_key(key, true, now()); step();
+    timeOffset += heldMs;
+    kernel.push_key(key, false, now()); step();
+  },
+  render() { kernel.request_render(); step(); },
+  readFb() { return kernel.framebuffer(); },
+  rngGet() { return kernel.rng_get(); },
+  rngSeed(s) { kernel.rng_seed(s); },
+  startApp(i) { const ok = kernel.start_app(i); step(); return ok; },
+  exitToLauncher() { kernel.exit_to_launcher(); step(); },
+  appCount() { return kernel.app_count(); },
+  appName(i) { return kernel.app_name(i); },
+  lastError() { return kernel.last_error(); },
+  advance(ms) { timeOffset += ms; step(); },
+};
+</script>
+</body>
+</html>

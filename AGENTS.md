@@ -2,39 +2,24 @@
 
 See [CLAUDE.md](CLAUDE.md) for the canonical workflow. Short version:
 
-- **Firmware host lives in `firmware/src/`** — one C++ implementation, three
-  targets (ESP32-S3, browser, native CLI).
-- **Always verify in the browser or the native runner before flashing hardware.**
-  `firmware/web/build.sh` + `firmware/tools/app-runner/build.sh` are sub-second
-  feedback loops; `pio run -t upload` is 15+ seconds and can wedge USB.
-- **Canvas primitives must stay byte-identical with the Rust reference.**
-  Run `firmware/tools/canvas-parity/run.sh` after any `canvas.{h,cpp}` or
-  `font.{h,cpp}` change.
-- **TDD for bugfixes**: reproduce as a test in `firmware/web/tests.js` first,
-  then fix.
+- **Everything is Rust.** Kernel in `fri3d-kernel/` (`no_std`), hosts in
+  `hosts/`, apps in `apps/`, bundler in `tools/fri3d-pack/`.
+- **Cheapest loop first:** `cargo test -p fri3d-kernel` → headless desktop
+  screenshot → browser `test.html` → badge.
+- **Design docs:** `design_docs/` explains the limits, the bundle format,
+  the lifecycle and why. Read before changing the kernel.
 
 ## Common commands
 
 ```bash
-# Rust apps (wasm32-unknown-unknown)
-./build_apps.sh
-
-# Browser emulator
-firmware/web/build.sh
-cd firmware/web/dist && python3 -m http.server 8090
-
-# Native app runner (dumps PNGs)
-firmware/tools/app-runner/build.sh
-firmware/tools/app-runner/app_runner <wasm> --out out.png
-
-# Full visual parity sweep (C++ host vs Rust goldens)
-firmware/tools/app-runner/visual_parity.sh
-
-# Canvas primitive parity (fine-grained)
-firmware/tools/canvas-parity/run.sh
-
-# Hardware firmware
-cd firmware && pio run && pio run -t upload
+cargo run -p fri3d-pack                                # build + bundle apps
+cargo run --release -p fri3d-host-desktop              # desktop window
+cargo run --release -p fri3d-host-desktop -- --headless --app snake \
+    --keys ok,down --screenshot out.png                # scripted screenshot
+cargo test -p fri3d-kernel                             # kernel tests
+hosts/web/build.sh && (cd hosts/web/dist && python3 -m http.server 8091)
+hosts/badge/flash.sh                                   # build + flash badge
+firmware/tools/canvas-parity/run.sh                    # C++ reference parity
 ```
 
 ## Commit style

@@ -1,0 +1,12 @@
+[package]
+name = "fri3d-pack"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Builds apps/*/ into .fab bundles and the fri3d-apps embed crate."
+
+[dependencies]
+fri3d-kernel = { path = "../../fri3d-kernel" }
+toml = "0.8"
+serde = { version = "1", features = ["derive"] }
+png = "0.17"

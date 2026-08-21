@@ -1,0 +1,9 @@
+# Fri3d app manifest. Packed by tools/fri3d-pack into a .fab bundle.
+id = "launcher"
+name = "Launcher"
+version = "0.1.0"
+author = "Fri3d Camp"
+description = "Home screen."
+category = "System"
+icon = "icon.png"
+system = true

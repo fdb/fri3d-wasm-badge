@@ -1,0 +1,16 @@
+[package]
+name = "fri3d-host-desktop"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Desktop host: the kernel in a minifb window. Also a headless screenshot tool."
+
+[[bin]]
+name = "fri3d"
+path = "src/main.rs"
+
+[dependencies]
+fri3d-kernel = { path = "../../fri3d-kernel", features = ["std"] }
+fri3d-apps = { path = "../../fri3d-apps" }
+minifb = { version = "0.28", default-features = false }
+png = "0.17"

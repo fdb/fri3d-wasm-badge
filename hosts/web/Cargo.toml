@@ -1,0 +1,16 @@
+[package]
+name = "fri3d-host-web"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Browser host: the kernel compiled to wasm32 and driven from JS via wasm-bindgen."
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+fri3d-kernel = { path = "../../fri3d-kernel" }
+fri3d-apps = { path = "../../fri3d-apps" }
+wasm-bindgen = "0.2"
+# Feature unification: the browser has no entropy source for hash maps.
+wasmi = { version = "0.51", default-features = false, features = ["prefer-btree-collections"] }

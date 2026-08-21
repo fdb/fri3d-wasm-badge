@@ -1,143 +1,115 @@
 # Fri3d WASM Badge
 
-A WebAssembly runtime for the [Fri3d Camp 2024 badge](https://github.com/Fri3dCamp/badge_2024_hw)
-(ESP32-S3, 240×296 color LCD). Rust apps compile to WASM and run on the
-real hardware via wasm3, in the browser via Emscripten, and natively for
-offline testing — all from the same C++ host.
+A Rust kernel that runs WebAssembly apps on the
+[Fri3d Camp 2026 badge](https://github.com/Fri3dCamp/badge_2026_hw)
+(ESP32-S3, 320×240 LCD), in a desktop window, and in the browser — the
+same kernel bytes on all three. Apps are Rust crates compiled to
+`wasm32-unknown-unknown`, each with a manifest and an icon, shown by a
+Flipper-Zero-style launcher.
 
 ![Fri3d Badge UI Teaser](fri3d-badge-teaser.gif)
-
-### **[Try the Live Demo in your Browser](https://fdb.github.io/fri3d-wasm-badge/)**
 
 ## Architecture
 
 ```
-┌─────────────────────────────┐
-│  Rust app (fri3d-app-*)     │  compiles to wasm32-unknown-unknown
-│  + fri3d-wasm-api SDK       │  (the 24 host functions the app imports)
-└───────────┬─────────────────┘
-            │ .wasm
-            ▼
-┌─────────────────────────────────────────────────────────────┐
-│  C++ host in firmware/src (canvas, random, wasm_host, font) │
-│  ─ shared across three targets ─                            │
-└───────┬──────────────┬──────────────┬─────────────────────────┘
-        │              │              │
-        ▼              ▼              ▼
- ESP32-S3 badge    browser       native CLI
- (PlatformIO)      (Emscripten)  (app-runner, parity tests)
+apps/<id>/                 Rust app crate + manifest.toml + icon.png
+   │  cargo build --target wasm32-unknown-unknown
+   ▼
+tools/fri3d-pack           → build/apps/<id>.fab   (256-byte header + wasm)
+   │                       → fri3d-apps/src/generated.rs (include_bytes!)
+   ▼
+fri3d-kernel  (no_std)     canvas · input · registry · settings · lifecycle · wasmi host
+   │
+   ├── hosts/desktop       minifb window, headless screenshot tool
+   ├── hosts/web           wasm-bindgen + <canvas>, Playwright-testable harness
+   └── hosts/badge         esp-hal (no_std) firmware for the ESP32-S3 badge
 ```
 
-Canvas primitives are kept **byte-exact** with the Rust reference
-implementation in `fri3d-runtime/src/canvas.rs` via a parity test harness —
-see [CLAUDE.md](CLAUDE.md) for details.
+Design notes and lessons learned live in [design_docs/](design_docs/README.md).
+The C++ firmware under `firmware/` is the previous implementation, kept
+as a reference for canvas parity; it is not built by default.
 
-## Display dimensions
+## Display
 
-Apps draw into a **128×64 monochrome** framebuffer. That's the virtual
-canvas size the WASM API and every primitive operate on — independent of
-the physical target.
-
-| Target | Physical screen | What we show |
-| --- | --- | --- |
-| ESP32-S3 badge | 240 × 296 colour IPS LCD (landscape: 296 × 240) | 128×64 canvas upscaled 2× to 256×128, centred, green-on-black |
-| Browser | 256 × 128 `<canvas>` (CSS-scaled 2×) | same 128×64 canvas, nearest-neighbour 2× |
-| Native `app-runner` | 128 × 64 PNG | raw canvas, 1 output pixel per canvas pixel |
-
-The WASM app never sees the 240×296 physical pixels — it draws against
-a fixed 128×64 grid, and the C++ host in `firmware/src/main.cpp` handles
-the upscale + centering to the hardware LCD. This keeps apps portable
-across targets and keeps the SDK surface tiny.
+Apps draw on a **160×120 monochrome canvas**. Hosts upscale it: 2× to the
+full 320×240 badge LCD, 4× on desktop and web, black pixels on a Flipper-style
+amber background.
 
 ## Prerequisites
 
-- Rust toolchain (via rustup) with `wasm32-unknown-unknown` target
-- `wasm-opt` ([binaryen](https://github.com/WebAssembly/binaryen)) for shrinking app WASM
-- [PlatformIO](https://platformio.org/install) for the badge firmware
-- [Emscripten](https://emscripten.org/) for the browser build
-- `uv` (Python runner) for optional parity sweeps
-
 ```bash
 rustup target add wasm32-unknown-unknown
-brew install binaryen emscripten
+brew install binaryen            # wasm-opt, optional: smaller app bundles
+cargo install wasm-pack          # browser host
+cargo install espflash           # badge host
 ```
 
-## Building & running
+The badge host needs the Espressif Rust toolchain (`espup install`);
+see [hosts/badge/README.md](hosts/badge/README.md).
 
-### Browser emulator (fastest feedback loop)
+## Build and run
 
 ```bash
-firmware/web/build.sh
-cd firmware/web/dist && python3 -m http.server 8080
-# open http://localhost:8080/
+# 1. Pack every app in apps/ (builds them, writes build/apps/*.fab).
+cargo run -p fri3d-pack
+
+# 2a. Desktop window.
+cargo run --release -p fri3d-host-desktop
+
+# 2b. Headless: scripted input + screenshot, for tests and CI.
+cargo run --release -p fri3d-host-desktop -- \
+    --headless --app snake --keys ok,down,down --frames 3 --screenshot out.png
+
+# 2c. Browser.
+hosts/web/build.sh
+cd hosts/web/dist && python3 -m http.server 8091   # open /  or /test.html
+
+# 2d. Badge (USB-C attached).
+hosts/badge/flash.sh
 ```
 
-### Hardware firmware
+Desktop and web keys: arrows / WASD = d-pad, `Z` / Enter = OK,
+`X` / Backspace = Back, `M` / Esc = Menu (home). `F12` saves a screenshot
+on desktop.
 
-```bash
-cd firmware
-pio run                 # build
-pio run -t upload       # flash (requires USB-C to the badge)
+## Writing an app
+
+```
+apps/hello/
+  Cargo.toml       crate-type = ["cdylib"], depends on fri3d-wasm-api
+  manifest.toml    id, name, version, author, description, category, icon
+  icon.png         14×14, dark pixels = set
+  src/lib.rs       export_render!, export_on_input!, optional lifecycle exports
 ```
 
-### Native app runner (offline rendering to PNG)
-
-```bash
-firmware/tools/app-runner/build.sh
-firmware/tools/app-runner/app_runner firmware/build/fri3d_app_circles_opt.wasm \
-    --out /tmp/circles.png
-```
+Add the crate to the workspace `members`, run `cargo run -p fri3d-pack`,
+and the app appears in every host. See
+[design_docs/007-app-api-guidelines.md](design_docs/007-app-api-guidelines.md)
+for the API and the performance rules it encodes.
 
 ## Tests
 
-### Canvas parity (C++ vs Rust reference)
-
 ```bash
-firmware/tools/canvas-parity/run.sh
+cargo test -p fri3d-kernel        # unit + lifecycle tests (WAT apps, fuel, settings policy)
+hosts/web/build.sh && ...          # open /test.html, read window.testResults
+firmware/tools/canvas-parity/run.sh   # C++ reference canvas vs the kernel canvas
 ```
-
-Regenerates Rust-side golden framebuffers, builds the C++ tester, and
-diffs byte-for-byte. Fails loudly on any drift.
-
-### Visual parity (full apps)
-
-```bash
-firmware/tools/app-runner/visual_parity.sh
-```
-
-Runs every app that has a Rust-generated `tests/visual/apps/<app>/golden/*.png`
-through the native C++ runner and compares pixel-for-pixel.
-
-## Controls (hardware & browser)
-
-- D-pad / WASD / arrow keys: navigate
-- A / Z / Enter: OK / Select
-- B / X / Backspace: Back
 
 ## Project structure
 
 ```
-firmware/
-  src/                 # Shared C++: canvas, random, wasm_host, font, fonts
-  lib/wasm3/           # Vendored wasm3 v0.5.0
-  web/                 # Emscripten browser build (index.html, test.html, tests.js)
-  tools/
-    app-runner/        # Native WASM runner, dumps PNG
-    canvas-parity/     # C++ parity tester
-  platformio.ini       # Hardware build config
-  scripts/embed_app.sh # Rust app -> optimized embedded_app.h
-
-fri3d-runtime/         # Canvas/Random reference (used only by parity-gen)
-fri3d-wasm-api/        # App SDK — 24 host imports
-fri3d-app-*/           # Rust WASM apps
-
-tools/
-  canvas-parity-gen/   # Rust binary that emits golden framebuffers
-  transpile_fonts.py   # One-shot fonts.rs → fonts.h extractor
-
-tests/
-  canvas-golden/       # Golden framebuffers for primitive tests
-  visual/apps/         # Golden PNGs for full-app visual parity
+fri3d-kernel/        The kernel. no_std + alloc. wasmi host, lifecycle, limits.
+fri3d-wasm-api/      App SDK: safe wrappers over the `env` imports, IMGUI, lifecycle macros.
+fri3d-apps/          Generated embed crate (LAUNCHER + APPS slices).
+apps/                One folder per app: launcher, settings, snake, mandelbrot, …
+hosts/desktop/       minifb host + headless screenshot tool (`fri3d`).
+hosts/web/           wasm-bindgen host, index.html harness, test.html suite.
+hosts/badge/         esp-hal firmware (separate workspace, Xtensa toolchain).
+tools/fri3d-pack/    manifest + icon + wasm → .fab bundles + generated.rs.
+tools/canvas-parity-gen/  Golden framebuffers for the C++ reference parity test.
+design_docs/         Lessons learned and decisions.
+specs/               Earlier stage specs (historical).
+firmware/            Previous C++ implementation (reference only).
 ```
 
 ## License

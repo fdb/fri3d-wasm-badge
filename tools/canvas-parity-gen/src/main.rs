@@ -6,11 +6,11 @@
 //! then writes the raw 8192-byte framebuffer to tests/canvas-golden/<name>.bin.
 //!
 //! Convention: each byte is 0 (white / background) or 1 (black / foreground),
-//! matching fri3d-runtime/src/canvas.rs. This is not a PNG — it's the raw
+//! matching fri3d-kernel/src/canvas.rs. This is not a PNG — it's the raw
 //! buffer so C++ can mmap-compare in O(n) without decoding.
 
-use fri3d_runtime::canvas::Canvas;
-use fri3d_runtime::types::{Color, Font};
+use fri3d_kernel::canvas::Canvas;
+use fri3d_kernel::types::{Color, Font};
 use std::fs;
 use std::path::Path;
 

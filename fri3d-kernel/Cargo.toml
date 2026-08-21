@@ -1,0 +1,20 @@
+[package]
+name = "fri3d-kernel"
+version = "0.1.0"
+edition = "2021"
+description = "Fri3d badge kernel: canvas, input, app registry, lifecycle and WASM host. no_std + alloc."
+
+[lib]
+crate-type = ["rlib"]
+
+[features]
+default = []
+# Enables `std`-only conveniences (Display impls for errors, env logging).
+std = ["wasmi/std"]
+
+[dependencies]
+wasmi = { version = "0.51", default-features = false }
+heapless = "0.9"
+
+[dev-dependencies]
+wat = "1"

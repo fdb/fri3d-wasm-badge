@@ -8,3 +8,7 @@ target/
 # Playwright / agent debugging artifacts
 .playwright-mcp/
 /*.png
+fri3d-apps/src/generated.rs
+/build/
+hosts/web/dist/
+hosts/badge/target/

@@ -1,0 +1,45 @@
+[package]
+name = "fri3d-badge"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Fri3d 2026 badge firmware: the kernel on esp-hal (ESP32-S3, no_std)."
+
+# Separate workspace: this crate targets xtensa-esp32s3-none-elf with the
+# `esp` toolchain, unlike the rest of the repo.
+[workspace]
+
+[[bin]]
+name = "fri3d-badge"
+path = "src/main.rs"
+test = false
+bench = false
+
+[dependencies]
+fri3d-kernel = { path = "../../fri3d-kernel" }
+fri3d-apps = { path = "../../fri3d-apps" }
+
+esp-hal = { version = "1.1", features = ["esp32s3", "unstable"] }
+esp-alloc = { version = "0.10", features = ["esp32s3"] }
+esp-println = { version = "0.17", default-features = false, features = ["esp32s3", "jtag-serial", "critical-section"] }
+esp-backtrace = { version = "0.19", features = ["esp32s3", "panic-handler", "println"] }
+esp-bootloader-esp-idf = { version = "0.5", features = ["esp32s3"] }
+# esp-hal 1.1.2 was published against the 0.35.2 PAC; 0.35.3 removed
+# register fields it still references. Keep in sync with esp-hal upgrades.
+esp32s3 = "=0.35.2"
+
+mipidsi = "0.10"
+embedded-graphics = "0.8"
+embedded-hal = "1"
+embedded-hal-bus = "0.3"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+debug = 2          # symbols for espflash backtraces; not flashed
+panic = "abort"
+
+[profile.dev]
+opt-level = "s"
+panic = "abort"

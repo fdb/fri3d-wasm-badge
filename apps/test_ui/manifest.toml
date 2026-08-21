@@ -1,0 +1,8 @@
+# Fri3d app manifest. Packed by tools/fri3d-pack into a .fab bundle.
+id = "test_ui"
+name = "Test UI"
+version = "0.1.0"
+author = "Fri3d Camp"
+description = "IMGUI widget showcase."
+category = "Tools"
+icon = "icon.png"

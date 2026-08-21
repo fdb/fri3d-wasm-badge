@@ -1,0 +1,8 @@
+# Fri3d app manifest. Packed by tools/fri3d-pack into a .fab bundle.
+id = "dots"
+name = "Dots"
+version = "0.1.0"
+author = "Fri3d Camp"
+description = "Drifting dots."
+category = "Demo"
+icon = "icon.png"

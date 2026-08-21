@@ -1,0 +1,8 @@
+# Fri3d app manifest. Packed by tools/fri3d-pack into a .fab bundle.
+id = "test_drawing"
+name = "Test Drawing"
+version = "0.1.0"
+author = "Fri3d Camp"
+description = "Canvas primitive scenes for parity tests."
+category = "Tools"
+icon = "icon.png"

@@ -1,0 +1,8 @@
+[package]
+name = "fri3d-apps"
+version = "0.1.0"
+edition = "2021"
+description = "Embedded .fab bundles. Regenerate with `cargo run -p fri3d-pack`."
+
+[lib]
+crate-type = ["rlib"]

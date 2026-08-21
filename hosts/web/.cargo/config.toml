@@ -1,0 +1,4 @@
+# The root config shrinks the wasm stack to 16 KB for *apps*. This crate is
+# the host: wasmi's interpreter runs on this stack, so give it 1 MB.
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "link-arg=-zstack-size=1048576"]
