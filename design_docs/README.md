@@ -17,3 +17,5 @@ source, the lesson, and how the kernel applies it. Read in order.
 | [010](010-host-contract.md) | Host contract, and what desktop / browser / badge taught us |
 | [011](011-storage-and-ota.md) | Partition layout, settings persistence, OTA status, file-system decision |
 | [012](012-bring-up-lessons.md) | Hardware bring-up lessons, chronological, with a checklist |
+| [015](015-wifi.md) | Wi-Fi: kernel-owned model and auto-connect, host radio primitives, settings flow |
+| [016](016-network-ops.md) | Network operations (probe, download) and the Speed Test app; IP stack on the badge |

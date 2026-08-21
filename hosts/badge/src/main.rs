@@ -2,7 +2,9 @@
 //!
 //! The kernel does all the work; this file is the IO layer:
 //! CH32 expander (buttons, LCD reset, backlight) over I²C1, ST7789V over
-//! SPI2, and a 2× upscale of the 160×120 canvas to the full 320×240 panel.
+//! SPI2, a 2× upscale of the 160×120 canvas to the full 320×240 panel, and
+//! the Wi-Fi radio behind the kernel's three primitives (scan, connect,
+//! disconnect).
 
 #![no_std]
 #![no_main]
@@ -10,6 +12,12 @@
 extern crate alloc;
 
 use alloc::boxed::Box;
+use alloc::sync::Arc;
+use alloc::vec::Vec;
+use core::sync::atomic::{AtomicU32, Ordering};
+use core::future::Future;
+use core::pin::Pin;
+use core::task::{Context, Poll, Waker};
 use embedded_graphics::pixelcolor::raw::RawU16;
 use embedded_graphics::pixelcolor::Rgb565;
 use embedded_graphics::prelude::*;
@@ -21,11 +29,23 @@ use esp_hal::gpio::{Level, Output, OutputConfig};
 use esp_hal::i2c::master::{Config as I2cConfig, I2c};
 use esp_hal::spi::master::{Config as SpiConfig, Spi};
 use esp_hal::spi::Mode;
+use esp_hal::interrupt::software::SoftwareInterruptControl;
+use esp_hal::peripherals::WIFI;
 use esp_hal::time::{Instant, Rate};
+use esp_hal::timer::timg::TimerGroup;
 use esp_backtrace as _;
 use esp_hal::Blocking;
 use esp_println::println;
+use embassy_net::dns::DnsQueryType;
+use embassy_net::tcp::TcpSocket;
+use embassy_net::{Ipv4Address, Stack, StackResources};
+use esp_radio::wifi::ap::AccessPointInfo;
+use esp_radio::wifi::scan::ScanConfig;
+use esp_radio::wifi::sta::StationConfig;
+use esp_radio::wifi::{AuthenticationMethod, Config as WifiConfig, WifiController, WifiError};
 use fri3d_kernel::types::InputKey;
+use fri3d_kernel::net::NetRequest;
+use fri3d_kernel::wifi::{ScanEntry, WifiRequest};
 use fri3d_kernel::{Kernel, FRAMEBUFFER_LEN, SCREEN_HEIGHT, SCREEN_WIDTH};
 use mipidsi::interface::SpiInterface;
 use mipidsi::models::ST7789;
@@ -34,14 +54,29 @@ use mipidsi::Builder;
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
-// ---- Settings persistence ---------------------------------------------
-//
-// The `settings` partition holds one 4 KB sector: magic, length, then the
-// kernel's settings image. Rewritten only when a setting changes.
+/// After a panic esp-backtrace has printed the message and the frames;
+/// a frozen badge helps nobody, so reboot. The delay keeps the log
+/// readable on a monitor and avoids a tight reboot loop.
+#[no_mangle]
+pub extern "Rust" fn custom_halt() -> ! {
+    println!("[fri3d] panic: rebooting in 3 s");
+    Delay::new().delay_ms(3000);
+    esp_hal::system::software_reset()
+}
 
-const SETTINGS_MAGIC: &[u8; 4] = b"FSET";
+// ---- Persistence ---------------------------------------------------------
+//
+// The `settings` partition holds one 4 KB sector per blob: magic, length,
+// payload. Sector 0 is the kernel settings image, sector 1 the saved
+// Wi-Fi networks. A sector is rewritten only when its blob changes.
+
 const SECTOR: usize = 4096;
+const SETTINGS_SECTOR: u32 = 0;
+const SETTINGS_MAGIC: &[u8; 4] = b"FSET";
+const WIFI_SECTOR: u32 = 1;
+const WIFI_MAGIC: &[u8; 4] = b"FWIF";
 const _: () = assert!(4 + 4 + fri3d_kernel::settings::IMAGE_LEN <= SECTOR);
+const _: () = assert!(4 + 4 + fri3d_kernel::wifi::IMAGE_LEN <= SECTOR);
 
 fn find_partition(
     flash: &mut esp_storage::FlashStorage<'static>,
@@ -57,34 +92,56 @@ fn find_partition(
     found
 }
 
-fn settings_load(flash: &mut esp_storage::FlashStorage<'static>, kernel: &mut Kernel) {
+/// Read one blob sector into `out`; returns the payload length.
+fn blob_load(
+    flash: &mut esp_storage::FlashStorage<'static>,
+    sector: u32,
+    magic: &[u8; 4],
+    out: &mut [u8; SECTOR],
+) -> Option<usize> {
     use embedded_storage::ReadStorage;
-    let Some((offset, _)) = find_partition(flash, "settings") else {
-        println!("[fri3d] no settings partition");
-        return;
-    };
-    let mut sector = [0u8; SECTOR];
-    if flash.read(offset, &mut sector).is_err() || &sector[..4] != SETTINGS_MAGIC {
-        println!("[fri3d] settings: empty");
-        return;
+    let (offset, _) = find_partition(flash, "settings")?;
+    let offset = offset + sector * SECTOR as u32;
+    if flash.read(offset, out).is_err() || &out[..4] != magic {
+        return None;
     }
-    let len = u32::from_le_bytes([sector[4], sector[5], sector[6], sector[7]]) as usize;
-    if len > SECTOR - 8 {
-        return;
-    }
-    kernel.load_settings(&sector[8..8 + len]);
-    println!("[fri3d] settings: loaded {} B", len);
+    let len = u32::from_le_bytes([out[4], out[5], out[6], out[7]]) as usize;
+    (len <= SECTOR - 8).then_some(len)
 }
 
-fn settings_store(flash: &mut esp_storage::FlashStorage<'static>, image: &[u8]) {
+fn blob_store(
+    flash: &mut esp_storage::FlashStorage<'static>,
+    sector: u32,
+    magic: &[u8; 4],
+    payload: &[u8],
+) {
     use embedded_storage::Storage;
     let Some((offset, _)) = find_partition(flash, "settings") else { return };
-    let mut sector = [0xFFu8; SECTOR];
-    sector[..4].copy_from_slice(SETTINGS_MAGIC);
-    sector[4..8].copy_from_slice(&(image.len() as u32).to_le_bytes());
-    sector[8..8 + image.len()].copy_from_slice(image);
+    let offset = offset + sector * SECTOR as u32;
+    let mut buf = [0xFFu8; SECTOR];
+    buf[..4].copy_from_slice(magic);
+    buf[4..8].copy_from_slice(&(payload.len() as u32).to_le_bytes());
+    buf[8..8 + payload.len()].copy_from_slice(payload);
     // `Storage::write` erases the sector first.
-    println!("[fri3d] settings: store -> {:?}", flash.write(offset, &sector).is_ok());
+    println!("[fri3d] {} store -> {:?}", core::str::from_utf8(magic).unwrap_or("?"), flash.write(offset, &buf).is_ok());
+}
+
+fn settings_load(flash: &mut esp_storage::FlashStorage<'static>, kernel: &mut Kernel) {
+    let mut sector = [0u8; SECTOR];
+    match blob_load(flash, SETTINGS_SECTOR, SETTINGS_MAGIC, &mut sector) {
+        Some(len) => {
+            kernel.load_settings(&sector[8..8 + len]);
+            println!("[fri3d] settings: loaded {} B", len);
+        }
+        None => println!("[fri3d] settings: empty"),
+    }
+    match blob_load(flash, WIFI_SECTOR, WIFI_MAGIC, &mut sector) {
+        Some(len) => {
+            kernel.load_wifi(&sector[8..8 + len]);
+            println!("[fri3d] wifi: loaded {} B", len);
+        }
+        None => println!("[fri3d] wifi: no saved networks"),
+    }
 }
 
 /// Report which OTA slot booted and, once the kernel is up, mark the image
@@ -205,19 +262,29 @@ fn main() -> ! {
 
     // Internal heap for small, hot allocations; PSRAM for wasmi's linear
     // memories and the kernel itself.
-    esp_alloc::heap_allocator!(size: 96 * 1024);
     let mut delay = Delay::new();
     // Give the host a moment to attach to USB-JTAG so early log lines land.
     delay.delay_ms(300);
-    println!("[fri3d] boot, internal heap ready");
+    println!("[fri3d] boot");
 
-    // N16R8: 8 MB octal PSRAM.
+    // esp-alloc serves the first region that fits, in registration order.
+    // PSRAM first: the kernel and wasmi live there. The internal region
+    // only answers requests that demand internal RAM — the Wi-Fi driver's
+    // task stacks and DMA buffers — so it cannot be eaten up before the
+    // radio starts. N16R8: 8 MB octal PSRAM.
     let psram_config = esp_hal::psram::PsramConfig {
         mode: esp_hal::psram::PsramMode::Auto,
         ..Default::default()
     };
     esp_alloc::psram_allocator!(peripherals.PSRAM, esp_hal::psram, psram_config);
-    println!("[fri3d] psram ready, free heap {} B", esp_alloc::HEAP.free());
+    esp_alloc::heap_allocator!(size: 160 * 1024);
+    println!("[fri3d] heaps ready, free {} B", esp_alloc::HEAP.free());
+
+    // The radio driver runs its own tasks; esp-rtos turns this context
+    // into the main task and preempts it for them.
+    let timg0 = TimerGroup::new(peripherals.TIMG0);
+    let sw_ints = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
+    esp_rtos::start(timg0.timer0, sw_ints.software_interrupt0);
 
     // -- expander: reset LCD, power aux rail, as MicroPythonOS does --------
     let i2c = I2c::new(
@@ -311,6 +378,9 @@ fn main() -> ! {
     let last_fb = unsafe { &mut LAST_FB };
 
     let mut settings_img = [0u8; fri3d_kernel::settings::IMAGE_LEN];
+    let mut wifi_img = [0u8; fri3d_kernel::wifi::IMAGE_LEN];
+    let mut radio = Radio::new(peripherals.WIFI);
+    let mut net = NetDriver::new();
     let mut last_error_len = 0usize;
     let mut brightness = 100u32;
     let mut last_poll = now_ms();
@@ -368,8 +438,13 @@ fn main() -> ! {
         }
 
         if kernel.take_settings_image(&mut settings_img) {
-            settings_store(&mut flash, &settings_img);
+            blob_store(&mut flash, SETTINGS_SECTOR, SETTINGS_MAGIC, &settings_img);
         }
+        if kernel.take_wifi_image(&mut wifi_img) {
+            blob_store(&mut flash, WIFI_SECTOR, WIFI_MAGIC, &wifi_img);
+        }
+        radio.poll(&mut kernel);
+        net.poll(&mut kernel, radio.is_up());
 
         let wanted = kernel.setting("system", "brightness").unwrap_or(100).clamp(5, 100);
         if wanted != brightness {
@@ -388,6 +463,313 @@ fn main() -> ! {
             delay.delay_ms(2);
         }
     }
+}
+
+// ---- Wi-Fi radio ----------------------------------------------------------
+//
+// esp-radio's scan/connect are async. The main loop is not, so each request
+// becomes one boxed future that is polled once per iteration with a no-op
+// waker; the driver's own tasks make progress under esp-rtos in between.
+// The controller is created on the first request, so a badge with Wi-Fi
+// off never powers the radio.
+
+type Ctrl = &'static mut WifiController<'static>;
+
+enum Outcome {
+    Scan(Result<Vec<AccessPointInfo>, WifiError>),
+    Connect(bool),
+    Disconnect,
+}
+
+struct Radio {
+    peripheral: Option<WIFI<'static>>,
+    ctrl: Option<Ctrl>,
+    inflight: Option<Pin<Box<dyn Future<Output = (Ctrl, Outcome)>>>>,
+    was_connected: bool,
+}
+
+impl Radio {
+    fn new(peripheral: WIFI<'static>) -> Self {
+        Self { peripheral: Some(peripheral), ctrl: None, inflight: None, was_connected: false }
+    }
+
+    fn controller(&mut self) -> Option<Ctrl> {
+        if let Some(c) = self.ctrl.take() {
+            return Some(c);
+        }
+        let periph = self.peripheral.take()?;
+        match WifiController::new(periph, Default::default()) {
+            Ok(c) => {
+                println!("[wifi] radio up, free heap {} B", esp_alloc::HEAP.free());
+                Some(Box::leak(Box::new(c)))
+            }
+            Err(e) => {
+                println!("[wifi] init failed: {:?}", e);
+                None
+            }
+        }
+    }
+
+    /// The radio exists and the station is associated.
+    fn is_up(&self) -> bool {
+        self.was_connected
+    }
+
+    fn poll(&mut self, kernel: &mut Kernel) {
+        if let Some(f) = self.inflight.as_mut() {
+            let mut cx = Context::from_waker(Waker::noop());
+            let Poll::Ready((ctrl, outcome)) = f.as_mut().poll(&mut cx) else { return };
+            self.inflight = None;
+            self.ctrl = Some(ctrl);
+            match outcome {
+                Outcome::Scan(Ok(aps)) => {
+                    let mut entries: heapless::Vec<ScanEntry, { fri3d_kernel::limits::WIFI_SCAN_MAX }> =
+                        heapless::Vec::new();
+                    for ap in &aps {
+                        let mut ssid = fri3d_kernel::wifi::Ssid::new();
+                        if ap.ssid.as_str().is_empty() || ssid.push_str(ap.ssid.as_str()).is_err() {
+                            continue;
+                        }
+                        if entries.iter().any(|e| e.ssid == ssid) {
+                            continue;
+                        }
+                        let secure = !matches!(ap.auth_method, Some(AuthenticationMethod::None));
+                        let _ = entries.push(ScanEntry { ssid, rssi: ap.signal_strength, secure });
+                    }
+                    println!("[wifi] scan: {} networks", entries.len());
+                    kernel.wifi_scan_done(&entries);
+                }
+                Outcome::Scan(Err(e)) => {
+                    println!("[wifi] scan failed: {:?}", e);
+                    kernel.wifi_scan_done(&[]);
+                }
+                Outcome::Connect(ok) => {
+                    println!("[wifi] connect -> {}", ok);
+                    self.was_connected = ok;
+                    kernel.wifi_connect_done(ok);
+                }
+                Outcome::Disconnect => self.was_connected = false,
+            }
+        }
+
+        if let Some(c) = &self.ctrl {
+            let connected = c.is_connected();
+            if self.was_connected && !connected {
+                println!("[wifi] link lost");
+                kernel.wifi_link_lost();
+            }
+            self.was_connected = connected;
+        }
+
+        let Some(req) = kernel.take_wifi_request() else { return };
+        match req {
+            WifiRequest::Scan => {
+                let Some(ctrl) = self.controller() else {
+                    kernel.wifi_scan_done(&[]);
+                    return;
+                };
+                self.inflight = Some(Box::pin(async move {
+                    let r = ctrl.scan_async(&ScanConfig::default().with_max(fri3d_kernel::limits::WIFI_SCAN_MAX)).await;
+                    (ctrl, Outcome::Scan(r))
+                }));
+            }
+            WifiRequest::Connect { ssid, password } => {
+                let Some(ctrl) = self.controller() else {
+                    kernel.wifi_connect_done(false);
+                    return;
+                };
+                println!("[wifi] connecting to '{}'", ssid.as_str());
+                let auth = if password.is_empty() { AuthenticationMethod::None } else { AuthenticationMethod::Wpa2Personal };
+                let cfg = StationConfig::default()
+                    .with_ssid(ssid.as_str())
+                    .with_password(password.as_str().into())
+                    .with_auth_method(auth);
+                if let Err(e) = ctrl.set_config(&WifiConfig::Station(cfg)) {
+                    println!("[wifi] config rejected: {:?}", e);
+                    self.ctrl = Some(ctrl);
+                    kernel.wifi_connect_done(false);
+                    return;
+                }
+                self.inflight = Some(Box::pin(async move {
+                    let r = ctrl.connect_async().await;
+                    if let Err(e) = &r {
+                        println!("[wifi] connect error: {:?}", e);
+                    }
+                    (ctrl, Outcome::Connect(r.is_ok()))
+                }));
+            }
+            WifiRequest::Disconnect => {
+                // Radio never started: nothing to drop.
+                let Some(ctrl) = self.ctrl.take() else { return };
+                self.inflight = Some(Box::pin(async move {
+                    let _ = ctrl.disconnect_async().await;
+                    (ctrl, Outcome::Disconnect)
+                }));
+            }
+        }
+    }
+}
+
+// ---- IP stack -------------------------------------------------------------
+//
+// embassy-net over the esp-radio station interface, DHCP. The stack's
+// runner and the one operation in flight are boxed futures polled from the
+// main loop, like the radio. The stack is built on the first request after
+// the station associated; it is never torn down.
+
+struct NetDriver {
+    stack: Option<Stack<'static>>,
+    runner: Option<Pin<Box<dyn Future<Output = ()>>>>,
+    op: Option<Pin<Box<dyn Future<Output = bool>>>>,
+    progress: Arc<AtomicU32>,
+}
+
+const NET_TIMEOUT: embassy_time::Duration = embassy_time::Duration::from_secs(10);
+
+impl NetDriver {
+    fn new() -> Self {
+        Self { stack: None, runner: None, op: None, progress: Arc::new(AtomicU32::new(0)) }
+    }
+
+    fn stack(&mut self) -> Stack<'static> {
+        if let Some(s) = self.stack {
+            return s;
+        }
+        let rng = esp_hal::rng::Rng::new();
+        let seed = (rng.random() as u64) << 32 | rng.random() as u64;
+        let resources: &'static mut StackResources<4> = Box::leak(Box::new(StackResources::new()));
+        let (stack, mut runner) = embassy_net::new(
+            esp_radio::wifi::Interface::station(),
+            embassy_net::Config::dhcpv4(Default::default()),
+            resources,
+            seed,
+        );
+        self.runner = Some(Box::pin(async move { runner.run().await }));
+        self.stack = Some(stack);
+        println!("[net] stack up");
+        stack
+    }
+
+    fn poll(&mut self, kernel: &mut Kernel, link_up: bool) {
+        let mut cx = Context::from_waker(Waker::noop());
+        if let Some(r) = self.runner.as_mut() {
+            let _ = r.as_mut().poll(&mut cx);
+        }
+        if let Some(op) = self.op.as_mut() {
+            kernel.net_progress(self.progress.load(Ordering::Relaxed));
+            if let Poll::Ready(ok) = op.as_mut().poll(&mut cx) {
+                self.op = None;
+                println!("[net] done -> {}", ok);
+                kernel.net_progress(self.progress.load(Ordering::Relaxed));
+                kernel.net_done(ok);
+            }
+        }
+        let Some(req) = kernel.take_net_request() else { return };
+        self.op = None;
+        self.progress.store(0, Ordering::Relaxed);
+        if matches!(req, NetRequest::Cancel) {
+            return;
+        }
+        if !link_up {
+            println!("[net] request without a link");
+            kernel.net_done(false);
+            return;
+        }
+        let stack = self.stack();
+        let progress = Arc::clone(&self.progress);
+        self.op = Some(match req {
+            NetRequest::Probe { ip, port } => Box::pin(tcp_probe(stack, ip, port)),
+            NetRequest::Download { url } => Box::pin(http_download(stack, url, progress)),
+            NetRequest::Cancel => unreachable!(),
+        });
+    }
+}
+
+async fn tcp_probe(stack: Stack<'static>, ip: [u8; 4], port: u16) -> bool {
+    stack.wait_config_up().await;
+    let mut rx = [0u8; 1024];
+    let mut tx = [0u8; 1024];
+    let mut socket = TcpSocket::new(stack, &mut rx, &mut tx);
+    socket.set_timeout(Some(NET_TIMEOUT));
+    let r = socket.connect((Ipv4Address::new(ip[0], ip[1], ip[2], ip[3]), port)).await;
+    if let Err(e) = &r {
+        println!("[net] probe {:?}:{} -> {:?}", ip, port, e);
+    }
+    socket.close();
+    r.is_ok()
+}
+
+/// Plain HTTP/1.0 GET; counts the body into `progress`, keeps nothing.
+async fn http_download(stack: Stack<'static>, url: fri3d_kernel::net::Url, progress: Arc<AtomicU32>) -> bool {
+    use embedded_io_async::Write;
+    let Some(rest) = url.strip_prefix("http://") else {
+        println!("[net] only http:// is supported");
+        return false;
+    };
+    let (hostport, path) = match rest.find('/') {
+        Some(i) => (&rest[..i], &rest[i..]),
+        None => (rest, "/"),
+    };
+    let (host, port) = match hostport.split_once(':') {
+        Some((h, p)) => (h, p.parse().unwrap_or(80)),
+        None => (hostport, 80u16),
+    };
+    stack.wait_config_up().await;
+    let addr = match stack.dns_query(host, DnsQueryType::A).await {
+        Ok(addrs) if !addrs.is_empty() => addrs[0],
+        other => {
+            println!("[net] dns {} -> {:?}", host, other);
+            return false;
+        }
+    };
+    println!("[net] {} -> {}", host, addr);
+    let mut rx = [0u8; 16 * 1024];
+    let mut tx = [0u8; 1024];
+    let mut socket = TcpSocket::new(stack, &mut rx, &mut tx);
+    socket.set_timeout(Some(NET_TIMEOUT));
+    if let Err(e) = socket.connect((addr, port)).await {
+        println!("[net] connect -> {:?}", e);
+        return false;
+    }
+    let mut req: heapless::String<256> = heapless::String::new();
+    let _ = core::fmt::write(&mut req, format_args!("GET {path} HTTP/1.0\r\nHost: {host}\r\nConnection: close\r\n\r\n"));
+    if socket.write_all(req.as_bytes()).await.is_err() {
+        return false;
+    }
+    let mut buf = [0u8; 4096];
+    let mut head: heapless::Vec<u8, 2048> = heapless::Vec::new();
+    let mut in_body = false;
+    let mut body = 0u32;
+    loop {
+        let n = match socket.read(&mut buf).await {
+            Ok(0) => break,
+            Ok(n) => n,
+            Err(e) => {
+                println!("[net] read -> {:?}", e);
+                return false;
+            }
+        };
+        if in_body {
+            body += n as u32;
+        } else {
+            let _ = head.extend_from_slice(&buf[..n.min(head.capacity() - head.len())]);
+            if let Some(end) = head.windows(4).position(|w| w == b"\r\n\r\n") {
+                let status = core::str::from_utf8(&head[..end]).unwrap_or("");
+                let ok = status.split_whitespace().nth(1).is_some_and(|c| c.starts_with('2'));
+                println!("[net] {}", status.lines().next().unwrap_or("?"));
+                if !ok {
+                    return false;
+                }
+                in_body = true;
+                body = (head.len() - end - 4) as u32;
+            } else if head.is_full() {
+                return false;
+            }
+        }
+        progress.store(body, Ordering::Relaxed);
+    }
+    socket.close();
+    in_body && body > 0
 }
 
 // ---- Drawing --------------------------------------------------------------

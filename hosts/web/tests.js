@@ -73,6 +73,22 @@
     home();
   });
 
+  test('wifi: auto-connect via the simulated radio shows the launcher icon', () => {
+    const f = window.fri3d;
+    // localStorage may carry a saved network from an earlier run: start
+    // from a known state.
+    f.wifiSetEnabled(false);
+    home();
+    const before = fbHash();
+    if (!f.wifiSave('Fri3d Camp', 'fri3d2026')) throw new Error('wifi_save refused');
+    f.wifiSetEnabled(true);
+    for (let i = 0; i < 10; i++) f.advance(500);
+    assertEq(f.wifiStatus(), 3, 'status (3 = connected)');
+    assertEq(f.wifiSsid(), 'Fri3d Camp', 'ssid');
+    f.render();
+    if (fbHash() === before) throw new Error('launcher frame unchanged after connect');
+  });
+
   window.runTests = function runTests() {
     const results = [];
     for (const t of tests) {

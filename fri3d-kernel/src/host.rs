@@ -12,6 +12,8 @@ use crate::random::Random;
 use crate::registry::Registry;
 use crate::settings::{Settings, SYSTEM_NS};
 use crate::types::{Color, Font};
+use crate::net::{Net, URL_LEN};
+use crate::wifi::{Wifi, SSID_LEN};
 use crate::KERNEL_VERSION;
 use alloc::rc::Rc;
 use core::cell::RefCell;
@@ -28,6 +30,8 @@ pub struct Shared {
     pub random: Random,
     pub registry: Registry,
     pub settings: Settings,
+    pub wifi: Wifi,
+    pub net: Net,
     pub now_ms: u32,
     pub request: AppRequest,
     pub log: Deque<String<LOG_LINE_LEN>, LOG_LINES>,
@@ -40,6 +44,8 @@ impl Shared {
             random: Random::new(42),
             registry: Registry::new(),
             settings: Settings::new(),
+            wifi: Wifi::new(),
+            net: Net::new(),
             now_ms: 0,
             request: AppRequest::None,
             log: Deque::new(),
@@ -364,6 +370,18 @@ fn cstr(mem: &[u8], ptr: i32, max_len: usize) -> &str {
     core::str::from_utf8(&slice[..len]).unwrap_or("")
 }
 
+/// Copy `bytes` into app memory at `ptr` (no terminator). Returns bytes
+/// written; 0 when the buffer is too small or out of range.
+fn copy_out(mem: &mut [u8], ptr: i32, len: i32, bytes: &[u8]) -> i32 {
+    let start = ptr.max(0) as usize;
+    let cap = len.max(0) as usize;
+    if bytes.len() > cap || start.saturating_add(bytes.len()) > mem.len() {
+        return 0;
+    }
+    mem[start..start + bytes.len()].copy_from_slice(bytes);
+    bytes.len() as i32
+}
+
 const STR_MAX: usize = 256;
 
 fn with_canvas(caller: &mut C<'_>, f: impl FnOnce(&mut Canvas)) {
@@ -580,6 +598,132 @@ fn register_imports(linker: &mut Linker<HostState>) -> Result<(), WasmiError> {
             state.shared.borrow_mut().settings.set(ns, key, value as u32) as i32
         },
     )?;
+
+    // -- wifi ----------------------------------------------------------
+    //
+    // Reads are open to every app (the launcher draws the status icon).
+    // Actions are system-only: the settings app owns the radio.
+    linker.func_wrap("env", "wifi_status", |c: C<'_>| -> i32 {
+        c.data().shared.borrow().wifi.status() as i32
+    })?;
+    linker.func_wrap("env", "wifi_scanning", |c: C<'_>| -> i32 {
+        c.data().shared.borrow().wifi.scanning() as i32
+    })?;
+    linker.func_wrap("env", "wifi_enabled", |c: C<'_>| -> i32 {
+        c.data().shared.borrow().wifi.enabled() as i32
+    })?;
+    linker.func_wrap("env", "wifi_current_ssid", |mut c: C<'_>, ptr: i32, len: i32| -> i32 {
+        let Some(memory) = memory_of(&mut c) else { return 0 };
+        let (mem, state) = memory.data_and_store_mut(&mut c);
+        let shared = state.shared.borrow();
+        copy_out(mem, ptr, len, shared.wifi.current_ssid().as_bytes())
+    })?;
+    linker.func_wrap("env", "wifi_scan_count", |c: C<'_>| -> i32 {
+        c.data().shared.borrow().wifi.scan_results().len() as i32
+    })?;
+    linker.func_wrap("env", "wifi_scan_ssid", |mut c: C<'_>, i: i32, ptr: i32, len: i32| -> i32 {
+        let Some(memory) = memory_of(&mut c) else { return 0 };
+        let (mem, state) = memory.data_and_store_mut(&mut c);
+        let shared = state.shared.borrow();
+        match shared.wifi.scan_results().get(i.max(0) as usize) {
+            Some(e) => copy_out(mem, ptr, len, e.ssid.as_bytes()),
+            None => 0,
+        }
+    })?;
+    linker.func_wrap("env", "wifi_scan_rssi", |c: C<'_>, i: i32| -> i32 {
+        c.data().shared.borrow().wifi.scan_results().get(i.max(0) as usize).map_or(-128, |e| e.rssi as i32)
+    })?;
+    linker.func_wrap("env", "wifi_scan_secure", |c: C<'_>, i: i32| -> i32 {
+        c.data().shared.borrow().wifi.scan_results().get(i.max(0) as usize).map_or(0, |e| e.secure as i32)
+    })?;
+    linker.func_wrap("env", "wifi_saved_count", |c: C<'_>| -> i32 {
+        c.data().shared.borrow().wifi.saved().len() as i32
+    })?;
+    linker.func_wrap("env", "wifi_saved_ssid", |mut c: C<'_>, i: i32, ptr: i32, len: i32| -> i32 {
+        let Some(memory) = memory_of(&mut c) else { return 0 };
+        let (mem, state) = memory.data_and_store_mut(&mut c);
+        let shared = state.shared.borrow();
+        match shared.wifi.saved().get(i.max(0) as usize) {
+            Some(n) => copy_out(mem, ptr, len, n.ssid.as_bytes()),
+            None => 0,
+        }
+    })?;
+    linker.func_wrap("env", "wifi_set_enabled", |mut c: C<'_>, on: i32| {
+        if !c.data().is_system {
+            return;
+        }
+        let shared = Rc::clone(&c.data_mut().shared);
+        let mut shared = shared.borrow_mut();
+        shared.settings.set(SYSTEM_NS, "wifi", (on != 0) as u32);
+        shared.wifi.set_enabled(on != 0);
+    })?;
+    linker.func_wrap("env", "wifi_scan", |c: C<'_>| -> i32 {
+        if !c.data().is_system {
+            return 0;
+        }
+        c.data().shared.borrow_mut().wifi.scan() as i32
+    })?;
+    linker.func_wrap("env", "wifi_disconnect", |c: C<'_>| {
+        if c.data().is_system {
+            c.data().shared.borrow_mut().wifi.disconnect();
+        }
+    })?;
+    linker.func_wrap("env", "wifi_connect", |mut c: C<'_>, ssid_ptr: i32| -> i32 {
+        if !c.data().is_system {
+            return 0;
+        }
+        let Some(memory) = memory_of(&mut c) else { return 0 };
+        let (mem, state) = memory.data_and_store_mut(&mut c);
+        let ssid = cstr(mem, ssid_ptr, SSID_LEN);
+        state.shared.borrow_mut().wifi.connect(ssid) as i32
+    })?;
+    linker.func_wrap("env", "wifi_forget", |mut c: C<'_>, ssid_ptr: i32| -> i32 {
+        if !c.data().is_system {
+            return 0;
+        }
+        let Some(memory) = memory_of(&mut c) else { return 0 };
+        let (mem, state) = memory.data_and_store_mut(&mut c);
+        let ssid = cstr(mem, ssid_ptr, SSID_LEN);
+        state.shared.borrow_mut().wifi.forget(ssid) as i32
+    })?;
+    linker.func_wrap("env", "wifi_save", |mut c: C<'_>, ssid_ptr: i32, pw_ptr: i32| -> i32 {
+        if !c.data().is_system {
+            return 0;
+        }
+        let Some(memory) = memory_of(&mut c) else { return 0 };
+        let (mem, state) = memory.data_and_store_mut(&mut c);
+        let ssid = cstr(mem, ssid_ptr, SSID_LEN);
+        let pw = cstr(mem, pw_ptr, crate::wifi::PASSWORD_LEN);
+        state.shared.borrow_mut().wifi.save(ssid, pw) as i32
+    })?;
+
+    // -- net -----------------------------------------------------------
+    linker.func_wrap("env", "net_status", |c: C<'_>| -> i32 {
+        c.data().shared.borrow().net.status() as i32
+    })?;
+    linker.func_wrap("env", "net_bytes", |c: C<'_>| -> i32 {
+        c.data().shared.borrow().net.bytes() as i32
+    })?;
+    linker.func_wrap("env", "net_elapsed_ms", |c: C<'_>| -> i32 {
+        let shared = c.data().shared.borrow();
+        shared.net.elapsed_ms(shared.now_ms) as i32
+    })?;
+    linker.func_wrap("env", "net_probe", |c: C<'_>, ip: i32, port: i32| -> i32 {
+        let mut shared = c.data().shared.borrow_mut();
+        let now = shared.now_ms;
+        shared.net.probe((ip as u32).to_be_bytes(), port.clamp(1, 65535) as u16, now) as i32
+    })?;
+    linker.func_wrap("env", "net_download", |mut c: C<'_>, url_ptr: i32| -> i32 {
+        let Some(memory) = memory_of(&mut c) else { return 0 };
+        let (mem, state) = memory.data_and_store_mut(&mut c);
+        let url = cstr(mem, url_ptr, URL_LEN);
+        let mut shared = state.shared.borrow_mut();
+        let now = shared.now_ms;
+        shared.net.download(url, now) as i32
+    })?;
+    linker.func_wrap("env", "net_cancel", |c: C<'_>| {
+        c.data().shared.borrow_mut().net.cancel();
+    })?;
 
     // -- logging -------------------------------------------------------
     linker.func_wrap("env", "log_str", |mut c: C<'_>, ptr: i32| {

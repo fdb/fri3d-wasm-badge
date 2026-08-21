@@ -11,7 +11,7 @@
 #![deny(unsafe_code)]
 
 use fri3d_wasm_api as api;
-use fri3d_wasm_api::{color, font, input};
+use fri3d_wasm_api::{color, font, input, wifi};
 
 const W: i32 = api::SCREEN_WIDTH as i32;
 const H: i32 = api::SCREEN_HEIGHT as i32;
@@ -64,23 +64,38 @@ fn render_impl() {
     }
 }
 
-fn render_bar(left: &str, right: &str) {
+/// 9x7 Wi-Fi mark, MSB-first rows (the `canvas_draw_bitmap` convention).
+const WIFI_ICON_W: u32 = 9;
+const WIFI_ICON_H: u32 = 7;
+const WIFI_ICON: [u8; 14] = [
+    0b00111110, 0b00000000, //   #####
+    0b01000001, 0b00000000, //  #     #
+    0b10011100, 0b10000000, // #  ###  #
+    0b00100010, 0b00000000, //   #   #
+    0b00001000, 0b00000000, //     #
+    0b00000000, 0b00000000, //
+    0b00001000, 0b00000000, //     #
+];
+
+/// Status bar: the title on the left, a Wi-Fi mark in the top-right
+/// corner while connected, `right` just before it, a separator below.
+fn render_bar(title: &str, right: &str) {
     api::canvas_set_color(color::BLACK);
     api::canvas_set_font(font::SECONDARY);
-    api::canvas_draw_str(2, 8, left);
+    api::canvas_draw_str(2, 8, title);
+    let mut edge = W - 2;
+    if wifi::status() == wifi::STATUS_CONNECTED {
+        edge -= WIFI_ICON_W as i32;
+        api::canvas_draw_bitmap(edge, 1, WIFI_ICON_W, WIFI_ICON_H, &WIFI_ICON);
+        edge -= 3;
+    }
     let rw = api::canvas_string_width(right) as i32;
-    api::canvas_draw_str(W - 2 - rw, 8, right);
+    api::canvas_draw_str(edge - rw, 8, right);
     api::canvas_draw_line(0, BAR_H - 1, W - 1, BAR_H - 1);
 }
 
 fn render_menu(s: &State) {
-    let mut right = Num::new();
-    if s.count > 0 {
-        right.push(s.selected + 1);
-        right.push_str("/");
-        right.push(s.count);
-    }
-    render_bar("Fri3d", right.as_str());
+    render_bar("Fri3d", "");
 
     if s.count == 0 {
         api::canvas_set_font(font::PRIMARY);
@@ -249,25 +264,6 @@ impl Num {
         for &b in s.as_bytes() {
             if self.len < self.buf.len() {
                 self.buf[self.len] = b;
-                self.len += 1;
-            }
-        }
-    }
-    fn push(&mut self, mut n: u32) {
-        let mut digits = [0u8; 10];
-        let mut i = 0;
-        loop {
-            digits[i] = b'0' + (n % 10) as u8;
-            n /= 10;
-            i += 1;
-            if n == 0 {
-                break;
-            }
-        }
-        while i > 0 {
-            i -= 1;
-            if self.len < self.buf.len() {
-                self.buf[self.len] = digits[i];
                 self.len += 1;
             }
         }

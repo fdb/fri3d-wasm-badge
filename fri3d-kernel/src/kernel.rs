@@ -18,7 +18,9 @@ use crate::bundle::Bundle;
 use crate::host::{make_engine, AppInstance, AppRequest, CallError, LoadError, Shared, SharedRef};
 use crate::input::{InputEvent, InputManager};
 use crate::registry::RegistryError;
-use crate::settings::IMAGE_LEN;
+use crate::settings::{IMAGE_LEN, SYSTEM_NS};
+use crate::net::NetRequest;
+use crate::wifi::{ScanEntry, WifiRequest, WifiStatus, IMAGE_LEN as WIFI_IMAGE_LEN};
 use crate::types::{Color, Font, InputKey, InputType};
 use alloc::rc::Rc;
 use core::cell::RefCell;
@@ -106,7 +108,12 @@ impl Kernel {
 
     /// Start the launcher. Call once after registering bundles.
     pub fn boot(&mut self, now_ms: u32) {
-        self.shared.borrow_mut().now_ms = now_ms;
+        {
+            let mut shared = self.shared.borrow_mut();
+            shared.now_ms = now_ms;
+            let on = shared.settings.get_or(SYSTEM_NS, "wifi", 1) != 0;
+            shared.wifi.set_enabled(on);
+        }
         self.reload_launcher();
         self.needs_render = true;
     }
@@ -178,6 +185,78 @@ impl Kernel {
         true
     }
 
+    // -- wifi (host driver side) ----------------------------------------
+
+    pub fn load_wifi(&mut self, image: &[u8]) {
+        self.shared.borrow_mut().wifi.load_image(image);
+    }
+
+    /// If saved networks changed since the last call, write the
+    /// persistent image into `out` and return true.
+    pub fn take_wifi_image(&mut self, out: &mut [u8; WIFI_IMAGE_LEN]) -> bool {
+        let mut shared = self.shared.borrow_mut();
+        if !shared.wifi.take_dirty() {
+            return false;
+        }
+        shared.wifi.write_image(out);
+        true
+    }
+
+    /// Next radio primitive the host must execute, if any.
+    pub fn take_wifi_request(&mut self) -> Option<WifiRequest> {
+        self.shared.borrow_mut().wifi.take_request()
+    }
+
+    pub fn wifi_scan_done(&mut self, entries: &[ScanEntry]) {
+        self.shared.borrow_mut().wifi.scan_done(entries);
+    }
+
+    pub fn wifi_connect_done(&mut self, ok: bool) {
+        self.shared.borrow_mut().wifi.connect_done(ok);
+    }
+
+    pub fn wifi_link_lost(&mut self) {
+        let mut shared = self.shared.borrow_mut();
+        let now = shared.now_ms;
+        shared.wifi.link_lost(now);
+    }
+
+    pub fn wifi_status(&self) -> WifiStatus {
+        self.shared.borrow().wifi.status()
+    }
+
+    pub fn wifi_current_ssid(&self) -> crate::wifi::Ssid {
+        let shared = self.shared.borrow();
+        let mut s = crate::wifi::Ssid::new();
+        let _ = s.push_str(shared.wifi.current_ssid());
+        s
+    }
+
+    /// Direct model access for hosts and tests (the `Sim` driver).
+    pub fn wifi_mut(&mut self) -> core::cell::RefMut<'_, crate::wifi::Wifi> {
+        core::cell::RefMut::map(self.shared.borrow_mut(), |s| &mut s.wifi)
+    }
+
+    // -- net (host driver side) -----------------------------------------
+
+    pub fn take_net_request(&mut self) -> Option<NetRequest> {
+        self.shared.borrow_mut().net.take_request()
+    }
+
+    pub fn net_progress(&mut self, bytes: u32) {
+        self.shared.borrow_mut().net.progress(bytes);
+    }
+
+    pub fn net_done(&mut self, ok: bool) {
+        let mut shared = self.shared.borrow_mut();
+        let now = shared.now_ms;
+        shared.net.done(ok, now);
+    }
+
+    pub fn net_mut(&mut self) -> core::cell::RefMut<'_, crate::net::Net> {
+        core::cell::RefMut::map(self.shared.borrow_mut(), |s| &mut s.net)
+    }
+
     /// Drain one buffered log line from apps.
     pub fn take_log_line(&mut self) -> Option<String<{ crate::limits::LOG_LINE_LEN }>> {
         self.shared.borrow_mut().log.pop_front()
@@ -223,7 +302,12 @@ impl Kernel {
     // -- the loop --------------------------------------------------------
 
     pub fn step(&mut self, now_ms: u32) -> StepResult {
-        self.shared.borrow_mut().now_ms = now_ms;
+        {
+            let mut shared = self.shared.borrow_mut();
+            shared.now_ms = now_ms;
+            shared.wifi.tick(now_ms);
+            self.needs_render |= shared.wifi.take_changed() | shared.net.take_changed();
+        }
         self.input.update(now_ms);
 
         while let Some(ev) = self.input.next_event() {
@@ -390,6 +474,8 @@ impl Kernel {
     }
 
     fn stop_app(&mut self) {
+        // The app's network operation dies with it.
+        self.shared.borrow_mut().net.cancel();
         if let Some(mut app) = self.app.take() {
             // Best effort: a trapping on_pause/on_stop must not block exit.
             let _ = app.on_pause();

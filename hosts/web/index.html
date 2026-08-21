@@ -142,6 +142,7 @@ window.fri3d = {
   wifiSsid() { return kernel.wifi_ssid(); },
   wifiSave(ssid, pw) { return kernel.wifi_save(ssid, pw); },
   wifiAuto() { kernel.wifi_auto(); step(); },
+  wifiSetEnabled(on) { kernel.wifi_set_enabled(on); step(); },
 };
 </script>
 </body>

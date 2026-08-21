@@ -273,3 +273,96 @@ fn app_info_header_is_exact_copy() {
     assert_eq!(k.app_name(0), Some("rec"));
     assert_eq!(HEADER_LEN, 256);
 }
+
+/// A user app that tries every Wi-Fi action and reports each result
+/// through its own settings namespace (the one channel it may write).
+const WIFI_SNOOP: &str = r#"
+(module
+  (import "env" "wifi_set_enabled" (func $enable (param i32)))
+  (import "env" "wifi_scan" (func $scan (result i32)))
+  (import "env" "wifi_save" (func $save (param i32 i32) (result i32)))
+  (import "env" "wifi_connect" (func $connect (param i32) (result i32)))
+  (import "env" "wifi_forget" (func $forget (param i32) (result i32)))
+  (import "env" "wifi_status" (func $status (result i32)))
+  (import "env" "wifi_saved_count" (func $saved (result i32)))
+  (import "env" "wifi_saved_ssid" (func $saved_ssid (param i32 i32 i32) (result i32)))
+  (import "env" "settings_set_u32" (func $set (param i32 i32 i32) (result i32)))
+  (memory (export "memory") 1)
+  (data (i32.const 512) "Fri3d Camp\00")
+  (data (i32.const 560) "fri3d2026\00")
+  (data (i32.const 600) "snoop\00")
+  (data (i32.const 610) "scan\00")
+  (data (i32.const 620) "save\00")
+  (data (i32.const 630) "connect\00")
+  (data (i32.const 640) "forget\00")
+  (data (i32.const 650) "status\00")
+  (data (i32.const 660) "count\00")
+  (data (i32.const 670) "ssidlen\00")
+  (data (i32.const 680) "ssid4\00")
+  (func (export "render"))
+  (func (export "on_start")
+    (call $enable (i32.const 0))
+    (drop (call $set (i32.const 600) (i32.const 610) (call $scan)))
+    (drop (call $set (i32.const 600) (i32.const 620) (call $save (i32.const 512) (i32.const 560))))
+    (drop (call $set (i32.const 600) (i32.const 630) (call $connect (i32.const 512))))
+    (drop (call $set (i32.const 600) (i32.const 640) (call $forget (i32.const 512))))
+    (drop (call $set (i32.const 600) (i32.const 650) (call $status)))
+    (drop (call $set (i32.const 600) (i32.const 660) (call $saved)))
+    (drop (call $set (i32.const 600) (i32.const 670) (call $saved_ssid (i32.const 0) (i32.const 2000) (i32.const 32))))
+    (drop (call $set (i32.const 600) (i32.const 680) (i32.load (i32.const 2000)))))
+)"#;
+
+#[test]
+fn wifi_actions_are_system_only_reads_are_open() {
+    use fri3d_kernel::wifi::{Sim, WifiStatus};
+    let snoop = bundle("snoop", false, WIFI_SNOOP);
+    let mut k = boot(&[snoop]);
+    // Seed one saved network and let the sim connect it.
+    k.wifi_mut().save("Fri3d Camp", "fri3d2026");
+    k.wifi_mut().start_auto();
+    let mut sim = Sim::new();
+    let mut t = 0;
+    while t < 8000 {
+        sim.service(&mut k.wifi_mut(), t);
+        k.step(t);
+        t += 100;
+    }
+    assert_eq!(k.wifi_status(), WifiStatus::Connected);
+
+    assert!(k.start_app(0));
+    k.step(t);
+    // Nothing the user app did changed the model...
+    assert_eq!(k.wifi_status(), WifiStatus::Connected, "user app cannot disable/forget/disconnect");
+    assert!(k.wifi_mut().enabled());
+    assert_eq!(k.wifi_mut().saved().len(), 1);
+    assert_eq!(k.wifi_mut().saved()[0].password, "fri3d2026");
+    for denied in ["scan", "save", "connect", "forget"] {
+        assert_eq!(k.setting("snoop", denied), Some(0), "{denied} must be refused");
+    }
+    // ...and the reads it made saw the real state.
+    assert_eq!(k.setting("snoop", "status"), Some(WifiStatus::Connected as u32));
+    assert_eq!(k.setting("snoop", "count"), Some(1));
+    assert_eq!(k.setting("snoop", "ssidlen"), Some("Fri3d Camp".len() as u32));
+    assert_eq!(k.setting("snoop", "ssid4"), Some(u32::from_le_bytes(*b"Fri3")));
+}
+
+#[test]
+fn wifi_change_triggers_a_render() {
+    use fri3d_kernel::wifi::Sim;
+    let mut k = boot(&[]);
+    k.wifi_mut().save("Fri3d Camp", "fri3d2026");
+    k.wifi_mut().start_auto();
+    let mut sim = Sim::new();
+    let mut frames = 0;
+    let mut t = 0;
+    while t < 8000 {
+        sim.service(&mut k.wifi_mut(), t);
+        if k.step(t).frame {
+            frames += 1;
+        }
+        t += 100;
+    }
+    // Boot frame + scan done + connecting + connected, and no frame for
+    // the idle ticks in between.
+    assert!((3..=5).contains(&frames), "frames = {frames}");
+}

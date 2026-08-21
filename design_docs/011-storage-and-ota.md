@@ -10,7 +10,7 @@
 | nvs | 0xb000 | 20 KB | unused; kept for MPOS compatibility |
 | ota_0 | 0x10000 | 3.5 MB | firmware A (USB flashes land here) |
 | ota_1 | 0x390000 | 3.5 MB | firmware B |
-| settings | 0x710000 | 64 KB | kernel settings image |
+| settings | 0x710000 | 64 KB | sector 0: kernel settings image; sector 1: saved Wi-Fi networks |
 | vfs | 0x720000 | 8.9 MB | reserved for a file system |
 
 The first four match the MicroPythonOS badge image byte for byte, so the
@@ -30,6 +30,10 @@ concern for years. No file system, no dependency, 40 lines.
 
 The desktop host writes the same image to `~/.fri3d-badge/settings.bin`;
 the browser host to `localStorage`. The kernel does not know which.
+
+Saved Wi-Fi networks are a second blob (`wifi::IMAGE_LEN`, magic `FWF1`
+inside, `FWIF` on flash) in sector 1 of the same partition, with the
+same dirty-tracking (`take_wifi_image`). Desktop: `~/.fri3d-badge/wifi.bin`.
 
 ## OTA
 

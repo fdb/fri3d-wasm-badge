@@ -5,7 +5,7 @@ import from module `env`, everything it may export, and the rules the
 kernel enforces. `fri3d-wasm-api` wraps all of this in safe Rust; this
 document is the ground truth the wrapper follows.
 
-ABI version: `kernel_version() == 1`. The version bumps when a signature
+ABI version: `kernel_version() == 2`. The version bumps when a signature
 changes or a function is removed. Adding a function is not a bump: an
 app that does not import it never notices.
 
@@ -86,6 +86,47 @@ may also use `ns = "system"`. Keys and namespaces are at most 23 bytes.
 The kernel persists the table through the host when it changes.
 
 Reserved `system` keys: `brightness` (10–100), `sound` (0/1).
+
+### Wi-Fi
+
+Reads work for every app. Actions (`*` below) work only from apps with
+`system = true`; others get 0. SSIDs are copied without a terminator;
+`len` must be ≥ 32. See design doc 015.
+
+| Import | Meaning |
+| --- | --- |
+| `wifi_status() -> i32` | 0 Off, 1 Idle, 2 Connecting, 3 Connected, 4 Failed. |
+| `wifi_scanning() -> i32` | A scan is in flight. |
+| `wifi_enabled() -> i32` | `system.wifi` as the kernel applies it. |
+| `wifi_current_ssid(ptr, len) -> i32` | SSID being connected to / connected / failed; bytes written. |
+| `wifi_scan_count() -> i32` | Results of the last scan, strongest first. |
+| `wifi_scan_ssid(i, ptr, len) -> i32` | SSID of result `i`; bytes written. |
+| `wifi_scan_rssi(i) -> i32` | dBm, −128 when out of range. |
+| `wifi_scan_secure(i) -> i32` | 0 for an open network. |
+| `wifi_saved_count() -> i32` | Saved networks (max 8). |
+| `wifi_saved_ssid(i, ptr, len) -> i32` | SSID of saved network `i`. Passwords are not readable. |
+| `wifi_set_enabled(on)` * | Persist `system.wifi`; start auto-connect or drop the link. |
+| `wifi_scan() -> i32` * | Start a scan. 0 when the radio is off. |
+| `wifi_save(ssid, password) -> i32` * | Add or update; empty password = open network. 0 when full. |
+| `wifi_forget(ssid) -> i32` * | Remove; disconnects if it is the current network. |
+| `wifi_connect(ssid) -> i32` * | Connect to a saved network now. |
+| `wifi_disconnect()` * | Drop the link. |
+
+The kernel re-renders the focused app when any of this changes.
+
+### Network
+
+One operation at a time, host-executed; apps see counters only. Design
+doc 016.
+
+| Import | Meaning |
+| --- | --- |
+| `net_probe(ip, port) -> i32` | TCP connect + close. `ip` = big-endian packed IPv4. 0 when busy. |
+| `net_download(url) -> i32` | Plain-HTTP GET, body counted and discarded. URL ≤ 96 bytes. |
+| `net_status() -> i32` | 0 Idle, 1 Busy, 2 Done, 3 Failed. |
+| `net_bytes() -> i32` | Bytes received so far. |
+| `net_elapsed_ms() -> i32` | Duration of the current or last operation. |
+| `net_cancel()` | Abort; also implied by the app stopping. |
 
 ### Debug
 

@@ -13,9 +13,9 @@ path = "src/main.rs"
 fri3d-kernel = { path = "../../fri3d-kernel", features = ["std"] }
 fri3d-apps = { path = "../../fri3d-apps" }
 minifb = { version = "0.28", default-features = false }
+png = "0.17"
 
 # Linux needs a windowing backend; x11-dl loads libX11 at runtime, so CI
 # compiles without X headers.
 [target.'cfg(target_os = "linux")'.dependencies]
 minifb = { version = "0.28", default-features = false, features = ["x11"] }
-png = "0.17"

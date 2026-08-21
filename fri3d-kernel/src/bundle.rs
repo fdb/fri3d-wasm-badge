@@ -283,7 +283,7 @@ mod tests {
 
     #[test]
     fn long_strings_are_clipped_with_nul() {
-        let long: alloc::string::String = core::iter::repeat('x').take(200).collect();
+        let long: alloc::string::String = "x".repeat(200);
         let header = HeaderBuilder::new().name(&long).finish();
         assert_eq!(field_str(&header, offset::NAME, len::NAME).len(), len::NAME - 1);
     }

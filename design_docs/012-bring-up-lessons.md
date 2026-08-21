@@ -48,3 +48,19 @@ Short, chronological, so the next bring-up does not repeat them.
 - Fill the panel red, then green, before drawing anything real.
 - Test a cold boot on battery before calling the display done.
 - Put the screen size behind constants before writing the second app.
+
+## Wi-Fi and IP bring-up (2026-08-21)
+
+Both failures froze the badge until the panic-reboot handler existed;
+neither can be reproduced on the desktop host.
+
+- **esp-alloc is first-fit in registration order.** With the internal
+  heap registered before PSRAM, the kernel and wasmi consumed it at boot
+  and `esp-rtos` could not allocate the Wi-Fi task stack from internal
+  RAM. Register PSRAM first; keep the internal region for capability-
+  tagged allocations (radio stacks, DMA buffers).
+- **Polling Embassy futures without an executor** needs
+  `embassy-time-queue-utils/generic-queue-*`; the default timer queue
+  asserts the waker belongs to an Embassy task.
+- **Panics must reboot.** `esp-backtrace`'s `custom-halt` feature plus
+  a 3 s delay and `software_reset()`.

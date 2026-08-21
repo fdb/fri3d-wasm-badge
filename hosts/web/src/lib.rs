@@ -3,6 +3,8 @@
 
 use fri3d_kernel::settings::IMAGE_LEN;
 use fri3d_kernel::types::InputKey;
+use fri3d_kernel::net::Sim as NetSim;
+use fri3d_kernel::wifi::{Sim, IMAGE_LEN as WIFI_IMAGE_LEN};
 use fri3d_kernel::{Kernel, StepResult};
 use wasm_bindgen::prelude::*;
 
@@ -10,6 +12,8 @@ use wasm_bindgen::prelude::*;
 pub struct WebKernel {
     kernel: Box<Kernel>,
     last: StepResult,
+    wifi: Sim,
+    net: NetSim,
 }
 
 #[wasm_bindgen]
@@ -26,7 +30,7 @@ impl WebKernel {
                 .map_err(|e| JsValue::from_str(&format!("app: {e:?}")))?;
         }
         kernel.boot(now_ms);
-        Ok(Self { kernel, last: StepResult::default() })
+        Ok(Self { kernel, last: StepResult::default(), wifi: Sim::new(), net: NetSim::new() })
     }
 
     pub fn push_key(&mut self, key: u32, pressed: bool, now_ms: u32) {
@@ -35,8 +39,11 @@ impl WebKernel {
         }
     }
 
-    /// Returns true when the framebuffer changed.
+    /// Returns true when the framebuffer changed. The simulated radio is
+    /// serviced first, so scan and connect results land in the same step.
     pub fn step(&mut self, now_ms: u32) -> bool {
+        self.wifi.service(&mut self.kernel.wifi_mut(), now_ms);
+        self.net.service(&mut self.kernel.net_mut(), now_ms);
         self.last = self.kernel.step(now_ms);
         self.last.frame
     }
@@ -89,6 +96,37 @@ impl WebKernel {
     /// -1 when unset.
     pub fn setting(&self, ns: &str, key: &str) -> i64 {
         self.kernel.setting(ns, key).map(i64::from).unwrap_or(-1)
+    }
+
+    pub fn wifi_image(&mut self) -> Option<Vec<u8>> {
+        let mut img = [0u8; WIFI_IMAGE_LEN];
+        self.kernel.take_wifi_image(&mut img).then(|| img.to_vec())
+    }
+
+    pub fn load_wifi(&mut self, bytes: &[u8]) {
+        self.kernel.load_wifi(bytes);
+    }
+
+    /// `fri3d_kernel::wifi::WifiStatus` as a number.
+    pub fn wifi_status(&self) -> u32 {
+        self.kernel.wifi_status() as u32
+    }
+
+    pub fn wifi_ssid(&self) -> String {
+        self.kernel.wifi_current_ssid().to_string()
+    }
+
+    /// Test hooks: seed a network and kick auto-connect without the UI.
+    pub fn wifi_save(&mut self, ssid: &str, password: &str) -> bool {
+        self.kernel.wifi_mut().save(ssid, password)
+    }
+
+    pub fn wifi_auto(&mut self) {
+        self.kernel.wifi_mut().start_auto();
+    }
+
+    pub fn wifi_set_enabled(&mut self, on: bool) {
+        self.kernel.wifi_mut().set_enabled(on);
     }
 
     pub fn set_scene(&mut self, scene: u32) {

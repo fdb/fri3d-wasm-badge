@@ -667,6 +667,8 @@ pub mod align {
 }
 
 pub mod imgui;
+pub mod wifi;
+pub mod net;
 
 #[macro_export]
 macro_rules! export_render {

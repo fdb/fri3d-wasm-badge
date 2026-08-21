@@ -8,6 +8,13 @@
 
 use fri3d_kernel::settings::IMAGE_LEN;
 use fri3d_kernel::types::InputKey;
+use fri3d_kernel::net::{NetRequest, Sim as NetSim};
+use fri3d_kernel::wifi::{Sim, IMAGE_LEN as WIFI_IMAGE_LEN};
+use std::io::{Read, Write};
+use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{channel, Receiver};
+use std::sync::Arc;
 use fri3d_kernel::{Kernel, FRAMEBUFFER_LEN, SCREEN_HEIGHT, SCREEN_WIDTH};
 use minifb::{Key, Scale, Window, WindowOptions};
 use std::path::{Path, PathBuf};
@@ -27,6 +34,7 @@ struct Args {
     apps_dir: Option<PathBuf>,
     seed: u32,
     list: bool,
+    real_net: bool,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -40,6 +48,7 @@ fn parse_args() -> Result<Args, String> {
         apps_dir: None,
         seed: 42,
         list: false,
+        real_net: false,
     };
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
@@ -47,6 +56,7 @@ fn parse_args() -> Result<Args, String> {
         match arg.as_str() {
             "--headless" => a.headless = true,
             "--list" => a.list = true,
+            "--real-net" => a.real_net = true,
             "--app" => a.app = Some(val()?),
             "--scene" => a.scene = Some(val()?.parse().map_err(|e| format!("--scene: {e}"))?),
             "--keys" => a.keys = val()?.split(',').map(str::to_string).collect(),
@@ -85,9 +95,13 @@ fn main() {
         return;
     }
 
-    let settings_path = settings_path();
+    let settings_path = state_path("settings.bin");
     if let Ok(img) = std::fs::read(&settings_path) {
         kernel.load_settings(&img);
+    }
+    let wifi_path = state_path("wifi.bin");
+    if let Ok(img) = std::fs::read(&wifi_path) {
+        kernel.load_wifi(&img);
     }
 
     kernel.random_seed(args.seed);
@@ -110,7 +124,7 @@ fn main() {
         run_headless(&mut kernel, &args);
         return;
     }
-    run_window(&mut kernel, &settings_path, start);
+    run_window(&mut kernel, &settings_path, &wifi_path, start);
 }
 
 fn register_bundles(kernel: &mut Kernel, apps_dir: Option<&Path>) -> Result<(), String> {
@@ -170,6 +184,10 @@ fn key_from_name(name: &str) -> Option<InputKey> {
 /// Scripted run: taps every key in order (50 ms apart), renders `frames`
 /// frames 100 ms apart, writes the last one as PNG.
 fn run_headless(kernel: &mut Kernel, args: &Args) {
+    let mut sim = Sim::new();
+    let mut net_sim = NetSim::new();
+    // --real-net: real sockets on a thread, so frames wait in wall time.
+    let mut net = NetDriver::default();
     let mut t = 1000u32;
     kernel.step(t);
     for name in &args.keys {
@@ -178,6 +196,8 @@ fn run_headless(kernel: &mut Kernel, args: &Args) {
             std::process::exit(2);
         };
         let hold = if name.starts_with("long") { 400 } else { 50 };
+        sim.service(&mut kernel.wifi_mut(), t);
+        net_sim.service(&mut kernel.net_mut(), t);
         kernel.push_raw_input(key, true, t);
         kernel.step(t);
         t += hold;
@@ -187,6 +207,13 @@ fn run_headless(kernel: &mut Kernel, args: &Args) {
     }
     for _ in 0..args.frames {
         t += 100;
+        sim.service(&mut kernel.wifi_mut(), t);
+        if args.real_net {
+            std::thread::sleep(Duration::from_millis(100));
+            net.service(kernel);
+        } else {
+            net_sim.service(&mut kernel.net_mut(), t);
+        }
         kernel.request_render();
         kernel.step(t);
     }
@@ -207,7 +234,7 @@ fn run_headless(kernel: &mut Kernel, args: &Args) {
     }
 }
 
-fn run_window(kernel: &mut Kernel, settings_path: &Path, start: Instant) {
+fn run_window(kernel: &mut Kernel, settings_path: &Path, wifi_path: &Path, start: Instant) {
     const SCALE: usize = 4;
     let (w, h) = (SCREEN_WIDTH as usize, SCREEN_HEIGHT as usize);
     let mut window = Window::new(
@@ -237,10 +264,15 @@ fn run_window(kernel: &mut Kernel, settings_path: &Path, start: Instant) {
     let mut last_error = String::new();
     let mut shot = 0u32;
     let mut settings_img = [0u8; IMAGE_LEN];
+    let mut wifi_img = [0u8; WIFI_IMAGE_LEN];
+    let mut sim = Sim::new();
+    let mut net = NetDriver::default();
     let mut last_perf = Instant::now();
 
     while window.is_open() {
         let now = start.elapsed().as_millis() as u32;
+        sim.service(&mut kernel.wifi_mut(), now);
+        net.service(kernel);
         for (keys, input) in &bindings {
             let down = keys.iter().any(|k| window.is_key_down(*k));
             kernel.push_raw_input(*input, down, now);
@@ -285,14 +317,131 @@ fn run_window(kernel: &mut Kernel, settings_path: &Path, start: Instant) {
             }
         }
         if kernel.take_settings_image(&mut settings_img) {
-            if let Some(dir) = settings_path.parent() {
-                let _ = std::fs::create_dir_all(dir);
-            }
-            if let Err(e) = std::fs::write(settings_path, settings_img) {
-                eprintln!("settings: {e}");
-            }
+            persist(settings_path, &settings_img);
+        }
+        if kernel.take_wifi_image(&mut wifi_img) {
+            persist(wifi_path, &wifi_img);
         }
     }
+}
+
+fn persist(path: &Path, bytes: &[u8]) {
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    if let Err(e) = std::fs::write(path, bytes) {
+        eprintln!("{}: {e}", path.display());
+    }
+}
+
+/// Real network operations on a worker thread: the kernel's `Probe` and
+/// `Download` primitives over std sockets (plain HTTP/1.0, body discarded).
+#[derive(Default)]
+struct NetDriver {
+    rx: Option<Receiver<NetMsg>>,
+    cancel: Option<Arc<AtomicBool>>,
+}
+
+enum NetMsg {
+    Progress(u32),
+    Done(bool),
+}
+
+impl NetDriver {
+    fn service(&mut self, kernel: &mut Kernel) {
+        if let Some(rx) = &self.rx {
+            while let Ok(msg) = rx.try_recv() {
+                match msg {
+                    NetMsg::Progress(b) => kernel.net_progress(b),
+                    NetMsg::Done(ok) => {
+                        kernel.net_done(ok);
+                        self.rx = None;
+                        self.cancel = None;
+                        break;
+                    }
+                }
+            }
+        }
+        let Some(req) = kernel.take_net_request() else { return };
+        if let Some(c) = &self.cancel {
+            c.store(true, Ordering::Relaxed);
+        }
+        self.rx = None;
+        self.cancel = None;
+        let job: Box<dyn FnOnce(&AtomicBool, &dyn Fn(u32)) -> bool + Send> = match req {
+            NetRequest::Cancel => return,
+            NetRequest::Probe { ip, port } => Box::new(move |_, _| tcp_probe(ip, port)),
+            NetRequest::Download { url } => {
+                let url = url.to_string();
+                Box::new(move |cancel, progress| http_download(&url, cancel, progress))
+            }
+        };
+        let (tx, rx) = channel();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let c2 = Arc::clone(&cancel);
+        std::thread::spawn(move || {
+            let tx2 = tx.clone();
+            let ok = job(&c2, &move |b| {
+                let _ = tx2.send(NetMsg::Progress(b));
+            });
+            let _ = tx.send(NetMsg::Done(ok));
+        });
+        self.rx = Some(rx);
+        self.cancel = Some(cancel);
+    }
+}
+
+fn tcp_probe(ip: [u8; 4], port: u16) -> bool {
+    let addr = SocketAddr::from((ip, port));
+    TcpStream::connect_timeout(&addr, Duration::from_secs(3)).is_ok()
+}
+
+/// GET `url` over plain HTTP, count the body, drop it. True on a 2xx
+/// response with at least one body byte.
+fn http_download(url: &str, cancel: &AtomicBool, progress: &dyn Fn(u32)) -> bool {
+    let Some(rest) = url.strip_prefix("http://") else { return false };
+    let (hostport, path) = rest.split_once('/').map_or((rest, "/"), |(h, _)| (h, &rest[h.len()..]));
+    let host = hostport.split(':').next().unwrap_or(hostport);
+    let addr = if hostport.contains(':') { hostport.to_string() } else { format!("{hostport}:80") };
+    let Some(addr) = addr.to_socket_addrs().ok().and_then(|mut a| a.next()) else { return false };
+    let Ok(mut stream) = TcpStream::connect_timeout(&addr, Duration::from_secs(5)) else { return false };
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
+    let req = format!("GET {path} HTTP/1.0\r\nHost: {host}\r\nConnection: close\r\n\r\n");
+    if stream.write_all(req.as_bytes()).is_err() {
+        return false;
+    }
+    let mut buf = vec![0u8; 64 * 1024];
+    let mut head = Vec::new();
+    let mut in_body = false;
+    let mut ok_status = false;
+    let mut body = 0u32;
+    loop {
+        if cancel.load(Ordering::Relaxed) {
+            return false;
+        }
+        let n = match stream.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => n,
+            Err(_) => return false,
+        };
+        if in_body {
+            body += n as u32;
+        } else {
+            head.extend_from_slice(&buf[..n]);
+            if let Some(end) = head.windows(4).position(|w| w == b"\r\n\r\n") {
+                let status = std::str::from_utf8(&head[..end]).unwrap_or("");
+                ok_status = status.split_whitespace().nth(1).is_some_and(|c| c.starts_with('2'));
+                if !ok_status {
+                    eprintln!("speedtest: {}", status.lines().next().unwrap_or("bad response"));
+                    return false;
+                }
+                in_body = true;
+                body = (head.len() - end - 4) as u32;
+            }
+        }
+        progress(body);
+    }
+    ok_status && body > 0
 }
 
 fn drain_log(kernel: &mut Kernel) {
@@ -306,9 +455,9 @@ fn scale_color(c: u32, pct: u32) -> u32 {
     ch(16) | ch(8) | ch(0)
 }
 
-fn settings_path() -> PathBuf {
+fn state_path(name: &str) -> PathBuf {
     let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."));
-    home.join(".fri3d-badge").join("settings.bin")
+    home.join(".fri3d-badge").join(name)
 }
 
 /// Greyscale PNG, 0 = black pixel, 255 = white — the convention of

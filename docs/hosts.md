@@ -20,14 +20,19 @@ cargo run --release -p fri3d-host-desktop
 | M / Esc | MENU (home) |
 | F12 | screenshot → `screenshot_N.png` |
 
-Settings persist in `~/.fri3d-badge/settings.bin`. Brightness tints the
-amber background.
+Settings persist in `~/.fri3d-badge/settings.bin`, saved Wi-Fi networks
+in `~/.fri3d-badge/wifi.bin`. Brightness tints the amber background.
+Wi-Fi is simulated (`fri3d_kernel::wifi::Sim`): four fixed networks,
+1.5 s scan, 2 s connect; "Fri3d Camp" takes `fri3d2026`, "Hackerspace"
+`hunter22`, "Free WiFi" is open, "Neighbour" rejects everything.
+Network operations (Speed Test) use real sockets in the window and in
+headless runs with `--real-net`; other headless runs use `net::Sim`.
 
 Headless, for scripts and CI:
 
 ```bash
 fri3d --headless [--app NAME] [--scene N] [--keys k1,k2,…] [--frames N] \
-      [--screenshot out.png] [--seed S] [--apps-dir DIR] [--list]
+      [--screenshot out.png] [--seed S] [--apps-dir DIR] [--list] [--real-net]
 ```
 
 `--apps-dir` loads `.fab` files from a directory instead of the embedded
@@ -44,7 +49,10 @@ cd hosts/web/dist && python3 -m http.server 8091
 `tests.js` and sets `window.testResults`. `window.fri3d` exposes
 `tap(key, heldMs)`, `render()`, `readFb()`, `startApp(i)`,
 `exitToLauncher()`, `appCount()`, `appName(i)`, `rngSeed(s)`,
-`rngGet()`, `KEY`. Settings persist in `localStorage`.
+`rngGet()`, `KEY`, `wifiStatus()`, `wifiSsid()`, `wifiSave(ssid, pw)`,
+`wifiAuto()`. Settings and saved networks persist in `localStorage`
+(`fri3d.settings`, `fri3d.wifi`). Wi-Fi uses the same simulator as the
+desktop host.
 
 ## Badge (Fri3d 2026)
 

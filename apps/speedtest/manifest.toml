@@ -1,0 +1,8 @@
+# Fri3d app manifest. Packed by tools/fri3d-pack into a .fab bundle.
+id = "speedtest"
+name = "Speed Test"
+version = "0.1.0"
+author = "Fri3d Camp"
+description = "Reach 1.1.1.1 and 8.8.8.8, then download 1 MB and measure the throughput."
+category = "Tools"
+icon = "icon.png"

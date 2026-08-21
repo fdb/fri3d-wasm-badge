@@ -62,7 +62,7 @@ PSRAM (probed at runtime in `main.rs`).
 | nvs | 0xb000 | 20 KB | unused, kept for MPOS compatibility |
 | ota_0 | 0x10000 | 3.5 MB | firmware slot A |
 | ota_1 | 0x390000 | 3.5 MB | firmware slot B |
-| settings | 0x710000 | 64 KB | kernel settings image, one 4 KB sector (`main.rs` `settings_store`) |
+| settings | 0x710000 | 64 KB | sector 0: kernel settings image; sector 1: saved Wi-Fi networks (`main.rs` `blob_store`) |
 | vfs | 0x720000 | 8.9 MB | reserved for a file system; not mounted yet |
 
 `otadata`, `nvs`, `ota_0` and `ota_1` sit at the same offsets as the
@@ -71,9 +71,30 @@ MicroPythonOS badge image, so the same tooling can address both.
 OTA bookkeeping in `main.rs` (`ota_confirm_boot`): after the kernel is
 up, the running slot is marked `Valid`, which cancels the bootloader's
 rollback. An updater that writes a new image into the inactive slot and
-calls `OtaUpdater::activate_next_partition` is the remaining piece; the
-transport (Wi-Fi, USB) is not there yet. Everything here is pure Rust
-(`esp-bootloader-esp-idf`, `esp-storage`); no C is compiled.
+calls `OtaUpdater::activate_next_partition` is the remaining piece; Wi-Fi
+and the IP stack work (see below). The storage
+side is pure Rust (`esp-bootloader-esp-idf`, `esp-storage`); the radio
+links Espressif's binary Wi-Fi blobs through `esp-radio`.
+
+## Panics reboot
+
+A panic prints the message and backtrace (`esp-backtrace`), waits 3 s so
+a monitor can show it, then `software_reset`s (`custom_halt` in
+`main.rs`). A badge must never sit frozen; the log is where the failure
+is read.
+
+## Wi-Fi
+
+`esp-radio` 1.0.0-beta.0 station mode, driven from the main loop: the
+kernel hands over scan / connect / disconnect requests, `Radio::poll`
+turns each into one boxed `async` future polled per iteration, and
+`esp-rtos` (started in `main` right after the allocators) runs the
+driver's tasks. The radio is created on the first request, so Wi-Fi off
+never powers it. Log lines are prefixed `[wifi]`. Design doc 015.
+
+On top of it, `embassy-net` (DHCP, DNS, TCP) serves the kernel's network
+operations (`[net]` log lines, design doc 016): the stack runner and the
+operation in flight are boxed futures polled from the same loop.
 
 Going back to MicroPythonOS means reflashing its image (same offsets, so
 no bootloader surgery).

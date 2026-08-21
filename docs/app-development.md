@@ -104,6 +104,12 @@ Rules the kernel enforces, so design around them:
 - **One memory, 256 KB max.** One 64 KB page is typical.
 - **`Menu` goes home.** You cannot override it. `Back` is yours.
 - **Settings** are `u32` under your own `id`. Write them in `on_stop`.
+- **Wi-Fi** is read-only for apps: `api::wifi::status()`,
+  `current_ssid()`, the scan and saved lists. Only the Settings app
+  (system) scans, saves and connects. There is no socket API yet; apps
+  can run one host-side operation at a time via `api::net`
+  (`probe(ip, port)`, `download(url)`, then poll `status()`, `bytes()`,
+  `elapsed_ms()`). See `apps/speedtest`.
 
 ## 3. Pack and look at it
 

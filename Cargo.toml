@@ -12,6 +12,7 @@ members = [
     "apps/mandelbrot",
     "apps/settings",
     "apps/snake",
+    "apps/speedtest",
     "apps/test_drawing",
     "apps/test_ui",
     "apps/wifi_pet",

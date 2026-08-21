@@ -31,6 +31,8 @@ pub mod random;
 pub mod registry;
 pub mod settings;
 pub mod types;
+pub mod net;
+pub mod wifi;
 
 pub use kernel::{Kernel, StepResult};
 
@@ -40,7 +42,7 @@ pub const SCREEN_HEIGHT: u32 = 120;
 pub const FRAMEBUFFER_LEN: usize = (SCREEN_WIDTH * SCREEN_HEIGHT) as usize;
 
 /// Kernel ABI version reported to apps. Bump when host imports change shape.
-pub const KERNEL_VERSION: u32 = 1;
+pub const KERNEL_VERSION: u32 = 2;
 
 /// Hard limits. Every table in the kernel is sized by one of these.
 pub mod limits {
@@ -61,4 +63,8 @@ pub mod limits {
     /// Log lines buffered for the host to drain.
     pub const LOG_LINES: usize = 8;
     pub const LOG_LINE_LEN: usize = 96;
+    /// Access points kept from the last Wi-Fi scan.
+    pub const WIFI_SCAN_MAX: usize = 16;
+    /// Saved Wi-Fi networks (one bit each in the auto-connect round).
+    pub const WIFI_SAVED_MAX: usize = 8;
 }
