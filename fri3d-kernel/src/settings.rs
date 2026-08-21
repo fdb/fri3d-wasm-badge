@@ -108,7 +108,7 @@ impl Settings {
             return;
         }
         let body = &image[4..];
-        for chunk in body.chunks_exact(ENTRY_LEN).take(SETTINGS_ENTRIES) {
+        for chunk in body.as_chunks::<ENTRY_LEN>().0.iter().take(SETTINGS_ENTRIES) {
             let mut ns = [0u8; NS_LEN];
             let mut key = [0u8; KEY_LEN];
             ns.copy_from_slice(&chunk[..NS_LEN]);
