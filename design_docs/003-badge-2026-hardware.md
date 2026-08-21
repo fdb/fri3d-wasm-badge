@@ -60,5 +60,6 @@ is bit *11 − i*. The table above already resolves that.
 - **PSRAM is octal** (`qio_opi`); esp-hal needs the `psram` feature and
   the octal mode config.
 - The MPOS image puts MicroPythonOS in two 3.5 MB OTA slots plus retro-go
-  partitions. A WASM firmware can use the same 16 MB partition table or
-  its own; both are flashed with esptool.
+  partitions. `hosts/badge/partitions.csv` keeps `otadata`/`nvs`/`ota_0`/
+  `ota_1` at the same offsets and uses the rest for a `settings` sector
+  and a reserved `vfs` partition.

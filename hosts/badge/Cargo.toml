@@ -24,6 +24,8 @@ esp-alloc = { version = "0.10", features = ["esp32s3"] }
 esp-println = { version = "0.17", default-features = false, features = ["esp32s3", "jtag-serial", "critical-section"] }
 esp-backtrace = { version = "0.19", features = ["esp32s3", "panic-handler", "println"] }
 esp-bootloader-esp-idf = { version = "0.5", features = ["esp32s3"] }
+esp-storage = { version = "0.9", features = ["esp32s3"] }
+embedded-storage = "0.3"
 # esp-hal 1.1.2 was published against the 0.35.2 PAC; 0.35.3 removed
 # register fields it still references. Keep in sync with esp-hal upgrades.
 esp32s3 = "=0.35.2"

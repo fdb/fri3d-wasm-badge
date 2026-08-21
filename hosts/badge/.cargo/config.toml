@@ -12,7 +12,7 @@ rustflags = [
   # Back traces across the wasmi interpreter.
   "-C", "force-frame-pointers",
 ]
-runner = "espflash flash --monitor --flash-size 16mb"
+runner = "espflash flash --monitor --flash-size 16mb --partition-table partitions.csv --erase-parts otadata"
 
 [unstable]
 build-std = ["alloc", "core"]

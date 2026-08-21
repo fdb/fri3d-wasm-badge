@@ -39,7 +39,7 @@ amber background.
 rustup target add wasm32-unknown-unknown
 brew install binaryen            # wasm-opt, optional: smaller app bundles
 cargo install wasm-pack          # browser host
-cargo install espflash           # badge host
+cargo install espflash           # badge host (flashing + serial monitor)
 ```
 
 The badge host needs the Espressif Rust toolchain (`espup install`);

@@ -22,5 +22,8 @@ echo "==> building firmware"
 (cd "$here" && cargo build --release)
 
 echo "==> flashing"
+# OTA layout (see partitions.csv). otadata is erased so a USB flash always
+# boots ota_0; the vfs (LittleFS) partition is left alone.
 exec espflash flash --monitor --flash-size 16mb \
+    --partition-table "$here/partitions.csv" --erase-parts otadata \
     "$here/target/xtensa-esp32s3-none-elf/release/fri3d-badge" "$@"

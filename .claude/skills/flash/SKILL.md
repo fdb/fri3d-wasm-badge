@@ -41,12 +41,14 @@ hosts/badge/flash.sh
 ```
 
 It packs, builds (`cd hosts/badge && cargo build --release`), and runs
-`espflash flash --monitor --flash-size 16mb`. Watch for the monitor's
+`espflash flash --monitor --flash-size 16mb --partition-table partitions.csv
+--erase-parts otadata` (OTA layout: boots `ota_0`; see hosts/badge/README.md). Watch for the monitor's
 `[fri3d] boot` line, then `kernel up: N apps`. Press Ctrl-C to leave the
 monitor.
 
 Report the image size from espflash's output (the app is ~1.1 MB today,
-~7 % of the 16 MB flash).
+out of a 3.5 MB OTA slot). Expect `ota slot Ok(Ota0) state Ok(Valid)` in
+the boot log.
 
 ### 4. Failure modes
 

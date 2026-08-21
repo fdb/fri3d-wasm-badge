@@ -34,6 +34,78 @@ use mipidsi::Builder;
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
+// ---- Settings persistence ---------------------------------------------
+//
+// The `settings` partition holds one 4 KB sector: magic, length, then the
+// kernel's settings image. Rewritten only when a setting changes.
+
+const SETTINGS_MAGIC: &[u8; 4] = b"FSET";
+const SECTOR: usize = 4096;
+const _: () = assert!(4 + 4 + fri3d_kernel::settings::IMAGE_LEN <= SECTOR);
+
+fn find_partition(
+    flash: &mut esp_storage::FlashStorage<'static>,
+    label: &str,
+) -> Option<(u32, u32)> {
+    use esp_bootloader_esp_idf::partitions::read_partition_table;
+    let mut pt_buf = [0u8; esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN];
+    let pt = read_partition_table(flash, &mut pt_buf).ok()?;
+    let found = pt
+        .iter()
+        .find(|p| p.label_as_str() == label)
+        .map(|p| (p.offset(), p.len()));
+    found
+}
+
+fn settings_load(flash: &mut esp_storage::FlashStorage<'static>, kernel: &mut Kernel) {
+    use embedded_storage::ReadStorage;
+    let Some((offset, _)) = find_partition(flash, "settings") else {
+        println!("[fri3d] no settings partition");
+        return;
+    };
+    let mut sector = [0u8; SECTOR];
+    if flash.read(offset, &mut sector).is_err() || &sector[..4] != SETTINGS_MAGIC {
+        println!("[fri3d] settings: empty");
+        return;
+    }
+    let len = u32::from_le_bytes([sector[4], sector[5], sector[6], sector[7]]) as usize;
+    if len > SECTOR - 8 {
+        return;
+    }
+    kernel.load_settings(&sector[8..8 + len]);
+    println!("[fri3d] settings: loaded {} B", len);
+}
+
+fn settings_store(flash: &mut esp_storage::FlashStorage<'static>, image: &[u8]) {
+    use embedded_storage::Storage;
+    let Some((offset, _)) = find_partition(flash, "settings") else { return };
+    let mut sector = [0xFFu8; SECTOR];
+    sector[..4].copy_from_slice(SETTINGS_MAGIC);
+    sector[4..8].copy_from_slice(&(image.len() as u32).to_le_bytes());
+    sector[8..8 + image.len()].copy_from_slice(image);
+    // `Storage::write` erases the sector first.
+    println!("[fri3d] settings: store -> {:?}", flash.write(offset, &sector).is_ok());
+}
+
+/// Report which OTA slot booted and, once the kernel is up, mark the image
+/// valid so the bootloader's rollback never reverts a working firmware.
+fn ota_confirm_boot(flash: &mut esp_storage::FlashStorage<'static>) {
+    use esp_bootloader_esp_idf::ota::OtaImageState;
+    use esp_bootloader_esp_idf::ota_updater::OtaUpdater;
+    let mut pt_buf = [0u8; esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN];
+    match OtaUpdater::new(flash, &mut pt_buf) {
+        Ok(mut ota) => {
+            let slot = ota.selected_partition();
+            let state = ota.current_ota_state();
+            println!("[fri3d] ota slot {:?} state {:?}", slot, state);
+            if matches!(state, Ok(OtaImageState::New) | Ok(OtaImageState::PendingVerify)) {
+                println!("[fri3d] ota mark valid -> {:?}", ota.set_current_ota_state(OtaImageState::Valid));
+            }
+        }
+        Err(e) => println!("[fri3d] no OTA layout ({:?}); single-app partition table", e),
+    }
+}
+
 // ---- Panel geometry -------------------------------------------------------
 
 const LCD_W: u16 = 320;
@@ -223,7 +295,10 @@ fn main() -> ! {
             println!("[fri3d] app bundle rejected: {:?}", e);
         }
     }
+    let mut flash = esp_storage::FlashStorage::new(peripherals.FLASH);
+    settings_load(&mut flash, &mut kernel);
     kernel.boot(now_ms());
+    ota_confirm_boot(&mut flash);
     println!(
         "[fri3d] kernel up, {} apps, free heap {} B",
         kernel.app_count(),
@@ -235,6 +310,7 @@ fn main() -> ! {
     #[allow(static_mut_refs)]
     let last_fb = unsafe { &mut LAST_FB };
 
+    let mut settings_img = [0u8; fri3d_kernel::settings::IMAGE_LEN];
     let mut last_error_len = 0usize;
     let mut brightness = 100u32;
     let mut last_poll = now_ms();
@@ -289,6 +365,10 @@ fn main() -> ! {
             if !err.is_empty() {
                 println!("[kernel] {}", err);
             }
+        }
+
+        if kernel.take_settings_image(&mut settings_img) {
+            settings_store(&mut flash, &settings_img);
         }
 
         let wanted = kernel.setting("system", "brightness").unwrap_or(100).clamp(5, 100);

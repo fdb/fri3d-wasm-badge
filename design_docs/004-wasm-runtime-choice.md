@@ -26,6 +26,11 @@ tree, no `ldproxy`). `esp-alloc` places the heap in PSRAM
 interpreter stack stays in internal SRAM. `mipidsi 0.10` drives the
 ST7789V over `embedded-hal` SPI. `esp-radio` adds Wi-Fi later.
 
+Residual non-Rust dependency: the Xtensa link step. esp-hal's linker
+scripts for the ESP32-S3 need GNU `ld` from the `espup`-installed GCC;
+`rust-lld` cannot lay out the Xtensa memory regions. Nothing is compiled
+with GCC — it links only.
+
 esp-idf-hal (std) remains the fallback if we ever need mbedTLS or a
 C component. Nothing in the kernel depends on `std`.
 

@@ -21,6 +21,12 @@ espup install
 cargo install espflash
 ```
 
+The toolchain is Rust end to end except for one step: linking. esp-hal's
+Xtensa linker scripts need GNU `ld`; `rust-lld` rejects them (tried with
+the `esp` toolchain's own lld: it cannot place the Xtensa memory regions).
+The RISC-V ESP32 parts link with `rust-lld`; the S3 does not, yet. No C
+is compiled anywhere in this repo.
+
 `.cargo/config.toml` pins the linker to the GCC that `espup` installs
 (`~/.rustup/toolchains/esp/xtensa-esp-elf/.../xtensa-esp32s3-elf-gcc`).
 If your copy lives elsewhere, put `xtensa-esp32s3-elf-gcc` on `PATH` and
@@ -35,7 +41,9 @@ cargo run -q -p fri3d-pack
 # From hosts/badge: build + flash + open the serial monitor.
 cd hosts/badge
 cargo build --release
-espflash flash --monitor --flash-size 16mb target/xtensa-esp32s3-none-elf/release/fri3d-badge
+espflash flash --monitor --flash-size 16mb \
+    --partition-table partitions.csv --erase-parts otadata \
+    target/xtensa-esp32s3-none-elf/release/fri3d-badge
 ```
 
 Or in one step: `hosts/badge/flash.sh`.
@@ -44,10 +52,31 @@ Or in one step: `hosts/badge/flash.sh`.
 `.cargo/config.toml`.
 
 Flash settings: ESP32-S3 N16R8, 16 MB flash (`--flash-size 16mb`), octal
-PSRAM (configured at runtime in `main.rs` via `PsramMode::OctalSpi`).
-espflash writes its own bootloader and a single-app partition table; the
-MicroPythonOS partition layout is not preserved. To go back to MPOS,
-reflash its image.
+PSRAM (probed at runtime in `main.rs`).
+
+## Partition layout (`partitions.csv`)
+
+| Name | Offset | Size | Purpose |
+| --- | --- | --- | --- |
+| otadata | 0x9000 | 8 KB | which OTA slot boots; erased by `flash.sh` so USB flashes boot `ota_0` |
+| nvs | 0xb000 | 20 KB | unused, kept for MPOS compatibility |
+| ota_0 | 0x10000 | 3.5 MB | firmware slot A |
+| ota_1 | 0x390000 | 3.5 MB | firmware slot B |
+| settings | 0x710000 | 64 KB | kernel settings image, one 4 KB sector (`main.rs` `settings_store`) |
+| vfs | 0x720000 | 8.9 MB | reserved for a file system; not mounted yet |
+
+`otadata`, `nvs`, `ota_0` and `ota_1` sit at the same offsets as the
+MicroPythonOS badge image, so the same tooling can address both.
+
+OTA bookkeeping in `main.rs` (`ota_confirm_boot`): after the kernel is
+up, the running slot is marked `Valid`, which cancels the bootloader's
+rollback. An updater that writes a new image into the inactive slot and
+calls `OtaUpdater::activate_next_partition` is the remaining piece; the
+transport (Wi-Fi, USB) is not there yet. Everything here is pure Rust
+(`esp-bootloader-esp-idf`, `esp-storage`); no C is compiled.
+
+Going back to MicroPythonOS means reflashing its image (same offsets, so
+no bootloader surgery).
 
 Build an image without a badge attached:
 
