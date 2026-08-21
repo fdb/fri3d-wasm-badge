@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  kernel:
+    name: Kernel tests + clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - run: rustup target add wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Kernel + tools tests
+        run: cargo test -p fri3d-kernel -p fri3d-wasm-api -p fri3d-pack
+
+      - name: Clippy (kernel, pack)
+        run: cargo clippy -p fri3d-kernel -p fri3d-pack -- -D warnings
+
+      - name: Apps compile to wasm32
+        run: cargo build --release --target wasm32-unknown-unknown --workspace --exclude fri3d-host-desktop --exclude fri3d-pack
+
+  screenshots:
+    name: Pack apps + headless screenshots
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: rustup target add wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install binaryen (wasm-opt)
+        run: sudo apt-get update && sudo apt-get install -y binaryen
+
+      - name: Pack apps
+        run: cargo run -q -p fri3d-pack
+
+      - name: Build desktop host
+        run: cargo build --release -p fri3d-host-desktop
+
+      - name: Render every app headlessly
+        run: |
+          set -euo pipefail
+          mkdir -p shots
+          ./target/release/fri3d --headless --screenshot shots/launcher.png
+          ./target/release/fri3d --headless --keys down,right --screenshot shots/launcher_info.png
+          ./target/release/fri3d --list | while read -r idx name; do
+            id="$(echo "$name" | tr '[:upper:] ' '[:lower:]_')"
+            ./target/release/fri3d --headless --app "$name" --keys ok --frames 2 --screenshot "shots/$id.png"
+          done
+          ls -l shots
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: shots/*.png
+          retention-days: 14

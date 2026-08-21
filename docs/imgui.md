@@ -1,6 +1,9 @@
 # IMGUI View System
 
-An Immediate Mode GUI library for ESP32 devices with 128x64 monochrome displays. Inspired by Flipper Zero's view system, redesigned for simplicity using the IMGUI paradigm.
+An immediate-mode GUI for Fri3d badge apps. It lives in
+`fri3d_wasm_api::imgui` and draws on the 160×120 monochrome canvas through
+the kernel's canvas imports. Inspired by Flipper Zero's view system, reduced
+to what a `no_std`, no-allocation WASM app needs.
 
 ## Table of Contents
 
@@ -13,6 +16,7 @@ An Immediate Mode GUI library for ESP32 devices with 128x64 monochrome displays.
 - [Focus Navigation](#focus-navigation)
 - [Menu System](#menu-system)
 - [Footer Buttons](#footer-buttons)
+- [Virtual Keyboard](#virtual-keyboard)
 - [Complete Example](#complete-example)
 - [API Reference](#api-reference)
 - [Implementation Notes](#implementation-notes)
@@ -23,244 +27,248 @@ An Immediate Mode GUI library for ESP32 devices with 128x64 monochrome displays.
 
 ### Retained Mode vs Immediate Mode
 
-**Flipper Zero uses Retained Mode:**
-```c
-// Allocate persistent widget
-Submenu* menu = submenu_alloc();
+Flipper Zero uses retained mode: allocate a widget, add items with callbacks,
+register it with a dispatcher, free it later.
 
-// Configure with callbacks
-submenu_add_item(menu, "Option A", 0, callback, context);
-submenu_add_item(menu, "Option B", 1, callback, context);
+This library uses immediate mode. Widgets exist only while `render()` runs.
+A widget call draws the widget and returns `true` when the user activated it:
 
-// Register with view dispatcher
-view_dispatcher_add_view(dispatcher, ViewMenu, submenu_get_view(menu));
-
-// Later: free everything
-submenu_free(menu);
-```
-
-**This library uses Immediate Mode:**
-```c
-void render(void) {
-    ui_begin();
-
-    if (ui_menu_item("Option A", 0)) {
+```rust
+fn render_impl() {
+    imgui::ui_begin();
+    if imgui::ui_button("Option A") {
         handle_option_a();
     }
-    if (ui_menu_item("Option B", 1)) {
+    if imgui::ui_button("Option B") {
         handle_option_b();
     }
-
-    ui_end();
+    imgui::ui_end();
 }
 ```
 
 ### Key Principles
 
-1. **No Widget Allocation**: Widgets exist only during the render call
-2. **Immediate Returns**: Interactive widgets return `true` when activated
-3. **State Lives in App**: The app owns all state, UI just reflects it
-4. **Minimal Persistence**: Only focus position persists between frames
-5. **WASM-Friendly**: No callbacks, no function pointers crossing the boundary
+1. **No widget allocation.** Widgets are function calls. Nothing is stored
+   between frames except focus and layout bookkeeping.
+2. **Immediate returns.** Interactive widgets return `true` when activated.
+3. **State lives in the app.** The app owns its data in `static AppCell<T>`
+   values. The UI only reflects it.
+4. **Minimal persistence.** One fixed `UiContext` holds the focus index and
+   the layout stack. No heap, no `alloc`.
+5. **WASM-friendly.** No callbacks, no function pointers cross the host
+   boundary. The only function pointer is the optional keyboard validator,
+   which stays inside the app.
 
 ---
 
 ## Quick Start
 
-A minimal app using IMGUI:
+A minimal app:
 
-```c
-#include <frd.h>
-#include <imgui.h>
+```rust
+#![no_std]
+#![deny(unsafe_code)]
 
-static int counter = 0;
+use fri3d_wasm_api as api;
+use fri3d_wasm_api::{align, font, imgui, input};
 
-void render(void) {
-    ui_begin();
+static COUNTER: api::AppCell<i32> = api::AppCell::new(0);
 
-    char buf[16];
-    snprintf(buf, sizeof(buf), "Count: %d", counter);
-    ui_label(buf, UI_FONT_PRIMARY, UI_ALIGN_CENTER);
+fn render_impl() {
+    imgui::ui_begin();
 
-    ui_spacer(8);
+    imgui::ui_label("Counter", font::PRIMARY, align::CENTER);
+    imgui::ui_spacer(8);
 
-    if (ui_button("Increment")) {
-        counter++;
+    if imgui::ui_button("Increment") {
+        COUNTER.set(COUNTER.get() + 1);
     }
 
-    if (ui_button("Reset")) {
-        counter = 0;
+    imgui::ui_end();
+}
+
+fn on_input_impl(key: u32, kind: u32) {
+    imgui::ui_input(key as u8, kind as u8);
+    if key == input::KEY_BACK && kind == input::TYPE_SHORT_PRESS {
+        api::exit_to_launcher();
     }
-
-    ui_end();
 }
 
-void on_input(InputKey key, InputType type) {
-    ui_input(key, type);
-}
-
-int main(void) {
-    return 0;
-}
+api::export_render!(render_impl);
+api::export_on_input!(on_input_impl);
+api::wasm_panic_handler!();
 ```
+
+`AppCell<T>` is a `Copy`-only cell that is `Sync` by construction, because a
+WASM app has one thread. Read with `get()`, write back with `set()`.
+
+The `export_*!` macros define the `render` and `on_input` symbols the
+kernel looks up, so the app's own functions need other names
+(`render_impl`, `on_input_impl` by convention).
 
 ---
 
 ## Frame Lifecycle
 
-Every frame follows this pattern:
+The kernel calls `render()` only when something changed: an input event, an
+app timer tick, or a `request_render()`. An idle app costs nothing.
 
-```c
-void render(void) {
-    // 1. Begin frame - clears canvas, resets widget state
-    ui_begin();
+Every render follows the same shape:
 
-    // 2. Call widget functions - they draw and return interaction state
-    ui_label("Title", UI_FONT_PRIMARY, UI_ALIGN_CENTER);
-
-    if (ui_button("OK")) {
-        // Button was pressed this frame
-    }
-
-    // 3. End frame - commits canvas to display
-    ui_end();
+```rust
+fn render_impl() {
+    imgui::ui_begin();   // clears the canvas, resets layout and focus count
+    // ... widgets ...
+    imgui::ui_end();     // clamps focus, consumes the frame's input
 }
 ```
 
 ### What Happens Each Frame
 
-| Phase | Action |
-|-------|--------|
-| `ui_begin()` | Clear canvas, reset focus counter, clear input flags |
-| Widget calls | Draw to canvas, register for focus, check activation |
-| `ui_end()` | Commit canvas buffer to display hardware |
+1. `ui_begin()` **clears the whole canvas**, resets the layout stack to one
+   full-width vertical stack at (0, 0), sets the focusable count to zero,
+   and forgets any pending menu or deferred buttons.
+2. Each widget takes the next slot from the current layout, registers itself
+   as focusable if it is interactive, draws itself, and reports activation.
+3. `ui_end()` clamps the focus index to `0..focus_count`, or sets it to `-1`
+   when the frame had no focusable widgets, and clears the frame's input.
+
+### `ui_begin()` clears the canvas
+
+This matters when an app mixes IMGUI widgets with its own canvas drawing:
+
+- Draw custom content **after** `ui_begin()`, never before it.
+- When a screen needs a footer plus free-form content, call
+  `ui_begin()` → footer widgets → `ui_end()` first, then draw the custom
+  content with the canvas functions. The launcher's info screen does this.
+
+```rust
+// Footer first, then free-form drawing on the same frame.
+imgui::ui_begin();
+imgui::ui_footer_left("Back");
+imgui::ui_footer_right("Open");
+imgui::ui_end();
+
+api::canvas_set_font(font::SECONDARY);
+api::canvas_draw_str(2, 30, "Custom content here");
+```
 
 ---
 
 ## Input Handling
 
-Input events are fed to the UI system, which handles focus navigation automatically:
+Forward every input event to the UI from the app's `on_input` export:
 
-```c
-void on_input(InputKey key, InputType type) {
-    // Feed input to UI system
-    ui_input(key, type);
-
-    // Check for back button (not consumed by widgets)
-    if (ui_back_pressed()) {
-        exit_app();
-    }
-
-    // Custom input handling
-    if (key == InputKeyLeft && type == InputTypeShort) {
-        // Handle left press
-    }
+```rust
+fn on_input_impl(key: u32, kind: u32) {
+    imgui::ui_input(key as u8, kind as u8);
+    // app-specific handling follows
 }
 ```
 
+`ui_input` records the last key and type for the next frame and moves focus
+on Up/Down. It does not draw. The kernel renders after every delivered input
+event, so the next `render()` sees `ok_pressed` or `back_pressed` set.
+
 ### Input Types
 
-| Type | Description |
-|------|-------------|
-| `UI_INPUT_PRESS` | Physical button press |
-| `UI_INPUT_RELEASE` | Physical button release |
-| `UI_INPUT_SHORT` | Short press completed (< 500ms) |
-| `UI_INPUT_LONG` | Long press threshold reached |
-| `UI_INPUT_REPEAT` | Repeat while held |
+`fri3d_wasm_api::input`:
+
+| Constant | Meaning |
+| --- | --- |
+| `TYPE_PRESS` | key went down |
+| `TYPE_RELEASE` | key went up |
+| `TYPE_SHORT_PRESS` | released before 300 ms |
+| `TYPE_LONG_PRESS` | held 300 ms, fires once |
+| `TYPE_REPEAT` | every 150 ms after a long press |
+
+The UI reacts to `TYPE_SHORT_PRESS` and `TYPE_REPEAT` for focus moves and
+activation. Footer buttons also accept `TYPE_PRESS`.
 
 ### Input Keys
 
-| Key | Description |
-|-----|-------------|
-| `UI_KEY_UP` | D-pad up |
-| `UI_KEY_DOWN` | D-pad down |
-| `UI_KEY_LEFT` | D-pad left |
-| `UI_KEY_RIGHT` | D-pad right |
-| `UI_KEY_OK` | Center/confirm button |
-| `UI_KEY_BACK` | Back/cancel button |
+| Constant | Badge | UI behaviour |
+| --- | --- | --- |
+| `KEY_UP` / `KEY_DOWN` | joystick | move focus, wrap around |
+| `KEY_LEFT` / `KEY_RIGHT` | joystick | footer buttons; free for value rows |
+| `KEY_OK` | A | activate the focused widget |
+| `KEY_BACK` | X | sets `ui_back_pressed()`; convention: exit or go back |
+| `KEY_MENU` | MENU | kernel home key |
+
+`KEY_MENU` belongs to the kernel. A short press returns to the launcher
+before the app sees it. The app still receives the press, release and long
+press, so a game can pause on `(KEY_MENU, TYPE_PRESS)`.
 
 ### Built-in Navigation
 
-The UI system automatically handles:
-- **Up/Down**: Move focus between widgets
-- **OK (short)**: Activate focused widget
-- **Back**: Sets `ui_back_pressed()` flag
+- Up/Down: previous/next focusable widget, wrapping at both ends. Focus
+  moves against the *previous* frame's widget count, so the first frame
+  after a screen change settles focus at `ui_end()`.
+- OK: the focused widget returns `true` this frame.
+- Back: `ui_back_pressed()` returns `true` this frame. The library never
+  exits the app by itself.
 
 ---
 
 ## Layout System
 
-Widgets are positioned using a stack-based layout system. Without explicit layout, widgets stack vertically from top-left.
+Every widget asks the current layout for a position. The root layout is a
+full-width vertical stack. Widgets advance the stack cursor by their height.
 
 ### Vertical Stack
 
-```c
-ui_begin();
-
-// Default: vertical stack from (0, 0)
-ui_label("First", UI_FONT_PRIMARY, UI_ALIGN_LEFT);   // y = 0
-ui_label("Second", UI_FONT_SECONDARY, UI_ALIGN_LEFT); // y = 12
-ui_label("Third", UI_FONT_SECONDARY, UI_ALIGN_LEFT);  // y = 24
-
-ui_end();
+```rust
+imgui::ui_begin();                 // root vertical stack, spacing 0
+imgui::ui_label("Title", font::PRIMARY, align::CENTER);
+imgui::ui_separator();
+imgui::ui_button("One");           // each widget lands under the previous
+imgui::ui_button("Two");
+imgui::ui_end();
 ```
 
 ### Explicit Stacks
 
-```c
-ui_begin();
+`ui_vstack(spacing)` opens a nested vertical stack with its own spacing.
+`ui_end_stack()` closes it and advances the parent by the used height.
 
-// Create a vertical stack with custom spacing
-ui_vstack(4);  // 4px between items
-    ui_label("Item 1", UI_FONT_SECONDARY, UI_ALIGN_LEFT);
-    ui_label("Item 2", UI_FONT_SECONDARY, UI_ALIGN_LEFT);
-    ui_label("Item 3", UI_FONT_SECONDARY, UI_ALIGN_LEFT);
-ui_end_stack();
-
-ui_end();
+```rust
+imgui::ui_vstack(4);
+imgui::ui_button("Spaced");
+imgui::ui_button("By 4 px");
+imgui::ui_end_stack();
 ```
 
 ### Horizontal Stack
 
-```c
-ui_begin();
+`ui_hstack(spacing)` lays widgets out left to right. `ui_hstack_centered`
+does the same and centres the group in the parent's width by deferring
+the draw until `ui_end_stack()`.
 
-ui_hstack(8);  // 8px between items
-    ui_button("A");
-    ui_button("B");
-    ui_button("C");
-ui_end_stack();
-
-ui_end();
+```rust
+imgui::ui_hstack_centered(4);
+if imgui::ui_button("+") { COUNTER.set(COUNTER.get() + 1); }
+if imgui::ui_button("-") { COUNTER.set(COUNTER.get() - 1); }
+if imgui::ui_button("Reset") { COUNTER.set(0); }
+imgui::ui_end_stack();
 ```
+
+A horizontal stack always reports a height of one button row to its parent.
 
 ### Nested Layouts
 
-```c
-ui_begin();
-
-ui_vstack(4);
-    ui_label("Header", UI_FONT_PRIMARY, UI_ALIGN_CENTER);
-
-    ui_hstack(8);
-        ui_button("Left");
-        ui_button("Right");
-    ui_end_stack();
-
-    ui_label("Footer", UI_FONT_SECONDARY, UI_ALIGN_CENTER);
-ui_end_stack();
-
-ui_end();
-```
+Stacks nest up to `UI_MAX_LAYOUT_DEPTH` (8) levels. Deeper calls are
+ignored, so the frame still renders.
 
 ### Layout Functions
 
-| Function | Description |
-|----------|-------------|
-| `ui_vstack(spacing)` | Start vertical stack with pixel spacing |
-| `ui_hstack(spacing)` | Start horizontal stack with pixel spacing |
-| `ui_end_stack()` | End current stack, return to parent |
-| `ui_spacer(pixels)` | Add empty space in current direction |
+| Function | Effect |
+| --- | --- |
+| `ui_vstack(spacing)` | push a vertical stack |
+| `ui_hstack(spacing)` | push a horizontal stack |
+| `ui_hstack_centered(spacing)` | push a centred horizontal stack |
+| `ui_end_stack()` | pop the current stack |
+| `ui_spacer(pixels)` | advance the cursor |
+| `ui_set_position(x, y)` | place only the next widget at an absolute point |
 
 ---
 
@@ -268,620 +276,533 @@ ui_end();
 
 ### Labels
 
-Non-interactive text display:
-
-```c
-// Simple label
-ui_label("Hello World", UI_FONT_PRIMARY, UI_ALIGN_LEFT);
-
-// Centered header
-ui_label("Settings", UI_FONT_PRIMARY, UI_ALIGN_CENTER);
-
-// Right-aligned value
-ui_label("100%", UI_FONT_SECONDARY, UI_ALIGN_RIGHT);
+```rust
+imgui::ui_label("Left", font::SECONDARY, align::LEFT);
+imgui::ui_label("Centred", font::PRIMARY, align::CENTER);
+imgui::ui_label("Right", font::SECONDARY, align::RIGHT);
 ```
 
-**Fonts:**
-| Font | Height | Use Case |
-|------|--------|----------|
-| `UI_FONT_PRIMARY` | 12px | Headers, titles |
-| `UI_FONT_SECONDARY` | 10px | Body text, values |
+A label takes the current layout width and one font height
+(`PRIMARY` 12 px, all others 11 px). Labels are not focusable.
 
-**Alignment:**
-| Alignment | Description |
-|-----------|-------------|
-| `UI_ALIGN_LEFT` | Left edge of layout area |
-| `UI_ALIGN_CENTER` | Center of layout area |
-| `UI_ALIGN_RIGHT` | Right edge of layout area |
+Build dynamic text in a fixed buffer. The SDK has no `format!`; the
+`test_ui` app shows a small `write_i32` helper, and the launcher's `Num`
+type is the same idea.
 
 ### Buttons
 
-Interactive, focusable buttons:
-
-```c
-// Returns true the frame the button is pressed
-if (ui_button("Save")) {
-    save_data();
-}
-
-if (ui_button("Cancel")) {
-    go_back();
+```rust
+if imgui::ui_button("Save") {
+    save();
 }
 ```
 
-Buttons automatically:
-- Register for focus navigation
-- Show inverted colors when focused
-- Return `true` on OK press when focused
+A button is focusable. It draws a rounded frame, or an inverted rounded box
+when focused. Width follows the text plus padding. In a plain vertical stack
+the button centres itself in the layout width.
 
 ### Absolute Positioning
 
-For precise control:
-
-```c
-// Button at specific position
-if (ui_button_at(10, 40, "OK")) {
-    confirm();
-}
+```rust
+if imgui::ui_button_at(100, 90, "Go") { go(); }
 ```
+
+`ui_button_at` is `ui_set_position` followed by `ui_button`. The position
+applies to that one widget; the layout cursor does not move.
 
 ### Progress Bars
 
-Display progress (0.0 to 1.0):
-
-```c
-// Simple progress bar (full width)
-ui_progress(0.75, 0);
-
-// Progress bar with specific width
-ui_progress(download_progress, 100);
-
-// Progress with label
-ui_progress_text(0.5, "Loading...", 80);
+```rust
+imgui::ui_progress(PROGRESS.get(), 0);   // 0 = layout width minus 8 px
+imgui::ui_progress(0.75, 60);            // fixed 60 px wide, centred
 ```
+
+Value is clamped to `0.0..=1.0`. The bar is 8 px tall.
 
 ### Checkboxes
 
-Toggle boolean state:
-
-```c
-static bool sound_enabled = true;
-
-// Returns true when value changes
-if (ui_checkbox("Sound", &sound_enabled)) {
-    apply_sound_setting(sound_enabled);
+```rust
+let mut enabled = ENABLED.get();
+if imgui::ui_checkbox("Enable sound", &mut enabled) {
+    ENABLED.set(enabled);      // toggled this frame
 }
 ```
 
+The checkbox toggles `checked` itself on activation and returns `true` in
+that frame. The focused row inverts.
+
 ### Icons
 
-Display bitmap icons:
-
-```c
-// XBM format icon data
-static const uint8_t icon_wifi[] = { ... };
-
-ui_icon(icon_wifi, 16, 16);
+```rust
+imgui::ui_icon(&ICON_BITS, 16, 16);
 ```
+
+`ui_icon` centres a 1-bit bitmap in the layout width and advances by its
+height. Row stride is `ceil(width / 8)` bytes; **bit 0 is the leftmost
+pixel** (LSB first). This differs from `api::canvas_draw_bitmap`, which
+is MSB first and is what the launcher uses for app icons.
 
 ### Separator
 
-Horizontal line:
-
-```c
-ui_label("Section 1", UI_FONT_PRIMARY, UI_ALIGN_LEFT);
-ui_separator();
-ui_label("Section 2", UI_FONT_PRIMARY, UI_ALIGN_LEFT);
+```rust
+imgui::ui_separator();   // 5 px tall, line on the middle row
 ```
 
 ---
 
 ## Focus Navigation
 
-Focus moves between interactive widgets using Up/Down keys.
-
 ### How Focus Works
 
-1. Each focusable widget (button, menu item, checkbox) registers itself during render
-2. Widgets are assigned focus indices in render order
-3. Up/Down keys decrement/increment the focus index
-4. Focus wraps around at boundaries
+Every interactive widget (`ui_button`, `ui_checkbox`, `ui_menu_item`,
+`ui_menu_item_value`) registers itself in call order and receives the next
+index, starting at 0 each frame. `ui_input` moves the index on Up/Down.
+`ui_end` clamps it. Up to `UI_MAX_FOCUSABLE` (32) widgets per frame; later
+widgets draw unfocused and never activate.
+
+Call order is the tab order. Keep it stable between frames, or the focus
+jumps.
 
 ### Focus State
 
-```c
-// Get current focus index
-int16_t focused = ui_get_focus();
+```rust
+let idx = imgui::ui_get_focus();      // -1 when nothing is focusable
+imgui::ui_set_focus(2);               // jump to the third widget
+if imgui::ui_is_focused(0) { /* first widget */ }
+```
 
-// Set focus programmatically
-ui_set_focus(2);  // Focus third widget
+`ui_get_focus` is how a value row reacts to Left/Right. The settings app
+adjusts brightness only when its row is focused:
 
-// Check if specific index is focused
-if (ui_is_focused(0)) {
-    // First widget is focused
+```rust
+fn on_input_impl(key: u32, kind: u32) {
+    let step = kind == input::TYPE_SHORT_PRESS || kind == input::TYPE_REPEAT;
+    match (imgui::ui_get_focus(), key) {
+        (ITEM_BRIGHTNESS, input::KEY_LEFT) if step => {
+            BRIGHTNESS.set(BRIGHTNESS.get().saturating_sub(10).max(10));
+        }
+        (ITEM_BRIGHTNESS, input::KEY_RIGHT) if step => {
+            BRIGHTNESS.set((BRIGHTNESS.get() + 10).min(100));
+        }
+        _ => {}
+    }
+    imgui::ui_input(key as u8, kind as u8);
 }
 ```
 
+Read the focus **before** `ui_input`, or after; both work, because Left and
+Right do not move focus. Do the read before `ui_input` when the same handler
+also maps Up/Down.
+
 ### Visual Feedback
 
-Focused widgets are drawn with inverted colors:
-- **Normal**: Black outline, white fill
-- **Focused**: White outline, black fill (inverted)
+| Widget | Focused look |
+| --- | --- |
+| button | inverted rounded box |
+| checkbox | inverted full row |
+| menu item | inverted full row |
 
 ---
 
 ## Menu System
 
-Scrollable menus for selection:
+A scrollable list with the item height fixed at 12 px. The app owns the
+scroll position and passes it in by reference each frame:
 
-```c
-static int16_t scroll = 0;  // Persists scroll position
+```rust
+static SCROLL: api::AppCell<i16> = api::AppCell::new(0);
 
-void render(void) {
-    ui_begin();
+fn render_impl() {
+    imgui::ui_begin();
+    imgui::ui_label("Main Menu", font::PRIMARY, align::CENTER);
+    imgui::ui_separator();
 
-    ui_label("Select Option", UI_FONT_PRIMARY, UI_ALIGN_CENTER);
-    ui_spacer(4);
+    let mut scroll = SCROLL.get();
+    imgui::ui_menu_begin(&mut scroll, 6, 3);      // 6 visible rows, 3 items
+    if imgui::ui_menu_item("Play", 0) { start_game(); }
+    if imgui::ui_menu_item("Scores", 1) { show_scores(); }
+    if imgui::ui_menu_item("Quit", 2) { api::exit_to_launcher(); }
+    imgui::ui_menu_end();
+    SCROLL.set(scroll);
 
-    // Begin menu: scroll state, visible items, total items
-    ui_menu_begin(&scroll, 4, 6);
-
-    if (ui_menu_item("Option 1", 0)) handle_option(0);
-    if (ui_menu_item("Option 2", 1)) handle_option(1);
-    if (ui_menu_item("Option 3", 2)) handle_option(2);
-    if (ui_menu_item("Option 4", 3)) handle_option(3);
-    if (ui_menu_item("Option 5", 4)) handle_option(4);
-    if (ui_menu_item("Option 6", 5)) handle_option(5);
-
-    ui_menu_end();  // Draws scrollbar
-
-    ui_end();
+    imgui::ui_end();
 }
 ```
+
+`ui_menu_begin(scroll, visible, total)` scrolls so the focused item is
+visible. `ui_menu_item(text, index)` draws item `index` when it is inside the
+window and returns `true` on activation. `ui_menu_end()` draws a dotted
+scrollbar with a solid thumb when `total > visible`, writes the scroll
+position back, and advances the layout by the visible rows.
+
+Item `index` values must be `0..total` in call order. Items outside the
+window are skipped cheaply, so calling all items every frame is fine.
+
+With an 11 px title and a separator, 6 rows (72 px) fit above a footer on
+the 120 px screen.
 
 ### Menu with Values
 
-Settings-style menu with current values:
-
-```c
-static int volume = 5;
-static bool bluetooth = true;
-
-ui_menu_begin(&scroll, 4, 2);
-
-char vol_str[8];
-snprintf(vol_str, sizeof(vol_str), "%d", volume);
-if (ui_menu_item_value("Volume", vol_str, 0)) {
-    // Open volume adjustment
-}
-
-if (ui_menu_item_value("Bluetooth", bluetooth ? "On" : "Off", 1)) {
-    bluetooth = !bluetooth;
-}
-
-ui_menu_end();
+```rust
+imgui::ui_menu_item_value("Brightness", pct.as_str(), 0);
+imgui::ui_menu_item_value("Sound", if SOUND.get() { "On" } else { "Off" }, 1);
 ```
+
+Label on the left, value right-aligned. Same focus and return semantics as
+`ui_menu_item`.
 
 ### Adjusting Values with Left/Right
 
-```c
-void on_input(InputKey key, InputType type) {
-    ui_input(key, type);
-
-    // Adjust focused menu item with left/right
-    if (type == UI_INPUT_SHORT) {
-        if (ui_get_focus() == 0) {  // Volume item
-            if (key == UI_KEY_LEFT && volume > 0) volume--;
-            if (key == UI_KEY_RIGHT && volume < 10) volume++;
-        }
-    }
-}
-```
+Combine `ui_menu_item_value` with `ui_get_focus` in `on_input` as shown in
+[Focus State](#focus-state). The settings app is the reference
+implementation: the row index constants double as focus indices because the
+menu is the only focusable group on that screen.
 
 ---
 
 ## Footer Buttons
 
-Fixed-position buttons at screen bottom, matching Flipper Zero's pattern:
+Footer hints sit in the bottom 12 px and react to Left and Right:
 
-```c
-void render(void) {
-    ui_begin();
+```rust
+imgui::ui_begin();
+// ... content ...
+if imgui::ui_footer_left("Back") { go_back(); }        // "< Back", Left key
+imgui::ui_footer_center("Select");                      // "● Select", no key
+if imgui::ui_footer_right("Next") { go_next(); }       // "Next >", Right key
+imgui::ui_end();
+```
 
-    // Main content...
-    ui_label("Confirm Action?", UI_FONT_PRIMARY, UI_ALIGN_CENTER);
+Footer buttons are not focusable. `ui_footer_left` returns `true` on a
+Left press or short press, `ui_footer_right` on Right. `ui_footer_center`
+always returns `false`; it is a hint for OK.
 
-    // Footer buttons (drawn at bottom)
-    if (ui_footer_left("Cancel")) {
-        go_back();
+Footers draw at a fixed position, so call them anywhere after `ui_begin()`.
+
+---
+
+## Virtual Keyboard
+
+A three-row on-screen keyboard for short text. The buffer size is a const
+generic; the text is NUL-terminated inside it, so `N` bytes hold `N - 1`
+characters.
+
+```rust
+static KEYBOARD: api::AppCell<imgui::UiVirtualKeyboard<32>> =
+    api::AppCell::new(imgui::UiVirtualKeyboard::new());
+
+fn init_keyboard() {
+    let mut kb = KEYBOARD.get();
+    imgui::ui_virtual_keyboard_init(&mut kb, "guest");   // initial text
+    imgui::ui_virtual_keyboard_set_min_length(&mut kb, 3);
+    kb.clear_default_text = true;   // first keystroke replaces "guest"
+    KEYBOARD.set(kb);
+}
+
+fn validator(text: &str, message: &mut [u8], _context: usize) -> bool {
+    if text.contains(' ') {
+        let msg = b"No spaces";
+        message[..msg.len()].copy_from_slice(msg);
+        message[msg.len()] = 0;
+        return false;
     }
-    if (ui_footer_center("Info")) {
-        show_info();
-    }
-    if (ui_footer_right("OK")) {
-        confirm();
-    }
+    true
+}
 
-    ui_end();
+fn render_impl() {
+    imgui::ui_begin();
+    let now_ms = api::get_time_ms();
+    let mut kb = KEYBOARD.get();
+    imgui::ui_virtual_keyboard_set_validator(&mut kb, validator, 0);
+    if imgui::ui_virtual_keyboard(&mut kb, "Enter Name", now_ms) {
+        save_name(kb.text());
+    }
+    KEYBOARD.set(kb);
+    imgui::ui_end();
 }
 ```
 
-Footer buttons:
-- Are positioned at screen bottom automatically
-- Show direction arrow + text
-- Respond to their respective keys (Left, OK, Right)
-- Don't participate in Up/Down focus navigation
+Keys: joystick moves the cursor (repeat while held), OK types, long OK
+submits, long Back or Back repeat deletes. Submit is refused below
+`min_len`, and a failing validator shows its message for 4 s (hence the
+`now_ms` argument). Return value is `true` on a successful submit.
+
+`clear_default_text` shows the initial text selected; the first typed
+character replaces it. `text()` returns the current string.
 
 ---
 
 ## Complete Example
 
-A settings app demonstrating all major features:
+A counter with a settings menu and a footer, switching between two screens.
+This compiles as an app crate that depends on `fri3d-wasm-api`.
 
-```c
-#include <frd.h>
-#include <imgui.h>
-#include <stdio.h>
+```rust
+#![no_std]
+#![deny(unsafe_code)]
 
-// App state
-typedef enum {
-    SCREEN_MAIN,
-    SCREEN_BRIGHTNESS,
-    SCREEN_ABOUT,
-} Screen;
+use fri3d_wasm_api as api;
+use fri3d_wasm_api::{align, font, imgui, input};
 
-static Screen current_screen = SCREEN_MAIN;
-static int16_t menu_scroll = 0;
-static int brightness = 5;
-static bool sound_enabled = true;
-static bool vibration_enabled = true;
-
-// Forward declarations
-static void render_main(void);
-static void render_brightness(void);
-static void render_about(void);
-
-void render(void) {
-    switch (current_screen) {
-        case SCREEN_MAIN:
-            render_main();
-            break;
-        case SCREEN_BRIGHTNESS:
-            render_brightness();
-            break;
-        case SCREEN_ABOUT:
-            render_about();
-            break;
-    }
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum Screen {
+    Counter,
+    Options,
 }
 
-static void render_main(void) {
-    ui_begin();
+static SCREEN: api::AppCell<Screen> = api::AppCell::new(Screen::Counter);
+static COUNT: api::AppCell<i32> = api::AppCell::new(0);
+static STEP: api::AppCell<i32> = api::AppCell::new(1);
+static SOUND: api::AppCell<bool> = api::AppCell::new(true);
+static SCROLL: api::AppCell<i16> = api::AppCell::new(0);
 
-    ui_label("Settings", UI_FONT_PRIMARY, UI_ALIGN_CENTER);
-    ui_spacer(4);
+const ROW_STEP: i16 = 0;
+const ROW_SOUND: i16 = 1;
+const ROW_RESET: i16 = 2;
 
-    ui_menu_begin(&menu_scroll, 4, 4);
-
-    // Brightness with value
-    char bright_str[8];
-    snprintf(bright_str, sizeof(bright_str), "%d", brightness);
-    if (ui_menu_item_value("Brightness", bright_str, 0)) {
-        current_screen = SCREEN_BRIGHTNESS;
-    }
-
-    // Sound toggle
-    if (ui_menu_item_value("Sound", sound_enabled ? "On" : "Off", 1)) {
-        sound_enabled = !sound_enabled;
-    }
-
-    // Vibration toggle
-    if (ui_menu_item_value("Vibration", vibration_enabled ? "On" : "Off", 2)) {
-        vibration_enabled = !vibration_enabled;
-    }
-
-    // About
-    if (ui_menu_item("About", 3)) {
-        current_screen = SCREEN_ABOUT;
-    }
-
-    ui_menu_end();
-
-    if (ui_footer_left("Back")) {
-        // Exit app
-    }
-
-    ui_end();
+/// Fixed-capacity decimal formatter. No allocation.
+struct Num {
+    buf: [u8; 12],
+    len: usize,
 }
 
-static void render_brightness(void) {
-    ui_begin();
-
-    ui_label("Brightness", UI_FONT_PRIMARY, UI_ALIGN_CENTER);
-    ui_spacer(16);
-
-    // Visual brightness bar
-    ui_progress((float)brightness / 10.0f, 100);
-    ui_spacer(8);
-
-    // Numeric value
-    char buf[16];
-    snprintf(buf, sizeof(buf), "%d / 10", brightness);
-    ui_label(buf, UI_FONT_SECONDARY, UI_ALIGN_CENTER);
-
-    if (ui_footer_left("Back")) {
-        current_screen = SCREEN_MAIN;
-    }
-
-    ui_end();
-}
-
-static void render_about(void) {
-    ui_begin();
-
-    ui_label("About", UI_FONT_PRIMARY, UI_ALIGN_CENTER);
-    ui_spacer(8);
-
-    ui_label("IMGUI Demo App", UI_FONT_SECONDARY, UI_ALIGN_CENTER);
-    ui_label("Version 1.0.0", UI_FONT_SECONDARY, UI_ALIGN_CENTER);
-    ui_spacer(4);
-    ui_label("Built with IMGUI", UI_FONT_SECONDARY, UI_ALIGN_CENTER);
-
-    if (ui_footer_left("Back")) {
-        current_screen = SCREEN_MAIN;
-    }
-
-    ui_end();
-}
-
-void on_input(InputKey key, InputType type) {
-    ui_input(key, type);
-
-    if (ui_back_pressed()) {
-        if (current_screen != SCREEN_MAIN) {
-            current_screen = SCREEN_MAIN;
+impl Num {
+    fn of(mut n: i32) -> Self {
+        let mut s = Num { buf: [0; 12], len: 0 };
+        if n < 0 {
+            s.buf[0] = b'-';
+            s.len = 1;
+            n = -n;
         }
-        // else: exit app handled by system
+        let mut digits = [0u8; 10];
+        let mut i = 0;
+        loop {
+            digits[i] = b'0' + (n % 10) as u8;
+            n /= 10;
+            i += 1;
+            if n == 0 {
+                break;
+            }
+        }
+        while i > 0 {
+            i -= 1;
+            s.buf[s.len] = digits[i];
+            s.len += 1;
+        }
+        s
     }
-
-    // Brightness adjustment with left/right
-    if (current_screen == SCREEN_BRIGHTNESS && type == UI_INPUT_SHORT) {
-        if (key == UI_KEY_LEFT && brightness > 0) brightness--;
-        if (key == UI_KEY_RIGHT && brightness < 10) brightness++;
+    fn as_str(&self) -> &str {
+        core::str::from_utf8(&self.buf[..self.len]).unwrap_or("")
     }
+}
 
-    // Quick adjust in menu
-    if (current_screen == SCREEN_MAIN && ui_get_focus() == 0) {
-        if (type == UI_INPUT_SHORT || type == UI_INPUT_REPEAT) {
-            if (key == UI_KEY_LEFT && brightness > 0) brightness--;
-            if (key == UI_KEY_RIGHT && brightness < 10) brightness++;
+fn render_counter() {
+    imgui::ui_label("Counter", font::PRIMARY, align::CENTER);
+    imgui::ui_spacer(10);
+    imgui::ui_label(Num::of(COUNT.get()).as_str(), font::PRIMARY, align::CENTER);
+    imgui::ui_spacer(10);
+
+    imgui::ui_hstack_centered(6);
+    if imgui::ui_button("-") {
+        COUNT.set(COUNT.get() - STEP.get());
+    }
+    if imgui::ui_button("+") {
+        COUNT.set(COUNT.get() + STEP.get());
+    }
+    imgui::ui_end_stack();
+
+    imgui::ui_footer_left("Exit");
+    if imgui::ui_footer_right("Options") {
+        SCREEN.set(Screen::Options);
+    }
+}
+
+fn render_options() {
+    imgui::ui_label("Options", font::PRIMARY, align::CENTER);
+    imgui::ui_separator();
+
+    let mut scroll = SCROLL.get();
+    imgui::ui_menu_begin(&mut scroll, 5, 3);
+    imgui::ui_menu_item_value("Step", Num::of(STEP.get()).as_str(), ROW_STEP);
+    if imgui::ui_menu_item_value("Sound", if SOUND.get() { "On" } else { "Off" }, ROW_SOUND) {
+        SOUND.set(!SOUND.get());
+    }
+    if imgui::ui_menu_item("Reset counter", ROW_RESET) {
+        COUNT.set(0);
+    }
+    imgui::ui_menu_end();
+    SCROLL.set(scroll);
+
+    if imgui::ui_footer_left("Back") {
+        SCREEN.set(Screen::Counter);
+    }
+}
+
+fn render_impl() {
+    imgui::ui_begin();
+    match SCREEN.get() {
+        Screen::Counter => render_counter(),
+        Screen::Options => render_options(),
+    }
+    imgui::ui_end();
+}
+
+fn on_input_impl(key: u32, kind: u32) {
+    let short = kind == input::TYPE_SHORT_PRESS;
+    let step = short || kind == input::TYPE_REPEAT;
+
+    match SCREEN.get() {
+        Screen::Counter => {
+            if key == input::KEY_BACK && short {
+                api::exit_to_launcher();
+                return;
+            }
+        }
+        Screen::Options => {
+            if key == input::KEY_BACK && short {
+                SCREEN.set(Screen::Counter);
+                api::request_render();
+                return;
+            }
+            // Left/Right adjust the focused value row.
+            if imgui::ui_get_focus() == ROW_STEP && step {
+                if key == input::KEY_LEFT {
+                    STEP.set((STEP.get() - 1).max(1));
+                } else if key == input::KEY_RIGHT {
+                    STEP.set((STEP.get() + 1).min(10));
+                }
+            }
         }
     }
+
+    imgui::ui_input(key as u8, kind as u8);
 }
 
-int main(void) {
-    return 0;
-}
+api::export_render!(render_impl);
+api::export_on_input!(on_input_impl);
+api::wasm_panic_handler!();
 ```
+
+Note the screen switch on Back calls `api::request_render()`: the kernel
+already renders after each input event, but the explicit request costs
+nothing and keeps the intent visible. Widgets that activate call
+`request_render()` themselves.
 
 ---
 
 ## API Reference
 
-### Context Management
+All functions live in `fri3d_wasm_api::imgui`. Coordinates and sizes are
+`i16` pixels. Constants come from `fri3d_wasm_api::{font, align, input}`.
 
-```c
-void ui_begin(void);
-```
-Begin a new frame. Clears the canvas and resets widget state.
+### Frame
 
-```c
-void ui_end(void);
-```
-End the frame. Commits the canvas buffer to display.
-
-```c
-void ui_input(UiKey key, UiInputType type);
-```
-Feed an input event to the UI system. Call from `on_input()`.
-
-```c
-bool ui_back_pressed(void);
-```
-Returns `true` if Back was pressed this frame.
+| Signature | Notes |
+| --- | --- |
+| `fn ui_begin()` | clears the canvas, resets layout, focus count, deferred buttons |
+| `fn ui_end()` | clamps focus, consumes this frame's input |
+| `fn ui_input(key: u8, input_type: u8)` | call from `on_input`; Up/Down move focus, OK/Back set flags |
+| `fn ui_back_pressed() -> bool` | Back short press or repeat seen this frame |
 
 ### Layout
 
-```c
-void ui_vstack(int16_t spacing);
-```
-Begin a vertical stack with specified pixel spacing between items.
-
-```c
-void ui_hstack(int16_t spacing);
-```
-Begin a horizontal stack with specified pixel spacing between items.
-
-```c
-void ui_end_stack(void);
-```
-End the current stack and return to parent layout.
-
-```c
-void ui_spacer(int16_t pixels);
-```
-Add empty space in the current stack direction.
+| Signature | Notes |
+| --- | --- |
+| `fn ui_vstack(spacing: i16)` | push vertical stack |
+| `fn ui_hstack(spacing: i16)` | push horizontal stack |
+| `fn ui_hstack_centered(spacing: i16)` | push centred horizontal stack; buttons inside are drawn at `ui_end_stack` |
+| `fn ui_end_stack()` | pop; advances parent by used height (one button row for horizontal) |
+| `fn ui_spacer(pixels: i16)` | advance cursor |
+| `fn ui_set_position(x: i16, y: i16)` | next widget only |
 
 ### Widgets
 
-```c
-void ui_label(const char* text, UiFont font, UiAlign align);
-```
-Draw a text label. Not focusable.
-
-```c
-bool ui_button(const char* text);
-```
-Draw a focusable button. Returns `true` when activated.
-
-```c
-bool ui_button_at(int16_t x, int16_t y, const char* text);
-```
-Draw a button at absolute position.
-
-```c
-void ui_progress(float value, int16_t width);
-```
-Draw a progress bar. `value` is 0.0 to 1.0, `width` 0 means full width.
-
-```c
-void ui_progress_text(float value, const char* text, int16_t width);
-```
-Draw a progress bar with text label.
-
-```c
-bool ui_checkbox(const char* text, bool* checked);
-```
-Draw a checkbox. Returns `true` when value changes.
-
-```c
-void ui_icon(const uint8_t* data, uint8_t width, uint8_t height);
-```
-Draw an XBM-format icon.
-
-```c
-void ui_separator(void);
-```
-Draw a horizontal separator line.
-
-### Menu
-
-```c
-void ui_menu_begin(int16_t* scroll, int16_t visible, int16_t total);
-```
-Begin a scrollable menu. `scroll` pointer persists scroll position.
-
-```c
-bool ui_menu_item(const char* text, int16_t index);
-```
-Add a menu item. Returns `true` when selected.
-
-```c
-bool ui_menu_item_value(const char* label, const char* value, int16_t index);
-```
-Add a menu item with right-aligned value text.
-
-```c
-void ui_menu_end(void);
-```
-End menu and draw scrollbar.
-
-### Footer
-
-```c
-bool ui_footer_left(const char* text);
-```
-Draw left footer button. Returns `true` on Left+Short press.
-
-```c
-bool ui_footer_center(const char* text);
-```
-Draw center footer button. Returns `true` on OK+Short press.
-
-```c
-bool ui_footer_right(const char* text);
-```
-Draw right footer button. Returns `true` on Right+Short press.
+| Signature | Focusable | Returns |
+| --- | --- | --- |
+| `fn ui_label(text: &str, font_id: u32, align_mode: u32)` | no | — |
+| `fn ui_separator()` | no | — |
+| `fn ui_button(text: &str) -> bool` | yes | activated |
+| `fn ui_button_at(x: i16, y: i16, text: &str) -> bool` | yes | activated |
+| `fn ui_progress(value: f32, width: i16)` | no | — (`width` 0 = layout width − 8) |
+| `fn ui_icon(data: &[u8], width: u8, height: u8)` | no | — (LSB-first rows) |
+| `fn ui_checkbox(text: &str, checked: &mut bool) -> bool` | yes | toggled this frame |
 
 ### Focus
 
-```c
-int16_t ui_get_focus(void);
-```
-Get current focus index (-1 if no focusable widgets).
+| Signature | Notes |
+| --- | --- |
+| `fn ui_get_focus() -> i16` | `-1` when nothing is focusable |
+| `fn ui_set_focus(index: i16)` | takes effect immediately |
+| `fn ui_is_focused(index: i16) -> bool` | |
 
-```c
-void ui_set_focus(int16_t index);
-```
-Set focus to specific widget index.
+### Menu
 
-```c
-bool ui_is_focused(int16_t index);
-```
-Check if specific widget index is focused.
+| Signature | Notes |
+| --- | --- |
+| `fn ui_menu_begin(scroll: &mut i16, visible: i16, total: i16)` | `scroll` is written back in `ui_menu_end` |
+| `fn ui_menu_item(text: &str, index: i16) -> bool` | activated |
+| `fn ui_menu_item_value(label: &str, value: &str, index: i16) -> bool` | activated; value right-aligned |
+| `fn ui_menu_end()` | scrollbar, layout advance |
+
+Menu rows are `UI_MENU_ITEM_HEIGHT` = 12 px; the scrollbar takes 3 px on
+the right.
+
+### Footer
+
+| Signature | Key | Returns |
+| --- | --- | --- |
+| `fn ui_footer_left(text: &str) -> bool` | Left | pressed |
+| `fn ui_footer_center(text: &str) -> bool` | — | always `false` |
+| `fn ui_footer_right(text: &str) -> bool` | Right | pressed |
+
+The footer occupies the bottom `UI_FOOTER_HEIGHT` = 12 px.
+
+### Virtual keyboard
+
+| Signature | Notes |
+| --- | --- |
+| `struct UiVirtualKeyboard<const N: usize>` | `Copy`; fields `min_len`, `row`, `col`, `clear_default_text` are public |
+| `const fn UiVirtualKeyboard::new() -> Self` | empty, `min_len` 1 |
+| `fn text(&self) -> &str` | current text |
+| `fn set_text(&mut self, text: &str)` | clipped to `N - 1` bytes |
+| `type VirtualKeyboardValidator = fn(text: &str, message: &mut [u8], context: usize) -> bool` | write a NUL-terminated message (≤ 63 bytes) on `false` |
+| `fn ui_virtual_keyboard_init<const N: usize>(kb: &mut UiVirtualKeyboard<N>, initial: &str)` | resets state, sets text, moves the cursor to OK when text is non-empty |
+| `fn ui_virtual_keyboard_set_min_length<const N: usize>(kb: &mut UiVirtualKeyboard<N>, min_len: usize)` | |
+| `fn ui_virtual_keyboard_set_validator<const N: usize>(kb: &mut UiVirtualKeyboard<N>, validator: VirtualKeyboardValidator, context: usize)` | |
+| `fn ui_virtual_keyboard<const N: usize>(kb: &mut UiVirtualKeyboard<N>, header: &str, now_ms: u32) -> bool` | draws and handles input; `true` on submit |
+
+### Screen constants
+
+The library derives its geometry from `fri3d_wasm_api::SCREEN_WIDTH`
+(160) and `SCREEN_HEIGHT` (120). Font heights: primary 12 px, others 11 px.
+Button padding 4 px horizontal, 2 px vertical.
 
 ---
 
 ## Implementation Notes
 
-### Internal State Structure
-
-```c
-typedef struct {
-    // Layout stack (max 8 levels deep)
-    UiLayoutStack layout_stack[8];
-    int8_t layout_depth;
-
-    // Focus tracking
-    int16_t focus_index;      // Current focus
-    int16_t focus_count;      // Focusable widgets this frame
-
-    // Input state
-    UiKey last_key;
-    UiInputType last_type;
-    bool ok_pressed;
-    bool back_pressed;
-
-    // Active menu state
-    struct {
-        bool active;
-        int16_t* scroll;
-        int16_t visible;
-        int16_t total;
-    } menu;
-} UiContext;
-```
-
-### Widget Registration
-
-Focusable widgets call an internal registration function:
-
-```c
-static int16_t ui_register_focusable(int16_t x, int16_t y, int16_t w, int16_t h) {
-    int16_t index = g_ctx.focus_count++;
-    g_ctx.widgets[index] = (UiWidgetRect){ x, y, w, h };
-    return index;
-}
-```
-
-### Focus Navigation
-
-Handled automatically in `ui_input()`:
-
-```c
-if (type == UI_INPUT_SHORT || type == UI_INPUT_REPEAT) {
-    if (key == UI_KEY_UP) {
-        g_ctx.focus_index--;
-        if (g_ctx.focus_index < 0) {
-            g_ctx.focus_index = g_ctx.focus_count - 1;
-        }
-    }
-    if (key == UI_KEY_DOWN) {
-        g_ctx.focus_index++;
-        if (g_ctx.focus_index >= g_ctx.focus_count) {
-            g_ctx.focus_index = 0;
-        }
-    }
-}
-```
-
-### WASM Considerations
-
-- No callbacks cross the WASM boundary
-- State is simple integers/booleans (no pointers)
-- Canvas operations are host-provided imports
-- String handling uses null-terminated C strings
-
-### Performance
-
-The 128x64 display is only 1KB of framebuffer data, so full redraws every frame are acceptable. No dirty rectangle tracking is needed.
+- **No allocation.** The whole library state is one `UiContext` value in a
+  `static AppCell`. Each call copies it out, mutates it, and copies it back.
+  It contains the layout stack (8 entries), focus counters, the last input,
+  menu bookkeeping, and the deferred-button table.
+- **Bounded tables.** `UI_MAX_LAYOUT_DEPTH` = 8 stacks,
+  `UI_MAX_FOCUSABLE` = 32 focusable widgets per frame,
+  `UI_MAX_DEFERRED` = 16 deferred buttons with 128 bytes of text between
+  them. Past a bound the call is ignored, never a panic.
+- **Deferred buttons.** Inside `ui_hstack_centered` a button cannot know
+  the group width yet, so it is recorded and drawn at `ui_end_stack()`
+  once the centring offset is known.
+- **Menu scroll pointer.** `ui_menu_begin` keeps the address of the
+  caller's `scroll` and `ui_menu_end` writes through it. Keep the `scroll`
+  variable alive until `ui_menu_end()`.
+- **Rendering on activation.** Every widget that returns `true`, and a
+  successful keyboard submit, calls `api::request_render()` so the kernel
+  draws the resulting state in the same step, never one frame late.
+- **Full redraw.** The canvas is 19 200 bytes and the kernel only renders
+  on change, so each frame redraws everything. No dirty rectangles.
+- **Strings** are `&str`; the SDK copies them to a 256-byte stack buffer
+  and NUL-terminates them for the host. Longer strings are clipped.
+- **Fonts.** `font::PRIMARY` (bold 8 px Helvetica) for titles and button
+  labels in the launcher, `font::SECONDARY` for body text and menu rows,
+  `font::KEYBOARD` for the keyboard glyphs, `font::BIG_NUMBERS` for
+  large digits.

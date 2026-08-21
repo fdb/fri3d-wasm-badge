@@ -18,30 +18,25 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Add wasm32 target
-        run: rustup target add wasm32-unknown-unknown
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: rustup target add wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
 
       - name: Install binaryen (wasm-opt)
         run: sudo apt-get update && sudo apt-get install -y binaryen
 
-      - name: Setup Emscripten
-        uses: mymindstorm/setup-emsdk@v14
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
         with:
-          version: 'latest'
+          version: latest
 
-      - name: Build browser emulator
-        run: firmware/web/build.sh
+      - name: Build browser host
+        run: hosts/web/build.sh
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v3
         with:
-          path: firmware/web/dist
+          path: hosts/web/dist
 
   deploy:
     needs: build
@@ -50,6 +45,5 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
+      - id: deployment
         uses: actions/deploy-pages@v4

@@ -13,3 +13,7 @@ source, the lesson, and how the kernel applies it. Read in order.
 | [006](006-app-bundle-format.md) | The `.fab` app bundle and `manifest.toml` |
 | [007](007-app-api-guidelines.md) | How the API steers app developers toward fast apps |
 | [008](008-launcher-design.md) | Launcher and Settings: Flipper Zero look on a 160x120 canvas |
+| [009](009-app-abi.md) | App ABI reference: every import, export, limit and rule |
+| [010](010-host-contract.md) | Host contract, and what desktop / browser / badge taught us |
+| [011](011-storage-and-ota.md) | Partition layout, settings persistence, OTA status, file-system decision |
+| [012](012-bring-up-lessons.md) | Hardware bring-up lessons, chronological, with a checklist |
